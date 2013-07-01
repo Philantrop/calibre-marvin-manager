@@ -100,8 +100,11 @@ class SizePersistedDialog(QDialog):
     This dialog is a base class for any dialogs that want their size/position
     restored when they are next opened.
     '''
-    def __init__(self, parent, unique_pref_name):
-        QDialog.__init__(self, parent.opts.gui, Qt.WindowStaysOnTopHint)
+    def __init__(self, parent, unique_pref_name, stays_on_top=False):
+        if stays_on_top:
+            QDialog.__init__(self, parent.opts.gui, Qt.WindowStaysOnTopHint)
+        else:
+            QDialog.__init__(self, parent.opts.gui)
         self.unique_pref_name = unique_pref_name
         self.prefs = parent.opts.prefs
         self.geom = self.prefs.get(unique_pref_name, None)

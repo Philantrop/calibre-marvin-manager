@@ -19,6 +19,7 @@ from PyQt4.QtWebKit import QWebView
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.oeb.iterator import EbookIterator
+from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.utils.icu import sort_key
 from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
@@ -285,7 +286,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.done_button.setText('Close')
 
         # Action buttons
-        self.toggle_checkmarks_button = self.dialogButtonBox.addButton('Clear All', QDialogButtonBox.ActionRole)
+        self.toggle_checkmarks_button = self.dialogButtonBox.addButton(' Set All ', QDialogButtonBox.ActionRole)
         self.toggle_checkmarks_button.setObjectName('toggle_checkmarks_button')
 
         smq_text = 'Show Match Quality'
@@ -294,8 +295,8 @@ class BookStatusDialog(SizePersistedDialog):
         self.show_confidence_button = self.dialogButtonBox.addButton(smq_text, QDialogButtonBox.ActionRole)
         self.show_confidence_button.setObjectName('match_quality_button')
 
-        self.preview_button = self.dialogButtonBox.addButton('Do Something', QDialogButtonBox.ActionRole)
-        self.preview_button.setObjectName('do_something_button')
+        self.preview_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
+        self.preview_button.setObjectName('calculate_word_count_button')
 
         self.dialogButtonBox.clicked.connect(self.show_installed_books_dialog_clicked)
         self.l.addWidget(self.dialogButtonBox)
@@ -317,68 +318,11 @@ class BookStatusDialog(SizePersistedDialog):
         self._save_column_widths()
         super(BookStatusDialog, self).close()
 
-    def do_something(self):
-        '''
-        '''
-        def _extract_body_text(data):
-            '''
-            Get the body text of this html content with any html tags stripped
-            '''
-            RE_HTML_BODY = re.compile(u'<body[^>]*>(.*)</body>', re.UNICODE | re.DOTALL | re.IGNORECASE)
-            RE_STRIP_MARKUP = re.compile(u'<[^>]+>', re.UNICODE)
-
-            body = RE_HTML_BODY.findall(data)
-            if body:
-                return RE_STRIP_MARKUP.sub('', body[0]).replace('.','. ')
-            return ''
-
-
-        self._log_location()
-
-        selected_books = self._get_selected_books()
-        if selected_books:
-            for cid in selected_books:
-                self._log("%s: %s" % (cid, selected_books[cid]))
-
-                # Copy the remote epub to local storage
-                path = selected_books[cid]['path']
-                rbp = '/'.join(['/Documents', path])
-                lbp = os.path.join(self.local_cache_folder, path)
-
-                # Set the driver busy flag, copy the file
-                self._wait_for_driver_not_busy()
-                self.parent.connected_device.busy = True
-                with open(lbp, 'wb') as out:
-                    self.parent.ios.copy_from_idevice(str(rbp), out)
-                self.parent.connected_device.busy = False
-
-                # Open the file
-                iterator = EbookIterator(lbp)
-                iterator.__enter__(only_input_plugin=True, run_char_count=True,
-                                   read_anchor_map=False)
-                book_files = []
-                strip_html = True
-                for path in iterator.spine:
-                    with open(path, 'rb') as f:
-                        html = f.read().decode('utf-8', 'replace')
-                        if strip_html:
-                            html = unicode(_extract_body_text(html)).strip()
-                            #print('FOUND HTML:', html)
-                    book_files.append(html)
-                book_text = ''.join(book_files)
-
-                wordcount = get_wordcount_obj(book_text)
-
-                self._log("%s: %d words" % (selected_books[cid]['title'], wordcount.words))
-
-                # Delete the local copy
-                os.remove(lbp)
-
-        else:
-            self._log("No selected books")
-
     def getTableRowDoubleClick(self, index):
-        self.do_something()
+        self.row_double_clicked(index)
+
+    def row_double_clicked(self, index):
+        self._log_location(index)
 
     def show_installed_books_dialog_clicked(self, button):
         '''
@@ -394,8 +338,8 @@ class BookStatusDialog(SizePersistedDialog):
                 self.toggle_confidence_colors()
             elif button.objectName() == 'toggle_checkmarks_button':
                 self.toggle_checkmarks()
-            elif button.objectName() == 'do_something_button':
-                self.do_something()
+            elif button.objectName() == 'calculate_word_count_button':
+                self._calculate_word_count()
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.HelpRole:
             self.show_help()
@@ -438,6 +382,91 @@ class BookStatusDialog(SizePersistedDialog):
         self.tm.refresh(self.show_confidence_colors)
 
     # Helpers
+    def _calculate_word_count(self):
+        '''
+        Calculate word count for each selected book
+        '''
+        def _extract_body_text(data):
+            '''
+            Get the body text of this html content with any html tags stripped
+            '''
+            RE_HTML_BODY = re.compile(u'<body[^>]*>(.*)</body>', re.UNICODE | re.DOTALL | re.IGNORECASE)
+            RE_STRIP_MARKUP = re.compile(u'<[^>]+>', re.UNICODE)
+
+            body = RE_HTML_BODY.findall(data)
+            if body:
+                return RE_STRIP_MARKUP.sub('', body[0]).replace('.','. ')
+            return ''
+
+        self._log_location()
+
+        selected_books = self._get_selected_books()
+        if selected_books:
+
+            stats = {}
+
+            pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word counts", on_top=True)
+            total_books = len(selected_books)
+            pb.set_maximum(total_books)
+            pb.set_value(0)
+            pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
+            pb.show()
+
+            for i, cid in enumerate(selected_books):
+                pb.set_label('{:^100}'.format(selected_books[cid]['title']))
+
+                # Copy the remote epub to local storage
+                path = selected_books[cid]['path']
+                rbp = '/'.join(['/Documents', path])
+                lbp = os.path.join(self.local_cache_folder, path)
+
+                # Set the driver busy flag, copy the file
+                self._wait_for_driver_not_busy()
+                self.parent.connected_device.busy = True
+                with open(lbp, 'wb') as out:
+                    self.parent.ios.copy_from_idevice(str(rbp), out)
+                self.parent.connected_device.busy = False
+
+                # Open the file
+                iterator = EbookIterator(lbp)
+                iterator.__enter__(only_input_plugin=True, run_char_count=True,
+                                   read_anchor_map=False)
+                book_files = []
+                strip_html = True
+                for path in iterator.spine:
+                    with open(path, 'rb') as f:
+                        html = f.read().decode('utf-8', 'replace')
+                        if strip_html:
+                            html = unicode(_extract_body_text(html)).strip()
+                            #print('FOUND HTML:', html)
+                    book_files.append(html)
+                book_text = ''.join(book_files)
+
+                wordcount = get_wordcount_obj(book_text)
+
+                self._log("%s: %d words" % (selected_books[cid]['title'], wordcount.words))
+                stats[selected_books[cid]['title']] = wordcount.words
+
+                # Delete the local copy
+                os.remove(lbp)
+                pb.increment()
+
+                # Update Marvin db
+
+            pb.hide()
+
+            # Display a summary
+            title = "Word count results"
+            msg = ("<p>Calculated word count for {0} books.</p>".format(total_books) +
+                   "<p>Click <b>Show details</b> for a summary.</p>")
+            dl = ["%s: %s" % (stat, locale.format("%d", stats[stat], grouping=True))
+                   for stat in stats]
+            details = '\n'.join(dl)
+            MessageBox(MessageBox.INFO, title, msg, det_msg=details,
+                           show_copy_button=False).exec_()
+        else:
+            self._log("No selected books")
+
     def _compute_epub_hash(self, zipfile):
         '''
         Generate a hash of all *.*html files names, sizes
@@ -1023,6 +1052,7 @@ class BookStatusDialog(SizePersistedDialog):
                              as_path=True, preserve_filename=True)
             uuid_map[uuid]['hash'] = self._compute_epub_hash(path)
             os.remove(path)
+            pb.increment()
 
         hash_map = library_scanner.build_hash_map()
         pb.hide()
