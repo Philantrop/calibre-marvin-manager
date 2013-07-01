@@ -5,27 +5,6 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-"""
-import operator
-from time import localtime, strftime
-
-from PyQt4 import QtCore, QtGui
-from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QBrush,
-                      QCheckBox, QColor, QDialog, QDialogButtonBox, QFont, QLabel,
-                      QTableView, QTableWidgetItem,
-                      QVariant, QVBoxLayout,
-                      SIGNAL)
-from PyQt4.QtWebKit import QWebView
-
-from calibre.constants import islinux, isosx, iswindows
-
-from calibre_plugins.annotations.common_utils import (
-    BookStruct, HelpView, SizePersistedDialog,
-    get_clippings_cid)
-
-import calibre_plugins.annotations.config as cfg
-from calibre_plugins.annotations.reader_app_support import ReaderApp
-"""
 import hashlib, locale, operator, os, sqlite3, sys, time
 from lxml import etree
 
@@ -39,7 +18,9 @@ from PyQt4.QtWebKit import QWebView
 
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.driver import debug_print
+from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.utils.icu import sort_key
+from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
@@ -210,7 +191,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.tv = QTableView(self)
         self.l.addWidget(self.tv)
-        self.library_header = ['', 'uuid', 'cid', 'mid',
+        self.library_header = ['', 'uuid', 'cid', 'mid', 'path',
                                'Title', 'Author', 'Progress',
                                'Last Opened', 'Word Count', 'Annotations',
                                'Collections', 'Deep View', 'Vocabulary',
@@ -219,6 +200,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.UUID_COL = self.library_header.index('uuid')
         self.CALIBRE_ID_COL = self.library_header.index('cid')
         self.BOOK_ID_COL = self.library_header.index('mid')
+        self.PATH_COL = self.library_header.index('path')
         self.TITLE_COL = self.library_header.index('Title')
         self.AUTHOR_COL = self.library_header.index('Author')
         self.PROGRESS_COL = self.library_header.index('Progress')
@@ -230,7 +212,14 @@ class BookStatusDialog(SizePersistedDialog):
         self.VOCABULARY_COL = self.library_header.index('Vocabulary')
         self.MATCHED_COL = self.library_header.index('Match Quality')
 
-        columns_to_center = [
+        hidden_columns =    [
+                             self.UUID_COL,
+                             self.CALIBRE_ID_COL,
+                             self.BOOK_ID_COL,
+                             self.PATH_COL,
+                             self.MATCHED_COL,
+                            ]
+        centered_columns =  [
                              self.ANNOTATIONS_COL,
                              self.COLLECTIONS_COL,
                              self.DEEP_VIEW_COL,
@@ -241,7 +230,7 @@ class BookStatusDialog(SizePersistedDialog):
         right_aligned_columns = [
                              self.WORD_COUNT_COL
                              ]
-        self.tm = MarkupTableModel(self, columns_to_center=columns_to_center,
+        self.tm = MarkupTableModel(self, columns_to_center=centered_columns,
                                    right_aligned_columns=right_aligned_columns)
 
         self.tv.setModel(self.tm)
@@ -260,40 +249,21 @@ class BookStatusDialog(SizePersistedDialog):
         # Hide the vertical self.header
         self.tv.verticalHeader().setVisible(False)
 
-        # Hide uuid, mid, Match Quality
-        self.tv.hideColumn(self.library_header.index('uuid'))
-        self.tv.hideColumn(self.library_header.index('cid'))
-        self.tv.hideColumn(self.library_header.index('mid'))
-        self.tv.hideColumn(self.library_header.index('Match Quality'))
+        # Hide hidden columns
+        for index in hidden_columns:
+            self.tv.hideColumn(index)
 
         # Set horizontal self.header props
         self.tv.horizontalHeader().setStretchLastSection(True)
 
+        # Set column width to fit contents
+        self.tv.resizeColumnsToContents()
+
+        # Restore saved widths if available
         saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', False)
         if saved_column_widths:
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
-            #self.tv.resizeColumnsToContents()
-        elif False:
-            narrow_columns = ['Annotations', 'Collections', 'Deep View',
-                              'Last Opened', 'Progress', 'Vocabulary']
-            extra_width = 10
-            breathing_space = 20
-
-            # Set column width to fit contents
-            self.tv.resizeColumnsToContents()
-            perfect_width = 10 + (len(narrow_columns) * extra_width)
-            first_visible = self.library_header.index('Title')
-            last_visible = self.library_header.index('Vocabulary')
-            for i in range(first_visible, last_visible):
-                perfect_width += self.tv.columnWidth(i) + breathing_space
-            self.tv.setMinimumSize(perfect_width, 100)
-            self.perfect_width = perfect_width
-
-            # Add some width to narrow columns
-            for nc in narrow_columns:
-                cw = self.tv.columnWidth(self.library_header.index(nc))
-                self.tv.setColumnWidth(self.library_header.index(nc), cw + extra_width)
 
         # Set row height
         nrows = len(self.tabledata)
@@ -351,11 +321,48 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         self._log_location()
-        i = self.tvSelectionModel.currentIndex().row()
-        uuid = self.tm.arraydata[i][self.library_header.index('uuid')]
-        title = str(self.tm.arraydata[i][self.library_header.index('Title')].text())
-        self._log("selected uuid: %s" % repr(uuid))
-        self._log("selected title: %s" % repr(title))
+
+        selected_books = self._get_selected_books()
+        if selected_books:
+            for cid in selected_books:
+                self._log("%s: %s" % (cid, selected_books[cid]))
+
+                # Copy the remote epub to local storage
+                path = selected_books[cid]['path']
+                rbp = '/'.join(['/Documents', path])
+                lbp = os.path.join(self.local_cache_folder, path)
+
+                # Set the driver busy flag, copy the file
+                self._wait_for_driver_not_busy()
+                self.parent.connected_device.busy = True
+                with open(lbp, 'wb') as out:
+                    self.parent.ios.copy_from_idevice(str(rbp), out)
+                self.parent.connected_device.busy = False
+
+                # Open the file
+                iterator = EbookIterator(lbp)
+                iterator.__enter__(only_input_plugin=True, run_char_count=True,
+                                   read_anchor_map=False)
+                book_files = []
+                strip_html = False
+                for path in iterator.spine:
+                    with open(path, 'rb') as f:
+                        html = f.read().decode('utf-8', 'replace')
+                        if strip_html:
+                            html = unicode(_extract_body_text(html)).strip()
+                            #print('FOUND HTML:', html)
+                    book_files.append(html)
+                book_text = ''.join(book_files)
+
+                wordcount = get_wordcount_obj(book_text)
+
+                self._log("%s: %d words" % (selected_books[cid]['title'], wordcount.words))
+
+                # Delete the local copy
+                os.remove(lbp)
+
+        else:
+            self._log("No selected books")
 
     def getTableRowDoubleClick(self, index):
         self.do_something()
@@ -545,6 +552,7 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.uuid,
                 book_data.cid,
                 book_data.mid,
+                book_data.path,
                 title,
                 author,
                 progress,
@@ -853,6 +861,21 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("%s word_count: %s" % (book.title,
                                                   repr(book.word_count)))
         return installed_books
+
+    def _get_selected_books(self):
+        '''
+        Generate a dict of books selected in the dialog
+        '''
+        selected_books = {}
+        for i in range(len(self.tabledata)):
+            self.tv.selectRow(i)
+            enabled = bool(self.tm.arraydata[i][self.ENABLED_COL].checkState())
+            if enabled:
+                cid = self.tm.arraydata[i][self.library_header.index('cid')]
+                path = self.tm.arraydata[i][self.library_header.index('path')]
+                title = str(self.tm.arraydata[i][self.library_header.index('Title')].text())
+                selected_books[cid] = {'title': title, 'path': path}
+        return selected_books
 
     def _localize_hash_cache(self, cached_books):
         '''
