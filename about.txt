@@ -1,0 +1,7 @@
+The Marvin Mangler
+
+A calibre plugin for managing Marvin
+
+Version history:
+0.0.1 [27 June 2013]
+ • Initial implementation
