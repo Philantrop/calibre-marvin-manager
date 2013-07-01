@@ -5,7 +5,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import hashlib, locale, operator, os, sqlite3, sys, time
+import hashlib, locale, operator, os, re, sqlite3, sys, time
 from lxml import etree
 
 from PyQt4 import QtCore, QtGui
@@ -320,6 +320,19 @@ class BookStatusDialog(SizePersistedDialog):
     def do_something(self):
         '''
         '''
+        def _extract_body_text(data):
+            '''
+            Get the body text of this html content with any html tags stripped
+            '''
+            RE_HTML_BODY = re.compile(u'<body[^>]*>(.*)</body>', re.UNICODE | re.DOTALL | re.IGNORECASE)
+            RE_STRIP_MARKUP = re.compile(u'<[^>]+>', re.UNICODE)
+
+            body = RE_HTML_BODY.findall(data)
+            if body:
+                return RE_STRIP_MARKUP.sub('', body[0]).replace('.','. ')
+            return ''
+
+
         self._log_location()
 
         selected_books = self._get_selected_books()
@@ -344,7 +357,7 @@ class BookStatusDialog(SizePersistedDialog):
                 iterator.__enter__(only_input_plugin=True, run_char_count=True,
                                    read_anchor_map=False)
                 book_files = []
-                strip_html = False
+                strip_html = True
                 for path in iterator.spine:
                     with open(path, 'rb') as f:
                         html = f.read().decode('utf-8', 'replace')
