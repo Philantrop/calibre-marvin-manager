@@ -85,14 +85,7 @@
                 <item>
                  <widget class="QCheckBox" name="debug_plugin">
                   <property name="text">
-                   <string>Enable debugging for Marvin Mangler</string>
-                  </property>
-                 </widget>
-                </item>
-                <item>
-                 <widget class="QCheckBox" name="debug_libimobiledevice">
-                  <property name="text">
-                   <string>Enable debugging for libiMobileDevice</string>
+                   <string>Enable debugging for plugin</string>
                   </property>
                  </widget>
                 </item>

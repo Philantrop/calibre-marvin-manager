@@ -61,7 +61,7 @@ class SortableTableWidgetItem(QTableWidgetItem):
 class MarkupTableModel(QAbstractTableModel):
     #http://www.saltycrane.com/blog/2007/12/pyqt-43-qtableview-qabstracttablemodel/
 
-    def __init__(self, parent=None, columns_to_center=[], *args):
+    def __init__(self, parent=None, columns_to_center=[], right_aligned_columns=[], *args):
         """
         datain: a list of lists
         headerdata: a list of strings
@@ -70,6 +70,7 @@ class MarkupTableModel(QAbstractTableModel):
         self.parent = parent
         self.arraydata = parent.tabledata
         self.centered_columns = columns_to_center
+        self.right_aligned_columns = right_aligned_columns
         self.headerdata = parent.library_header
         self.show_confidence_colors = parent.show_confidence_colors
 
@@ -116,6 +117,8 @@ class MarkupTableModel(QAbstractTableModel):
             return self.arraydata[row][self.parent.LAST_OPENED_COL].text()
         elif role == Qt.TextAlignmentRole and (col in self.centered_columns):
             return Qt.AlignHCenter
+        elif role == Qt.TextAlignmentRole and (col in self.right_aligned_columns):
+            return Qt.AlignRight
         elif role != Qt.DisplayRole:
             return QVariant()
         return QVariant(self.arraydata[index.row()][index.column()])
@@ -158,7 +161,7 @@ class MarkupTableModel(QAbstractTableModel):
         self.emit(SIGNAL("layoutChanged()"))
 
 
-class BookStatusDialog(QDialog):
+class BookStatusDialog(SizePersistedDialog):
     '''
     '''
     # Location reporting template
@@ -176,7 +179,8 @@ class BookStatusDialog(QDialog):
         FONT = QFont('Monospace', 9)
         FONT.setStyleHint(QFont.TypeWriter)
 
-    def __init__(self, parent):
+    #def __init__(self, parent):
+    def initialize(self, parent):
         self.flags = {
             'new': 'NEW',
             'read': 'READ',
@@ -185,6 +189,9 @@ class BookStatusDialog(QDialog):
         self.hash_cache = 'content_hashes.zip'
         self.opts = parent.opts
         self.parent = parent
+        self.prefs = parent.opts.prefs
+        self.library_title_map = None
+        self.library_uuid_map = None
         self.local_cache_folder = self.parent.connected_device.temp_dir
         self.local_hash_cache = None
         self.remote_cache_folder = '/'.join(['/Library','calibre.mm'])
@@ -195,8 +202,6 @@ class BookStatusDialog(QDialog):
 
         self._construct_table_data(self._generate_booklist())
 
-        QDialog.__init__(self, parent=self.opts.gui)
-
         self.setWindowTitle(u'Marvin Library: %d books' % len(self.tabledata))
         self.setWindowIcon(self.opts.icon)
         self.l = QVBoxLayout(self)
@@ -205,23 +210,26 @@ class BookStatusDialog(QDialog):
 
         self.tv = QTableView(self)
         self.l.addWidget(self.tv)
-        self.library_header = ['uuid', 'book_id', '', 'Title',
-                                   'Author', 'Progress', 'Last Opened',
-                                   'Annotations', 'Collections', 'Deep View',
-                                   'Vocabulary', 'Word Count', 'Match Quality']
+        self.library_header = ['', 'uuid', 'cid', 'mid',
+                               'Title', 'Author', 'Progress',
+                               'Last Opened', 'Word Count', 'Annotations',
+                               'Collections', 'Deep View', 'Vocabulary',
+                               'Match Quality']
+        self.ENABLED_COL = 0
         self.UUID_COL = self.library_header.index('uuid')
-        self.BOOK_ID_COL = self.library_header.index('book_id')
-        self.ENABLED_COL = 2
+        self.CALIBRE_ID_COL = self.library_header.index('cid')
+        self.BOOK_ID_COL = self.library_header.index('mid')
         self.TITLE_COL = self.library_header.index('Title')
         self.AUTHOR_COL = self.library_header.index('Author')
         self.PROGRESS_COL = self.library_header.index('Progress')
         self.LAST_OPENED_COL = self.library_header.index('Last Opened')
+        self.WORD_COUNT_COL = self.library_header.index('Word Count')
         self.ANNOTATIONS_COL = self.library_header.index('Annotations')
         self.COLLECTIONS_COL = self.library_header.index('Collections')
         self.DEEP_VIEW_COL = self.library_header.index('Deep View')
         self.VOCABULARY_COL = self.library_header.index('Vocabulary')
-        self.WORD_COUNT_COL = self.library_header.index('Word Count')
         self.MATCHED_COL = self.library_header.index('Match Quality')
+
         columns_to_center = [
                              self.ANNOTATIONS_COL,
                              self.COLLECTIONS_COL,
@@ -230,7 +238,12 @@ class BookStatusDialog(QDialog):
                              self.PROGRESS_COL,
                              self.VOCABULARY_COL,
                              ]
-        self.tm = MarkupTableModel(self, columns_to_center=columns_to_center)
+        right_aligned_columns = [
+                             self.WORD_COUNT_COL
+                             ]
+        self.tm = MarkupTableModel(self, columns_to_center=columns_to_center,
+                                   right_aligned_columns=right_aligned_columns)
+
         self.tv.setModel(self.tm)
         self.tv.setShowGrid(False)
         self.tv.setFont(self.FONT)
@@ -247,28 +260,32 @@ class BookStatusDialog(QDialog):
         # Hide the vertical self.header
         self.tv.verticalHeader().setVisible(False)
 
-        # Hide uuid, book_id, confidence
+        # Hide uuid, mid, Match Quality
         self.tv.hideColumn(self.library_header.index('uuid'))
-        self.tv.hideColumn(self.library_header.index('book_id'))
+        self.tv.hideColumn(self.library_header.index('cid'))
+        self.tv.hideColumn(self.library_header.index('mid'))
         self.tv.hideColumn(self.library_header.index('Match Quality'))
 
         # Set horizontal self.header props
         self.tv.horizontalHeader().setStretchLastSection(True)
 
         saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', False)
-        if False and saved_column_widths:
+        if saved_column_widths:
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
-            self.tv.resizeColumnsToContents()
-        else:
-            narrow_columns = ['Annotations', 'Collections', 'Deep View', 'Last Opened', 'Progress', 'Vocabulary', ]
+            #self.tv.resizeColumnsToContents()
+        elif False:
+            narrow_columns = ['Annotations', 'Collections', 'Deep View',
+                              'Last Opened', 'Progress', 'Vocabulary']
             extra_width = 10
             breathing_space = 20
 
             # Set column width to fit contents
             self.tv.resizeColumnsToContents()
             perfect_width = 10 + (len(narrow_columns) * extra_width)
-            for i in range(3, 8):
+            first_visible = self.library_header.index('Title')
+            last_visible = self.library_header.index('Vocabulary')
+            for i in range(first_visible, last_visible):
                 perfect_width += self.tv.columnWidth(i) + breathing_space
             self.tv.setMinimumSize(perfect_width, 100)
             self.perfect_width = perfect_width
@@ -287,15 +304,15 @@ class BookStatusDialog(QDialog):
 
         sort_column = self.opts.prefs.get('marvin_library_sort_column',
                                           self.library_header.index('Match Quality'))
-        sort_order = self.opts.prefs.get('annotated_books_dialog_sort_order',
+        sort_order = self.opts.prefs.get('marvin_library_sort_order',
                                          Qt.DescendingOrder)
         self.tv.sortByColumn(sort_column, sort_order)
 
         # ~~~~~~~~ Create the ButtonBox ~~~~~~~~
-        self.dialogButtonBox = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Help)
+        self.dialogButtonBox = QDialogButtonBox(QDialogButtonBox.Help)
         self.dialogButtonBox.setOrientation(Qt.Horizontal)
         self.done_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Ok)
-        self.done_button.setText('Done')
+        self.done_button.setText('Close')
 
         # Action buttons
         self.toggle_checkmarks_button = self.dialogButtonBox.addButton('Clear All', QDialogButtonBox.ActionRole)
@@ -313,6 +330,8 @@ class BookStatusDialog(QDialog):
         self.dialogButtonBox.clicked.connect(self.show_installed_books_dialog_clicked)
         self.l.addWidget(self.dialogButtonBox)
 
+        self.resize_dialog()
+
     def accept(self):
         self._log_location()
         self._save_column_widths()
@@ -320,7 +339,7 @@ class BookStatusDialog(QDialog):
 
     def capture_sort_column(self, sort_column):
         sort_order = self.tv.horizontalHeader().sortIndicatorOrder()
-        self.opts.prefs.set('marvin_library_column', sort_column)
+        self.opts.prefs.set('marvin_library_sort_column', sort_column)
         self.opts.prefs.set('marvin_library_sort_order', sort_order)
 
     def close(self):
@@ -368,7 +387,7 @@ class BookStatusDialog(QDialog):
         Display help file
         '''
         hv = HelpView(self, self.opts.icon, self.opts.prefs,
-                      html=get_resources('help/import_annotations.html'), title="Import Annotations")
+                      html=get_resources('help/marvin_library.html'), title="Marvin Library")
         hv.show()
 
     def size_hint(self):
@@ -421,9 +440,9 @@ class BookStatusDialog(QDialog):
                     text_hrefs.append(item.get('href').split('/')[-1])
             zf.close()
         except:
-            error = True
-            import traceback
-            self._log(traceback.format_exc())
+            if self.opts.prefs.get('development_mode', False):
+                import traceback
+                self._log(traceback.format_exc())
             return None
 
         m = hashlib.md5()
@@ -442,12 +461,16 @@ class BookStatusDialog(QDialog):
         return m.hexdigest()
 
     def _construct_table_data(self, booklist):
-        # Populate the table data
+        '''
+        Populate the table data
+        '''
+        self._log_location()
+
         self.tabledata = []
 
         for book_data in booklist:
             enabled = QCheckBox()
-            enabled.setChecked(True)
+            enabled.setChecked(False)
 
             # last_opened sorts by timestamp
             last_opened_ts = ''
@@ -494,31 +517,43 @@ class BookStatusDialog(QDialog):
                 book_data.progress)
 
             # Match quality
+            if self.opts.prefs.get('development_mode', False):
+                self._log("%s uuid: %s matches: %s on_device: %s" %
+                            (book_data.title,
+                             repr(book_data.uuid),
+                             repr(book_data.matches),
+                             repr(book_data.on_device)))
+
             match_quality = 0
-            if [book_data.uuid] == book_data.matches:
+            if (book_data.uuid > '' and
+                [book_data.uuid] == book_data.matches):
                 # Exact uuid match
                 match_quality = 3
-            elif book_data.uuid in book_data.matches:
+            elif (book_data.uuid > '' and
+                  book_data.uuid in book_data.matches):
                 # Duplicates
                 match_quality = 1
-            elif len(book_data.matches):
+            elif book_data.on_device == 'Main':
                 # Soft match
                 match_quality = 2
+            if self.opts.prefs.get('development_mode', False):
+                self._log("match_quality: %s" % match_quality)
 
             # List order matches self.library_header
             this_book = [
-                book_data.uuid,
-                book_data.book_id,
                 enabled,
+                book_data.uuid,
+                book_data.cid,
+                book_data.mid,
                 title,
                 author,
                 progress,
                 last_opened,
+                book_data.word_count if book_data.word_count > '0' else '',
                 self.CHECKMARK if book_data.has_highlights else '',
                 self.CHECKMARK if len(book_data.collections) else '',
                 self.CHECKMARK if book_data.deep_view_prepared else '',
                 self.CHECKMARK if len(book_data.vocabulary) else '',
-                book_data.word_count if book_data.word_count > '0' else '',
                 match_quality
                 ]
             self.tabledata.append(this_book)
@@ -603,6 +638,10 @@ class BookStatusDialog(QDialog):
         if self.parent.library_scanner.isRunning():
             self.library_scanner.wait()
 
+        # Save a copy of the title, uuid map
+        self.library_title_map = self.parent.library_scanner.title_map
+        self.library_uuid_map = self.parent.library_scanner.uuid_map
+
         # Get the library hash_map
         library_hash_map = self.parent.library_scanner.hash_map
         if library_hash_map is None:
@@ -637,6 +676,28 @@ class BookStatusDialog(QDialog):
         soft match: author/title or md5 contents/size match excluding OPF - yellow
 
         '''
+        def _get_calibre_id(uuid, title, author):
+            '''
+            Find book in library, return cid
+            '''
+            if self.opts.prefs.get('development_mode', False):
+                self._log_location("%s %s" % (repr(title), repr(author)))
+            ans = None
+            db = self.opts.gui.current_db
+            if uuid in self.library_uuid_map:
+                ans = self.library_uuid_map[uuid]['id']
+                if self.opts.prefs.get('development_mode', False):
+                    self._log("UUID match")
+            elif title in self.library_title_map:
+                cid = self.library_title_map[title]['id']
+                mi = db.get_metadata(cid, index_is_id=True)
+                authors = author.split(', ')
+                if authors == mi.authors:
+                    ans = cid
+                    if self.opts.prefs.get('development_mode', False):
+                        self._log("TITLE/AUTHOR match")
+            return ans
+
         def _get_collections(cur, book_id, row):
             # Get the collection assignments
             ca_cur = con.cursor()
@@ -678,6 +739,20 @@ class BookStatusDialog(QDialog):
                 return True
             else:
                 return False
+
+        def _get_on_device_status(cid):
+            '''
+            Given a uuid, return the on_device status of the book
+            '''
+            if self.opts.prefs.get('development_mode', False):
+                self._log_location()
+
+            ans = None
+            if cid:
+                db = self.opts.gui.current_db
+                mi = db.get_metadata(cid, index_is_id=True)
+                ans = mi.ondevice_col
+            return ans
 
         def _get_vocabulary_list(cur, book_id):
             # Get the vocabulary content
@@ -754,12 +829,16 @@ class BookStatusDialog(QDialog):
                 # Get the primary metadata from Books
                 this_book = Book(row[b'Title'], row[b'Author'])
                 this_book.author_sort = row[b'AuthorSort']
-                this_book.book_id = book_id
+                this_book.cid = _get_calibre_id(row[b'UUID'],
+                                                row[b'Title'],
+                                                row[b'Author'])
                 this_book.collections = _get_collections(cur, book_id, row)
                 this_book.date_opened = row[b'DateOpened']
                 this_book.deep_view_prepared = row[b'DeepViewPrepared']
                 this_book.hash = hashes[row[b'FileName']]['hash']
                 this_book.has_highlights = _get_highlights(cur, book_id)
+                this_book.mid = book_id
+                this_book.on_device = _get_on_device_status(this_book.cid)
                 this_book.path = row[b'FileName']
                 this_book.progress = row[b'Progress']
                 this_book.title_sort = row[b'CalibreTitleSort']
@@ -781,7 +860,6 @@ class BookStatusDialog(QDialog):
         If existing cached, purge orphans
         '''
         self._log_location()
-        self._log()
 
         # Set the driver busy flag
         self._wait_for_driver_not_busy()

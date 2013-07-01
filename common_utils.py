@@ -27,6 +27,7 @@ import cStringIO, os, re, shutil, sys, tempfile, time
 from collections import defaultdict
 
 from calibre.constants import iswindows
+from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup
 from calibre.gui2 import Application
 from calibre.ebooks.metadata.book.base import Metadata
@@ -100,8 +101,9 @@ class SizePersistedDialog(QDialog):
     restored when they are next opened.
     '''
     def __init__(self, parent, unique_pref_name):
-        QDialog.__init__(self, parent, Qt.WindowStaysOnTopHint)
+        QDialog.__init__(self, parent.opts.gui, Qt.WindowStaysOnTopHint)
         self.unique_pref_name = unique_pref_name
+        self.prefs = parent.opts.prefs
         self.geom = self.prefs.get(unique_pref_name, None)
         self.finished.connect(self.dialog_closing)
 
@@ -120,11 +122,12 @@ class CompileUI():
     '''
     Compile Qt Creator .ui files at runtime
     '''
+    # Location reporting template
+    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
     def __init__(self, parent):
         self.compiled_forms = {}
         self.help_file = None
-        self._log = parent._log
-        self._log_location = parent._log_location
         self.parent = parent
         self.verbose = parent.verbose
         self.compiled_forms = self.compile_ui()
@@ -185,6 +188,37 @@ class CompileUI():
     def _form_to_compiled_form(self, form):
         compiled_form = form.rpartition('.')[0]+'_ui.py'
         return compiled_form
+
+    def _log(self, msg=None):
+        '''
+        Print msg to console
+        '''
+        if not self.verbose:
+            return
+
+        if msg:
+            debug_print(" %s" % str(msg))
+        else:
+            debug_print()
+
+    def _log_location(self, *args):
+        '''
+        Print location, args to console
+        '''
+        if not self.verbose:
+            return
+
+        arg1 = arg2 = ''
+
+        if len(args) > 0:
+            arg1 = str(args[0])
+        if len(args) > 1:
+            arg2 = str(args[1])
+
+        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
+            func=sys._getframe(1).f_code.co_name,
+            arg1=arg1, arg2=arg2))
+
 
 
 '''     Exceptions      '''
@@ -290,6 +324,7 @@ class IndexLibrary(QThread):
         self.hash_map = None
 
     def run(self):
+        self.title_map = self.index_by_title()
         self.uuid_map = self.index_by_uuid()
         self.emit(self.signal)
 
@@ -306,6 +341,21 @@ class IndexLibrary(QThread):
                 hash_map[v['hash']].append(uuid)
         self.hash_map = hash_map
         return hash_map
+
+    def index_by_title(self):
+        id = self.cdb.FIELD_MAP['id']
+        uuid = self.cdb.FIELD_MAP['uuid']
+        title = self.cdb.FIELD_MAP['title']
+        authors = self.cdb.FIELD_MAP['authors']
+
+        by_title = {}
+        for record in self.cdb.data.iterall():
+            by_title[record[title]] = {
+                'authors': record[authors].split(','),
+                'id': record[id],
+                'uuid': record[uuid],
+                }
+        return by_title
 
     def index_by_uuid(self):
         authors = self.cdb.FIELD_MAP['authors']
@@ -326,9 +376,8 @@ class IndexLibrary(QThread):
                     }
         return by_uuid
 
+
 '''     Helper functions   '''
-
-
 def get_icon(icon_name):
     '''
     Retrieve a QIcon for the named image from the zip file if it exists,

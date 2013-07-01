@@ -370,7 +370,8 @@ class MarvinManagerAction(InterfaceAction):
         '''
         '''
         self._log_location()
-        d = BookStatusDialog(self)
+        d = BookStatusDialog(self, 'marvin_library')
+        d.initialize(self)
         if d.exec_():
             self._log("accepted")
         else:

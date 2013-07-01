@@ -46,7 +46,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
         # Restore the debug settings
         self.debug_plugin.setChecked(self.prefs.get('debug_plugin', False))
-        self.debug_libimobiledevice.setChecked(self.prefs.get('debug_libimobiledevice', False))
 
         # Load the widgets
         self.widgets = []
@@ -90,7 +89,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
         # Save general settings
         self.prefs.set('debug_plugin', self.debug_plugin.isChecked())
-        self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice.isChecked())
 
         for pw in self.widgets:
             opts = pw.options()

@@ -1,7 +1,7 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-	<title>Import Annotations</title>
+	<title>Marvin Library</title>
 	<meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
 	<style type="text/css">
 		div.colors {
@@ -42,35 +42,42 @@
 			font-family:"Lucida Console", Monaco, monospace;
 			font-size:smaller;
 		}
-    </style>
+		tr.white {
+			background-color: #FFFFFF;
+			font-family:"Lucida Console", Monaco, monospace;
+			font-size:smaller;
+		}    </style>
 </head>
 <body>
-<h3>Import Annotations</h3>
+<h3>Marvin Library</h3>
 <div>
-  <p>Annotated books are displayed with a background color representing the quality of metadata matched with books in your library.</p>
+  <p>Books installed in Marvin's library are displayed with a background color representing matches to books in your calibre library.</p>
   <div class="colors">
-  <table width="100%">
+  <table width="100%" style="border:1px solid black;">
     <tr class="header">
-      <td>Matched metadata</td>
-      <td>Annotations will be added&hellip;</td>
+      <td>Color</td>
+      <td>Meaning</td>
     </tr>
     <tr class="green">
-      <td>Title, Author, uuid</td>
-      <td> to matched library book automatically</td>
+      <td>Green</td>
+      <td>This book has the same uuid as a book in your calibre library</td>
     </tr>
     <tr class="yellow">
-      <td>Title, Author</td>
-      <td>to matched library book after confirmation</td>
+      <td>Yellow</td>
+      <td>This book exists in your calibre library, but with a different uuid</td>
     </tr>
     <tr class="red">
-      <td>No metadata matches</td>
-      <td>to currently selected library book after confirmation</td>
+      <td>Red</td>
+      <td>This book is a duplicate copy of a uuid-matched book in your calibre library</td>
+    </tr>
+    <tr class="white">
+      <td>White</td>
+      <td>This book exists in Marvin, but not your calibre library</td>
     </tr>
   </table>
   </div>
   <p>&nbsp;</p>
-  <p>To Preview a book's annotations, select the book, then click <strong>Preview</strong>.</p>
-  <p>To import annotations from all checked books, click <strong>Import Annotations</strong>.</p>
+  <p>&nbsp;</p>
 </div>
 </body>
 </html>
