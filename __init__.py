@@ -30,7 +30,7 @@ class MarvinManagerPlugin(InterfaceActionBase):
         from calibre_plugins.marvin_manager.config import ConfigWidget
         self.icon = getattr(self.actual_plugin, 'icon', None)
         self.resources_path = getattr(self.actual_plugin, 'resources_path', None)
-        self.verbose = getattr(self.actual_plugin, 'verbose', False)
+        self.verbose = self.prefs.get('debug_plugin', False)
         self.cw = ConfigWidget(self)
         return self.cw
 

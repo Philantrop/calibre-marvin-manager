@@ -182,7 +182,8 @@ class BookStatusDialog(SizePersistedDialog):
         self.verbose = parent.verbose
         self._log_location()
 
-        self._construct_table_data(self._generate_booklist())
+        self.installed_books = self._generate_booklist()
+        self._construct_table_data()
 
         self.setWindowTitle(u'Marvin Library: %d books' % len(self.tabledata))
         self.setWindowIcon(self.opts.icon)
@@ -192,7 +193,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.tv = QTableView(self)
         self.l.addWidget(self.tv)
-        self.library_header = ['', 'uuid', 'cid', 'mid', 'path',
+        self.library_header = [self.CHECKMARK, 'uuid', 'cid', 'mid', 'path',
                                'Title', 'Author', 'Progress',
                                'Last Opened', 'Word Count', 'Annotations',
                                'Collections', 'Deep View', 'Vocabulary',
@@ -244,7 +245,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.tv.setSelectionBehavior(self.tv.SelectRows)
 
         # Connect signals
-        self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.getTableRowDoubleClick)
+        self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.double_clicked)
         self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
 
         # Hide the vertical self.header
@@ -281,9 +282,15 @@ class BookStatusDialog(SizePersistedDialog):
 
         # ~~~~~~~~ Create the ButtonBox ~~~~~~~~
         self.dialogButtonBox = QDialogButtonBox(QDialogButtonBox.Help)
-        self.dialogButtonBox.setOrientation(Qt.Horizontal)
+
+        self.delete_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Discard)
+        self.delete_button.setText('Delete')
+
         self.done_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Ok)
-        self.done_button.setText('Close')
+        self.done_button.setText('Done')
+
+        self.dialogButtonBox.setOrientation(Qt.Horizontal)
+        self.dialogButtonBox.setCenterButtons(False)
 
         # Set All/Clear All
         self.toggle_checkmarks_button = self.dialogButtonBox.addButton(' Set All ', QDialogButtonBox.ActionRole)
@@ -328,11 +335,67 @@ class BookStatusDialog(SizePersistedDialog):
         self._save_column_widths()
         super(BookStatusDialog, self).close()
 
-    def getTableRowDoubleClick(self, index):
-        self.row_double_clicked(index)
+    def double_clicked(self, index):
+        '''
+        Display column data for selected book
+        '''
+        row = index.row()
+        col = index.column()
+        column = self.library_header[col]
+        cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+        path = self.tm.arraydata[row][self.PATH_COL]
+        mid = self.tm.arraydata[row][self.BOOK_ID_COL]
+        title = str(self.tm.arraydata[row][self.TITLE_COL].text())
 
-    def row_double_clicked(self, index):
-        self._log_location(index)
+        self._log_location("%s '%s' mid: %s cid: %s" % (title, column, mid, cid))
+
+        if col == self.COLLECTIONS_COL:
+            device_collections = self.installed_books[mid].collections
+            if device_collections:
+                msg = "Marvin: " + ', '.join(sorted(device_collections, key=sort_key))
+            else:
+                msg = "Marvin: No collections assigned"
+
+            # Get calibre collection assignments
+            library_collections = []
+            if cid:
+                cfl = self.prefs.get('collection_field_lookup', '')
+                if cfl:
+                    self._log("cfl: %s" % cfl)
+                    db = self.opts.gui.current_db
+                    mi = db.get_metadata(cid, index_is_id=True)
+                    value = mi.get(cfl)
+                    if value:
+                        if type(value) is list:
+                            self._log("value is list: %s" % repr(value))
+                            msg += '\n' + "Calibre: " + ', '.join(value)
+                        elif type(value) in [str, unicode]:
+                            self._log("value is string/uni: %s" % repr(value))
+                            msg += '\n' + "Calibre: " + value
+                        else:
+                            self._log("value is unexpected type: '%s'" % type(value))
+                    else:
+                        self._log("no value for '%s'" % cfl)
+                        msg += '\n' + "Calibre: No collections assigned"
+                else:
+                    self._log("collection_field_lookup: %s" % repr(cfl))
+
+            MessageBox(MessageBox.INFO, column, msg,
+                           show_copy_button=False).exec_()
+
+        elif col == self.VOCABULARY_COL:
+            vocabulary = self.installed_books[mid].vocabulary
+            if vocabulary:
+                msg = ', '.join(sorted(vocabulary, key=sort_key))
+            else:
+                msg = ("<p>No vocabulary words.</p>")
+            MessageBox(MessageBox.INFO, column, msg,
+                           show_copy_button=False).exec_()
+
+        elif col == self.WORD_COUNT_COL:
+            selected_books = {}
+            selected_books[cid] = {'title': title, 'path': path}
+            self._calculate_word_count(selected_books=selected_books)
 
     def show_installed_books_dialog_clicked(self, button):
         '''
@@ -355,6 +418,8 @@ class BookStatusDialog(SizePersistedDialog):
             elif button.objectName() == 'bind_soft_matches_button':
                 self._bind_soft_matches()
 
+        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
+            self._delete_books()
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.HelpRole:
             self.show_help()
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.RejectRole:
@@ -403,7 +468,7 @@ class BookStatusDialog(SizePersistedDialog):
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
-    def _calculate_word_count(self):
+    def _calculate_word_count(self, selected_books=[]):
         '''
         Calculate word count for each selected book
         '''
@@ -421,9 +486,10 @@ class BookStatusDialog(SizePersistedDialog):
 
         self._log_location()
 
-        selected_books = self._get_selected_books()
-        if selected_books:
+        if not selected_books:
+            selected_books = self._get_selected_books()
 
+        if selected_books:
             stats = {}
 
             pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word counts", on_top=True)
@@ -535,15 +601,16 @@ class BookStatusDialog(SizePersistedDialog):
 
         return m.hexdigest()
 
-    def _construct_table_data(self, booklist):
+    def _construct_table_data(self):
         '''
-        Populate the table data
+        Populate the table data from self.installed_books
         '''
         self._log_location()
 
         self.tabledata = []
 
-        for book_data in booklist:
+        for book in self.installed_books:
+            book_data = self.installed_books[book]
             enabled = QCheckBox()
             enabled.setChecked(False)
 
@@ -634,6 +701,15 @@ class BookStatusDialog(SizePersistedDialog):
                 ]
             self.tabledata.append(this_book)
 
+    def _delete_books(self):
+        '''
+        '''
+        self._log_location()
+        title = "Delete books"
+        msg = ("<p>Not implemented</p>")
+        MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
+
     def _fetch_marvin_content_hash(self, path):
         '''
         Given a Marvin path, compute/fetch a hash of its contents (excluding OPF)
@@ -684,8 +760,9 @@ class BookStatusDialog(SizePersistedDialog):
         library_hash_map = library_scanner.hash_map
         hard_matches = {}
         soft_matches = []
-        for mb in installed_books:
+        for book in installed_books:
             #self._log("evaluating %s hash: %s uuid: %s" % (mb.title, mb.hash, mb.uuid))
+            mb = installed_books[book]
             uuids = []
             if mb.hash in library_hash_map:
                 if mb.uuid in library_hash_map[mb.hash]:
@@ -714,7 +791,7 @@ class BookStatusDialog(SizePersistedDialog):
         if self.parent.library_scanner.isRunning():
             self.library_scanner.wait()
 
-        # Save a copy of the title, uuid map
+        # Save a reference to the title, uuid map
         self.library_title_map = self.parent.library_scanner.title_map
         self.library_uuid_map = self.parent.library_scanner.uuid_map
 
@@ -751,6 +828,7 @@ class BookStatusDialog(SizePersistedDialog):
         hard match: uuid - green
         soft match: author/title or md5 contents/size match excluding OPF - yellow
 
+        {mid: Book, ...}
         '''
         def _get_calibre_id(uuid, title, author):
             '''
@@ -859,7 +937,7 @@ class BookStatusDialog(SizePersistedDialog):
         hashes = self._scan_marvin_books(cached_books)
 
         # Get the mainDb data
-        installed_books = []
+        installed_books = {}
         con = sqlite3.connect(self.parent.connected_device.local_db_path)
         with con:
             con.row_factory = sqlite3.Row
@@ -921,13 +999,13 @@ class BookStatusDialog(SizePersistedDialog):
                 this_book.uuid = row[b'UUID']
                 this_book.vocabulary = _get_vocabulary_list(cur, book_id)
                 this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
-                installed_books.append(this_book)
+                installed_books[book_id] = this_book
 
         if self.opts.prefs.get('development_mode', False):
             self._log("%d cached books from Marvin:" % len(cached_books))
             for book in installed_books:
-                self._log("%s word_count: %s" % (book.title,
-                                                  repr(book.word_count)))
+                self._log("%s word_count: %s" % (installed_books[book].title,
+                                                 repr(installed_books[book].word_count)))
         return installed_books
 
     def _get_selected_books(self):
@@ -1090,6 +1168,11 @@ class BookStatusDialog(SizePersistedDialog):
         Create the initial dict of installed books with hash values
         '''
         self._log_location()
+
+        # Fetch pre-existing hash cache from device
+        self._localize_hash_cache(cached_books)
+
+        # Set up the progress bar
         pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin", on_top=True)
         total_books = len(cached_books)
         pb.set_maximum(total_books)
@@ -1097,11 +1180,7 @@ class BookStatusDialog(SizePersistedDialog):
         pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
         pb.show()
 
-        # Fetch pre-existing hash cache from device
-        self._localize_hash_cache(cached_books)
-
         installed_books = {}
-
         for i, path in enumerate(cached_books):
             this_book = {}
             pb.set_label('{:^100}'.format("%d of %d" % (i+1, total_books)))
@@ -1109,11 +1188,10 @@ class BookStatusDialog(SizePersistedDialog):
 
             installed_books[path] = this_book
             pb.increment()
+        pb.hide()
 
         # Push the local hash to the iDevice
         self._update_remote_hash_cache()
-
-        pb.hide()
 
         return installed_books
 

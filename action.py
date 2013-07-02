@@ -54,19 +54,18 @@ from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.devices.usbms.driver import debug_print
-from calibre.utils.config import config_dir, JSONConfig
+from calibre.utils.config import config_dir
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (CompileUI, IndexLibrary,
     ProgressBar, Struct,
     get_icon, set_plugin_icon_resources)
+import calibre_plugins.marvin_manager.config as cfg
 
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
 PLUGIN_ICONS = ['images/icon.png']
-
-plugin_prefs = JSONConfig('plugins/Marvin Mangler')
 
 class MarvinManagerAction(InterfaceAction):
 
@@ -75,7 +74,7 @@ class MarvinManagerAction(InterfaceAction):
 
     icon = PLUGIN_ICONS[0]
     name = 'Marvin Mangler'
-    prefs = plugin_prefs
+    prefs = cfg.plugin_prefs
     verbose = prefs.get('debug_plugin', False)
 
     # Declare the main action associated with this plugin
@@ -358,13 +357,8 @@ class MarvinManagerAction(InterfaceAction):
         d.exec_()
 
     def show_help(self):
-        if False:
-            hv = HelpView(self.gui, self.opts.icon, self.opts.prefs,
-                          page=os.path.join(self.resources_path, 'help/help.html'), title="Marvin Mangler Help")
-            hv.show()
-        else:
-            path = os.path.join(self.resources_path, 'help/help.html')
-            open_url(QUrl.fromLocalFile(path))
+        path = os.path.join(self.resources_path, 'help/help.html')
+        open_url(QUrl.fromLocalFile(path))
 
     def show_installed_books(self):
         '''

@@ -22,6 +22,8 @@ if True:
     from main_ui import Ui_Dialog
     sys.path.remove(widget_path)
 
+plugin_prefs = JSONConfig('plugins/Marvin Mangler')
+
 class ConfigWidget(QWidget, Ui_Dialog):
     '''
     Tabbed config dialog for iOS Reader Apps
@@ -37,7 +39,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.gui = get_gui()
         self.icon = parent.icon
         self.parent = parent
-        self.prefs = parent.prefs
+        self.prefs = plugin_prefs
         self.resources_path = parent.resources_path
         self.verbose = parent.verbose
         self._log_location()
@@ -79,6 +81,33 @@ class ConfigWidget(QWidget, Ui_Dialog):
         #self.reader_apps.currentIndexChanged.connect(self.show_plugin_tab)
         self.show_plugin_tab(None)
 
+        # Init the collection field pick list
+        self.eligible_custom_fields = self.get_eligible_custom_fields()
+        self.collection_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_custom_fields.keys(), key=lambda s: s.lower())
+        self.collection_field_comboBox.addItems(ecf)
+
+        # Get the saved collection field
+        cf = self.prefs.get('collection_field_comboBox', '')
+        idx = self.collection_field_comboBox.findText(cf)
+        if idx > -1:
+            self.collection_field_comboBox.setCurrentIndex(idx)
+
+    def get_eligible_custom_fields(self):
+        '''
+        Discover qualifying custom fields for collection assignments
+        '''
+        self._log_location()
+
+        eligible_custom_fields = {}
+        for cf in self.gui.current_db.custom_field_keys():
+            cft = self.gui.current_db.metadata_for_field(cf)['datatype']
+            cfn = self.gui.current_db.metadata_for_field(cf)['name']
+            self._log("%s: %s (%s)" % (cf, cfn, cft))
+            if cft in ['enumeration', 'text']:
+                eligible_custom_fields[cfn] = cf
+        return eligible_custom_fields
+
     """
     def restart_required(self, *args):
         self._log_location()
@@ -90,12 +119,22 @@ class ConfigWidget(QWidget, Ui_Dialog):
         # Save general settings
         self.prefs.set('debug_plugin', self.debug_plugin.isChecked())
 
+        # Save collection field
+        cf = str(self.collection_field_comboBox.currentText())
+        self.prefs.set('collection_field_comboBox', cf)
+        if cf:
+            self.prefs.set('collection_field_lookup', self.eligible_custom_fields[cf])
+        else:
+            self.prefs.set('collection_field_lookup', '')
+
+        """
         for pw in self.widgets:
             opts = pw.options()
             self._log_location("%s: %s" % (pw.name, opts))
             for opt in opts:
                 #self._log_location("saving '%s' as %s" % (opt, repr(opts[opt])))
                 self.prefs.set(opt, opts[opt])
+        """
 
     def show_plugin_tab(self, idx):
         self._log_location(idx)
@@ -148,7 +187,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
 
 # For testing ConfigWidget, run from command line:
-# cd ~/Documents/calibredev/iOS_reader_applications
+# cd ~/Documents/calibredev/Marvin_Manager
 # calibre-debug config.py
 # Search 'Marvin'
 if __name__ == '__main__':
