@@ -292,9 +292,9 @@ class MarvinManagerAction(InterfaceAction):
                 self.connected_device.ios_reader_app == 'Marvin'):
                 self.launch_library_scanner()
 
-            # Subscribe to Marvin driver change events
-            self.connected_device.marvin_device_signals.reader_app_content_changed.connect(
-                self.marvin_content_changed)
+                # Subscribe to Marvin driver change events
+                self.connected_device.marvin_device_signals.reader_app_content_changed.connect(
+                    self.marvin_content_changed)
 
         else:
             self._log_location("device disconnected")

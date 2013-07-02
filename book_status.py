@@ -285,18 +285,28 @@ class BookStatusDialog(SizePersistedDialog):
         self.done_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Ok)
         self.done_button.setText('Close')
 
-        # Action buttons
+        # Set All/Clear All
         self.toggle_checkmarks_button = self.dialogButtonBox.addButton(' Set All ', QDialogButtonBox.ActionRole)
         self.toggle_checkmarks_button.setObjectName('toggle_checkmarks_button')
 
+        # Show/Hide Match Quality
         smq_text = 'Show Match Quality'
         if self.show_confidence_colors:
             smq_text = "Hide Match Quality"
         self.show_confidence_button = self.dialogButtonBox.addButton(smq_text, QDialogButtonBox.ActionRole)
         self.show_confidence_button.setObjectName('match_quality_button')
 
-        self.preview_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
-        self.preview_button.setObjectName('calculate_word_count_button')
+        # Word count
+        self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
+        self.wc_button.setObjectName('calculate_word_count_button')
+
+        # Synchronize collections
+        self.sc_button = self.dialogButtonBox.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
+        self.sc_button.setObjectName('synchronize_collections_button')
+
+        # Bind soft matches
+        self.bsm_button = self.dialogButtonBox.addButton('Bind soft matches', QDialogButtonBox.ActionRole)
+        self.bsm_button.setObjectName('bind_soft_matches_button')
 
         self.dialogButtonBox.clicked.connect(self.show_installed_books_dialog_clicked)
         self.l.addWidget(self.dialogButtonBox)
@@ -340,6 +350,10 @@ class BookStatusDialog(SizePersistedDialog):
                 self.toggle_checkmarks()
             elif button.objectName() == 'calculate_word_count_button':
                 self._calculate_word_count()
+            elif button.objectName() == 'synchronize_collections_button':
+                self._synchronize_collections()
+            elif button.objectName() == 'bind_soft_matches_button':
+                self._bind_soft_matches()
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.HelpRole:
             self.show_help()
@@ -350,9 +364,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Display help file
         '''
-        hv = HelpView(self, self.opts.icon, self.opts.prefs,
-                      html=get_resources('help/marvin_library.html'), title="Marvin Library")
-        hv.show()
+        self.parent.show_help()
 
     def size_hint(self):
         return QtCore.QSize(self.perfect_width, self.height())
@@ -382,6 +394,15 @@ class BookStatusDialog(SizePersistedDialog):
         self.tm.refresh(self.show_confidence_colors)
 
     # Helpers
+    def _bind_soft_matches(self):
+        '''
+        '''
+        self._log_location()
+        title = "Bind soft matches"
+        msg = ("<p>Not implemented</p>")
+        MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
+
     def _calculate_word_count(self):
         '''
         Calculate word count for each selected book
@@ -466,6 +487,11 @@ class BookStatusDialog(SizePersistedDialog):
                            show_copy_button=False).exec_()
         else:
             self._log("No selected books")
+            # Display a summary
+            title = "Word count"
+            msg = ("<p>Select one or more books to calculate word count.</p>")
+            MessageBox(MessageBox.INFO, title, msg,
+                           show_copy_button=False).exec_()
 
     def _compute_epub_hash(self, zipfile):
         '''
@@ -1091,6 +1117,15 @@ class BookStatusDialog(SizePersistedDialog):
 
         return installed_books
 
+    def _synchronize_collections(self):
+        '''
+        '''
+        self._log_location()
+        title = "Synchronize collections"
+        msg = ("<p>Not implemented</p>")
+        MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
+
     def _update_remote_hash_cache(self):
         '''
         Copy updated hash cache to iDevice
@@ -1126,39 +1161,3 @@ class BookStatusDialog(SizePersistedDialog):
                 time.sleep(0.05)
                 if not self.parent.connected_device.busy:
                     break
-
-
-class PreviewDialog(SizePersistedDialog):
-    """
-    Render a read-only preview of formatted annotations
-    """
-    def __init__(self, book_mi, annotations, parent=None):
-        #QDialog.__init__(self, parent)
-        self.prefs = cfg.plugin_prefs
-        super(PreviewDialog, self).__init__(parent, 'annotations_preview_dialog')
-        self.pl = QVBoxLayout(self)
-        self.setLayout(self.pl)
-
-        self.label = QLabel()
-        self.label.setText("<b>%s annotations &middot; %s</b>" % (book_mi.reader_app, book_mi.title))
-        self.label.setAlignment(Qt.AlignHCenter)
-        self.pl.addWidget(self.label)
-
-        self.wv = QWebView()
-        self.wv.setHtml(annotations)
-        self.pl.addWidget(self.wv)
-
-        self.buttonbox = QDialogButtonBox(self)
-        self.buttonbox.addButton('Close', QDialogButtonBox.AcceptRole)
-        self.buttonbox.setOrientation(Qt.Horizontal)
-        self.connect(self.buttonbox, SIGNAL('accepted()'), self.close)
-        self.connect(self.buttonbox, SIGNAL('rejected()'), self.close)
-        self.pl.addWidget(self.buttonbox)
-
-        # Sizing
-        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Preferred)
-        sizePolicy.setHorizontalStretch(0)
-        sizePolicy.setVerticalStretch(0)
-        sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
-        self.setSizePolicy(sizePolicy)
-        self.resize_dialog()
