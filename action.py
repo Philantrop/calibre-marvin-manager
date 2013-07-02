@@ -25,7 +25,7 @@ from calibre.utils.config import config_dir
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
-from calibre_plugins.marvin_manager.common_utils import (CompileUI, IndexLibrary,
+from calibre_plugins.marvin_manager.common_utils import (IndexLibrary,
     ProgressBar, Struct,
     get_icon, set_plugin_icon_resources)
 import calibre_plugins.marvin_manager.config as cfg
@@ -99,10 +99,6 @@ class MarvinManagerAction(InterfaceAction):
 
         # Populate the help resources
         self.inflate_help_resources()
-
-        # Copy the widget files to our resource directory
-        self.inflate_widget_resources()
-        cui = CompileUI(self)
 
     def inflate_help_resources(self):
         '''
