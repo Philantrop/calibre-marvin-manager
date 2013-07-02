@@ -11,81 +11,92 @@ from calibre.gui2 import show_restart_warning
 from calibre.gui2.ui import get_gui
 from calibre.utils.config import config_dir, JSONConfig
 
-from PyQt4.Qt import QWidget
-
-widget_path = os.path.join(config_dir, 'plugins',
-                           'Marvin_Mangler_resources', 'widgets')
+from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QGridLayout, QGroupBox,
+                      QLabel, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget)
 
 # Import Ui_Dialog from form generated dynamically during initialization
-if True:
+if False:
+    widget_path = os.path.join(config_dir, 'plugins',
+                           'Marvin_Mangler_resources', 'widgets')
     sys.path.insert(0, widget_path)
     from main_ui import Ui_Dialog
     sys.path.remove(widget_path)
 
 plugin_prefs = JSONConfig('plugins/Marvin Mangler')
 
-class ConfigWidget(QWidget, Ui_Dialog):
+from calibre_plugins.marvin_manager import MarvinManagerPlugin
+
+#class ConfigWidget(QWidget, Ui_Dialog):
+class ConfigWidget(QWidget):
     '''
-    Tabbed config dialog for iOS Reader Apps
+    Config dialog for iOS Reader Apps
     '''
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
-    def __init__(self, parent):
-        QWidget.__init__(self)
-        Ui_Dialog.__init__(self)
-
-        self.current_plugin = None
+    def __init__(self, plugin_action):
         self.gui = get_gui()
-        self.icon = parent.icon
-        self.parent = parent
+        self.icon = plugin_action.icon
+        self.parent = plugin_action
         self.prefs = plugin_prefs
-        self.resources_path = parent.resources_path
-        self.verbose = parent.verbose
+        self.resources_path = plugin_action.resources_path
+        self.verbose = plugin_action.verbose
         self._log_location()
-        self.setupUi(self)
-        self.support_label.setOpenExternalLinks(True)
 
-        # Restore the debug settings
-        self.debug_plugin.setChecked(self.prefs.get('debug_plugin', False))
+        QWidget.__init__(self)
+        self.l = QVBoxLayout()
+        self.setLayout(self.l)
 
-        # Load the widgets
-        self.widgets = []
-        """
-        for app_name in app_list:
-            name = app_name.lower().replace(' ', '_')
-            # Load dynamic tab
-            klass = os.path.join(widget_path, '%s.py' % name)
-            if os.path.exists(klass):
-                try:
-                    self._log_location("adding widget for %s" % name)
-                    sys.path.insert(0, widget_path)
-                    config_widget = importlib.import_module(name)
-                    pw = config_widget.PluginWidget(self)
-                    pw.initialize(name)
-                    pw.ICON = I('forward.png')
-                    self.widgets.append(pw)
-                except ImportError:
-                    self._log("ERROR: ImportError with %s" % name)
-                    import traceback
-                    traceback.print_exc()
-                finally:
-                    sys.path.remove(widget_path)
+        # ~~~~~~~~ Create the Collections options group box ~~~~~~~~
+        self.cfg_collection_options_gb = QGroupBox(self)
+        self.cfg_collection_options_gb.setTitle('Collections')
+        self.l.addWidget(self.cfg_collection_options_gb)
 
-            else:
-                self._log("no dynamic tab resources found for %s" % name)
-        """
-        self.widgets = sorted(self.widgets, cmp=lambda x,y:cmp(x.TITLE.lower(), y.TITLE.lower()))
+        self.cfg_collection_options_qgl = QGridLayout(self.cfg_collection_options_gb)
+        current_row = 0
 
-        # Init the plugin tab to currently selected reader app
-        #self.reader_apps.currentIndexChanged.connect(self.show_plugin_tab)
-        self.show_plugin_tab(None)
+        # Add the label/combobox for collections destination
+        self.cfg_collections_label = QLabel('Collections')
+        self.cfg_collections_label.setAlignment(Qt.AlignLeft)
+        self.cfg_collection_options_qgl.addWidget(self.cfg_collections_label, current_row, 0)
 
-        # Init the collection field pick list
+        self.collection_field_comboBox = QComboBox(self.cfg_collection_options_gb)
+        self.collection_field_comboBox.setObjectName('collection_field_comboBox')
+        self.collection_field_comboBox.setToolTip('custom field for Marvin collections')
+        self.cfg_collection_options_qgl.addWidget(self.collection_field_comboBox, current_row, 1)
+        current_row += 1
+
+        spacerItem1 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.cfg_collection_options_qgl.addItem(spacerItem1)
+
+        # ~~~~~~~~ Create the General options group box ~~~~~~~~
+        self.cfg_runtime_options_gb = QGroupBox(self)
+        self.cfg_runtime_options_gb.setTitle('General options')
+        self.l.addWidget(self.cfg_runtime_options_gb)
+        self.cfg_runtime_options_qvl = QVBoxLayout(self.cfg_runtime_options_gb)
+
+        # ~~~~~~~~ plugin logging checkbox ~~~~~~~~
+        self.debug_plugin_checkbox = QCheckBox('Enable debug logging')
+        self.debug_plugin_checkbox.setObjectName('debug_plugin_checkbox')
+        self.debug_plugin_checkbox.setToolTip('Print diagnostic messages to console')
+        self.cfg_runtime_options_qvl.addWidget(self.debug_plugin_checkbox)
+        spacerItem2 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.cfg_runtime_options_qvl.addItem(spacerItem2)
+
+        spacerItem3 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.l.addItem(spacerItem3)
+
+        # ~~~~~~~~ End of construction zone ~~~~~~~~
+
+        self.resize(self.sizeHint())
         self.eligible_custom_fields = self.get_eligible_custom_fields()
         self.collection_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_custom_fields.keys(), key=lambda s: s.lower())
         self.collection_field_comboBox.addItems(ecf)
+
+        # Get general settings
+        self.prefs.get('debug_plugin', False)
+        self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
 
         # Get the saved collection field
         cf = self.prefs.get('collection_field_comboBox', '')
@@ -103,21 +114,12 @@ class ConfigWidget(QWidget, Ui_Dialog):
         for cf in self.gui.current_db.custom_field_keys():
             cft = self.gui.current_db.metadata_for_field(cf)['datatype']
             cfn = self.gui.current_db.metadata_for_field(cf)['name']
-            self._log("%s: %s (%s)" % (cf, cfn, cft))
             if cft in ['enumeration', 'text']:
                 eligible_custom_fields[cfn] = cf
         return eligible_custom_fields
 
-    """
-    def restart_required(self, *args):
-        self._log_location()
-    """
-
     def save_settings(self):
         self._log_location()
-
-        # Save general settings
-        self.prefs.set('debug_plugin', self.debug_plugin.isChecked())
 
         # Save collection field
         cf = str(self.collection_field_comboBox.currentText())
@@ -127,33 +129,8 @@ class ConfigWidget(QWidget, Ui_Dialog):
         else:
             self.prefs.set('collection_field_lookup', '')
 
-        """
-        for pw in self.widgets:
-            opts = pw.options()
-            self._log_location("%s: %s" % (pw.name, opts))
-            for opt in opts:
-                #self._log_location("saving '%s' as %s" % (opt, repr(opts[opt])))
-                self.prefs.set(opt, opts[opt])
-        """
-
-    def show_plugin_tab(self, idx):
-        self._log_location(idx)
-#         cf = unicode(self.reader_apps.currentText()).lower()
-#         while self.tabs.count() > 1:
-#             self.tabs.removeTab(1)
-#         for pw in self.widgets:
-#             if cf == pw.name:
-#                 self._log("adding '%s' tab" % pw.TITLE)
-#                 self.tabs.addTab(pw, pw.TITLE)
-#                 self.current_plugin = pw
-#                 break
-
-    def validate(self):
-        '''
-        '''
-        self._log_location()
-
-        return True
+        # Save general settings
+        self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
 
     def _log(self, msg=None):
         '''

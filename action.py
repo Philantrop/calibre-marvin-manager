@@ -8,39 +8,6 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-"""
-import imp, inspect, os, re, tempfile, threading, types, urlparse
-
-from functools import partial
-from zipfile import ZipFile
-
-from PyQt4.Qt import (pyqtSignal, Qt, QApplication, QIcon, QMenu, QPixmap, QTimer)
-
-from calibre.constants import DEBUG, isosx, iswindows
-from calibre.devices.idevice.libimobiledevice import libiMobileDevice
-
-from calibre.ebooks.BeautifulSoup import BeautifulSoup
-from calibre.gui2 import open_url
-from calibre.gui2.device import device_signals
-from calibre.gui2.dialogs.message_box import MessageBox
-from calibre.utils.config import config_dir
-
-from calibre_plugins.annotations.annotated_books import AnnotatedBooksDialog
-from calibre_plugins.annotations.annotations import merge_annotations, merge_annotations_with_comments
-from calibre_plugins.annotations.annotations_db import AnnotationsDB
-import calibre_plugins.annotations.config as cfg
-from calibre_plugins.annotations.common_utils import (
-    DebugLog, ImportAnnotationsDialog, CoverMessageBox, HelpView, IndexLibrary,
-    Profiler, ProgressBar, Struct,
-    get_clippings_cid, get_icon, get_pixmap, get_resource_files,
-    get_selected_book_mi, plugin_tmpdir,
-    set_plugin_icon_resources, updateCalibreGUIView)
-from calibre_plugins.annotations.find_annotations import FindAnnotationsDialog
-from calibre_plugins.annotations.message_box_ui import COVER_ICON_SIZE
-from calibre_plugins.annotations.reader_app_support import *
-
-from PyQt4.Qt import QUrl
-"""
 import os, sys, threading
 
 from zipfile import ZipFile
