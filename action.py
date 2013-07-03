@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import os, sys, threading
+import os, sys, threading, time
 
 from zipfile import ZipFile
 
@@ -48,10 +48,14 @@ class MarvinManagerAction(InterfaceAction):
     action_spec = ('Marvin Mangler', None, None, None)
     popup_type = QToolButton.InstantPopup
 
+    marvin_device_status_changed = pyqtSignal(str)
     plugin_device_connection_changed = pyqtSignal(object)
 
     def about_to_show_menu(self):
         self.rebuild_menus()
+
+    def backup_restore(self):
+        self._log_location("not implemented")
 
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
@@ -73,6 +77,7 @@ class MarvinManagerAction(InterfaceAction):
         self.indexed_library = None
         self.library_indexed = False
         self.library_last_modified = None
+        self.reconnect_request_pending = False
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
 
         # Read the plugin icons and store for potential sharing with the config widget
@@ -121,37 +126,6 @@ class MarvinManagerAction(InterfaceAction):
                 os.makedirs(os.path.dirname(fs))
             with open(fs, 'wb') as f:
                 f.write(rd[resource])
-
-    def inflate_widget_resources(self):
-        widgets = []
-        with ZipFile(self.plugin_path, 'r') as zf:
-            for candidate in zf.namelist():
-                # Qt UI files
-                if candidate.startswith('widgets/') and candidate.endswith('.ui'):
-                    widgets.append(candidate)
-                # Corresponding class definitions
-                if candidate.startswith('widgets/') and candidate.endswith('.py'):
-                    widgets.append(candidate)
-        wr = self.load_resources(widgets)
-        for widget in widgets:
-            if not widget in wr:
-                continue
-            fs = os.path.join(self.resources_path, widget)
-            if not os.path.exists(fs):
-                # If the file doesn't exist in the resources dir, add it
-                if not os.path.exists(os.path.dirname(fs)):
-                    os.makedirs(os.path.dirname(fs))
-                with open (fs, 'wb') as f:
-                    f.write(wr[widget])
-            else:
-                # Is the .ui file current?
-                update_needed = False
-                with open(fs, 'r') as f:
-                    if f.read() != wr[widget]:
-                        update_needed = True
-                if update_needed:
-                    with open (fs, 'wb') as f:
-                        f.write(wr[widget])
 
     def init_options(self, disable_caching=False):
         """
@@ -227,21 +201,21 @@ class MarvinManagerAction(InterfaceAction):
         else:
             self.show_configuration()
 
-    def marvin_content_changed(self, command):
+    def marvin_status_changed(self, command):
         '''
         The Marvin driver emits a signal after completion of protocol commands.
         This method receives the notification. If the content on Marvin changed
         as a result of the operation, we need to invalidate our cache of Marvin's
         installed books.
         '''
+        self.marvin_device_status_changed.emit(command)
+
         self._log_location(command)
         if command in ['delete_books', 'upload_books']:
             self.marvin_content_invalid = True
 
     def on_device_connection_changed(self, is_connected):
         '''
-        We need to be aware of what kind of device is connected, whether it's an iDevice
-        or a regular USB device.
         self.connected_device is the handle to the driver.
         '''
         self.plugin_device_connection_changed.emit(is_connected)
@@ -252,18 +226,27 @@ class MarvinManagerAction(InterfaceAction):
 
             if (hasattr(self.connected_device, 'ios_reader_app') and
                 self.connected_device.ios_reader_app == 'Marvin'):
-                self.launch_library_scanner()
+                if not self.reconnect_request_pending:
+                    self.launch_library_scanner()
 
-                # Subscribe to Marvin driver change events
-                self.connected_device.marvin_device_signals.reader_app_content_changed.connect(
-                    self.marvin_content_changed)
+                    # Subscribe to Marvin driver change events
+                    self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
+                        self.marvin_status_changed)
+                else:
+                    self._log("reconnect request pending…")
 
         else:
             self._log_location("device disconnected")
-            self.connected_device.marvin_device_signals.reader_app_content_changed.disconnect()
+            self.connected_device.marvin_device_signals.reader_app_status_changed.disconnect()
             self.connected_device = None
             self.library_scanner.hash_map = None
-            self.rebuild_menus()
+
+            if self.book_status_dialog.reconnect_request_pending:
+                self.reconnect_request_pending = True
+                self.book_status_dialog.close()
+                self.book_status_dialog = None
+
+        self.rebuild_menus()
 
     def rebuild_menus(self):
         self._log_location()
@@ -281,10 +264,21 @@ class MarvinManagerAction(InterfaceAction):
                 if (self.connected_device.ios_reader_app == 'Marvin' and
                     self.connected_device.ios_connection['connected'] is True):
                     self._log("Marvin connected")
-                    ac = self.create_menu_item(m, 'Show installed books', image=I("dialog_information.png"))
+                    ac = self.create_menu_item(m, 'Marvin Library', image=I("dialog_information.png"))
                     ac.triggered.connect(self.show_installed_books)
+
+                    ac = self.create_menu_item(m, 'Backup or Restore Library', image=I("swap.png"))
+                    ac.triggered.connect(self.backup_restore)
+
+                    ac = self.create_menu_item(m, 'Reset Marvin Library', image=I("trash.png"))
+                    ac.triggered.connect(self.reset_marvin_library)
+
                     self.ios = self.connected_device.ios
 
+                    # If reconnecting, allow time for Device to be added before redisplaying
+                    if self.reconnect_request_pending:
+                        self.reconnect_request_pending = False
+                        QTimer.singleShot(100, self.show_installed_books)
                 else:
                     self._log("Marvin not connected")
                     ac = self.create_menu_item(m, 'Marvin not connected')
@@ -304,6 +298,9 @@ class MarvinManagerAction(InterfaceAction):
             # Add 'Help'
             ac = self.create_menu_item(m, 'Help', image=I('help.png'))
             ac.triggered.connect(self.show_help)
+
+    def reset_marvin_library(self):
+        self._log_location("not implemented")
 
     def show_configuration(self):
         self.interface_action_base_plugin.do_user_config(self.gui)
@@ -325,14 +322,12 @@ class MarvinManagerAction(InterfaceAction):
 
     def show_installed_books(self):
         '''
+        Show Marvin Library spreadsheet
         '''
         self._log_location()
-        d = BookStatusDialog(self, 'marvin_library')
-        d.initialize(self)
-        if d.exec_():
-            self._log("accepted")
-        else:
-            self._log("rejected")
+        self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
+        self.book_status_dialog.initialize(self)
+        self.book_status_dialog.exec_()
 
     # subclass override
     def shutting_down(self):

@@ -14,19 +14,8 @@ from calibre.utils.config import config_dir, JSONConfig
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QGridLayout, QGroupBox,
                       QLabel, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget)
 
-# Import Ui_Dialog from form generated dynamically during initialization
-if False:
-    widget_path = os.path.join(config_dir, 'plugins',
-                           'Marvin_Mangler_resources', 'widgets')
-    sys.path.insert(0, widget_path)
-    from main_ui import Ui_Dialog
-    sys.path.remove(widget_path)
-
 plugin_prefs = JSONConfig('plugins/Marvin Mangler')
 
-from calibre_plugins.marvin_manager import MarvinManagerPlugin
-
-#class ConfigWidget(QWidget, Ui_Dialog):
 class ConfigWidget(QWidget):
     '''
     Config dialog for iOS Reader Apps
@@ -75,11 +64,18 @@ class ConfigWidget(QWidget):
         self.l.addWidget(self.cfg_runtime_options_gb)
         self.cfg_runtime_options_qvl = QVBoxLayout(self.cfg_runtime_options_gb)
 
-        # ~~~~~~~~ plugin logging checkbox ~~~~~~~~
+        # ~~~~~~~~ Progress as percentage checkbox ~~~~~~~~
+        self.reading_progress_checkbox = QCheckBox('Show reading progress as percentage')
+        self.reading_progress_checkbox.setObjectName('show_progress_as_percentage')
+        self.reading_progress_checkbox.setToolTip('Display percentage in Progress column')
+        self.cfg_runtime_options_qvl.addWidget(self.reading_progress_checkbox)
+
+        # ~~~~~~~~ Debug logging checkbox ~~~~~~~~
         self.debug_plugin_checkbox = QCheckBox('Enable debug logging')
         self.debug_plugin_checkbox.setObjectName('debug_plugin_checkbox')
         self.debug_plugin_checkbox.setToolTip('Print diagnostic messages to console')
         self.cfg_runtime_options_qvl.addWidget(self.debug_plugin_checkbox)
+
         spacerItem2 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_runtime_options_qvl.addItem(spacerItem2)
 
@@ -87,22 +83,22 @@ class ConfigWidget(QWidget):
         self.l.addItem(spacerItem3)
 
         # ~~~~~~~~ End of construction zone ~~~~~~~~
-
         self.resize(self.sizeHint())
         self.eligible_custom_fields = self.get_eligible_custom_fields()
         self.collection_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_custom_fields.keys(), key=lambda s: s.lower())
         self.collection_field_comboBox.addItems(ecf)
 
-        # Get general settings
-        self.prefs.get('debug_plugin', False)
-        self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
-
-        # Get the saved collection field
+        # ~~~~~~~~ Restore settings ~~~~~~~~
+        # Restore the collection field
         cf = self.prefs.get('collection_field_comboBox', '')
         idx = self.collection_field_comboBox.findText(cf)
         if idx > -1:
             self.collection_field_comboBox.setCurrentIndex(idx)
+
+        # Restore general settings
+        self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
+        self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
 
     def get_eligible_custom_fields(self):
         '''
@@ -130,6 +126,7 @@ class ConfigWidget(QWidget):
             self.prefs.set('collection_field_lookup', '')
 
         # Save general settings
+        self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
 
     def _log(self, msg=None):

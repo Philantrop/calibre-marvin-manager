@@ -40,7 +40,7 @@ from PyQt4.Qt import (Qt, QAction, QApplication,
     QKeySequence, QLabel, QLineEdit, QMenu, QPixmap, QProgressBar, QPlainTextEdit,
     QRadioButton, QSize, QSizePolicy, QSlider, QSpinBox, QString, QThread, QUrl,
     QVBoxLayout,
-    SIGNAL)
+    SIGNAL, pyqtSignal)
 from PyQt4.QtWebKit import QWebView
 from PyQt4.uic import compileUi
 
