@@ -46,7 +46,9 @@ class MarvinManagerAction(InterfaceAction):
 
     # Declare the main action associated with this plugin
     action_spec = ('Marvin Mangler', None, None, None)
-    popup_type = QToolButton.InstantPopup
+    #popup_type = QToolButton.InstantPopup
+    action_add_menu = True
+    action_menu_clone_qaction = True
 
     marvin_device_status_changed = pyqtSignal(str)
     plugin_device_connection_changed = pyqtSignal(object)
