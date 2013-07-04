@@ -86,8 +86,6 @@ class MarvinManagerAction(InterfaceAction):
 
         # Piggyback on the device driver's connection to Marvin
         self.ios = None
-#         self.ios = libiMobileDevice(log=self._log,
-#             verbose=self.prefs.get('debug_libimobiledevice', False))
 
         # Build an opts object
         self.opts = self.init_options()
@@ -104,6 +102,31 @@ class MarvinManagerAction(InterfaceAction):
 
         # Populate the help resources
         self.inflate_help_resources()
+
+        # Populate icons
+        self.inflate_icon_resources()
+
+    def inflate_icon_resources(self):
+        '''
+        Extract the icon resources from the plugin
+        '''
+        icons = []
+        with ZipFile(self.plugin_path, 'r') as zf:
+            for candidate in zf.namelist():
+                if candidate.endswith('/'):
+                    continue
+                if candidate.startswith('icons/'):
+                    icons.append(candidate)
+        ir = self.load_resources(icons)
+        for icon in icons:
+            if not icon in ir:
+                continue
+            fs = os.path.join(self.resources_path, icon)
+            if not os.path.exists(fs):
+                if not os.path.exists(os.path.dirname(fs)):
+                    os.makedirs(os.path.dirname(fs))
+                with open (fs, 'wb') as f:
+                    f.write(ir[icon])
 
     def inflate_help_resources(self):
         '''
@@ -241,7 +264,7 @@ class MarvinManagerAction(InterfaceAction):
             self.connected_device = None
             self.library_scanner.hash_map = None
 
-            if self.book_status_dialog.reconnect_request_pending:
+            if hasattr(self, 'book_status_dialog') and self.book_status_dialog.reconnect_request_pending:
                 self.reconnect_request_pending = True
                 self.book_status_dialog.close()
                 self.book_status_dialog = None

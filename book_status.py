@@ -6,13 +6,14 @@ __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
 import hashlib, locale, operator, os, re, sqlite3, sys, time
+from functools import partial
 from lxml import etree
 
 from PyQt4 import QtCore, QtGui
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QBrush,
-                      QCheckBox, QColor, QDialog, QDialogButtonBox, QFont, QLabel,
-                      QTableView, QTableWidgetItem,
-                      QVariant, QVBoxLayout,
+                      QCheckBox, QColor, QDialog, QDialogButtonBox, QFont, QIcon, QLabel,
+                      QMenu, QPainter, QPixmap, QTableView, QTableWidgetItem,
+                      QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
 from PyQt4.QtWebKit import QWebView
 
@@ -26,6 +27,62 @@ from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
     Book, HelpView, ProgressBar, SizePersistedDialog)
+
+class MyTableView(QTableView):
+    def __init__(self, parent):
+        super(MyTableView, self).__init__(parent)
+        self.parent = parent
+
+    def contextMenuEvent(self, event):
+
+        index = self.indexAt(event.pos())
+        col = index.column()
+        if col == self.parent.FLAGS_COL:
+            menu = QMenu(self)
+
+            ac = menu.addAction("Clear New")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_new.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event, "clear_new_flag"))
+            ac = menu.addAction("Clear Reading list")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_reading.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event, "clear_reading_list_flag"))
+            ac = menu.addAction("Clear Read")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_read.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event, "clear_read_flag"))
+
+            menu.addSeparator()
+
+            ac = menu.addAction("Set New")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_new.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event, "set_new_flag"))
+            ac = menu.addAction("Set Reading list")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_reading.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event, "set_reading_list_flag"))
+            ac = menu.addAction("Set Read")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_read.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event, "set_read_flag"))
+
+            menu.exec_(event.globalPos())
+
+#         elif col == self.parent.COLLECTIONS_COL:
+#             menu = QMenu(self)
+#             ac = menu.addAction("Synchronize collections")
+#             ac.triggered.connect(partial(self.parent.context_menu_event, "synchronize_collections"))
+#             menu.exec_(event.globalPos())
+
+
+class SortableImageWidgetItem(QWidget):
+    def __init__(self, path, sort_key):
+        super(SortableImageWidgetItem, self).__init__(parent=None)
+        self.picture = QPixmap(path)
+        self.sort_key = sort_key
+
+    def __lt__(self, other):
+        return self.sort_key < other.sort_key
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.drawPixmap(0, 0, self.picture)
 
 
 class SortableTableWidgetItem(QTableWidgetItem):
@@ -68,7 +125,6 @@ class MarkupTableModel(QAbstractTableModel):
             return QVariant()
         elif role == Qt.BackgroundRole and self.show_confidence_colors:
             match_quality = self.arraydata[row][self.parent.MATCHED_COL]
-
             saturation = 0.40
             value = 1.0
             red_hue = 0.0
@@ -84,13 +140,25 @@ class MarkupTableModel(QAbstractTableModel):
             else:
                 return QVariant(QBrush(QColor.fromHsvF(white_hue, 0.0, value)))
 
-#         elif role == Qt.CheckStateRole and col == self.parent.ENABLED_COL:
-#             if self.arraydata[row][self.parent.ENABLED_COL].checkState():
-#                 return QVariant(Qt.Checked)
-#             else:
-#                 return QVariant(Qt.Unchecked)
-        elif role == Qt.DisplayRole and col == self.parent.PROGRESS_COL:
+        elif role == Qt.DecorationRole and col == self.parent.FLAGS_COL:
+            return self.arraydata[row][self.parent.FLAGS_COL].picture
+
+        elif role == Qt.DecorationRole and col == self.parent.COLLECTIONS_COL:
+            return self.arraydata[row][self.parent.COLLECTIONS_COL].picture
+
+        elif (role == Qt.DisplayRole and
+              col == self.parent.PROGRESS_COL):
             return self.arraydata[row][self.parent.PROGRESS_COL].text()
+
+#         elif (role == Qt.DisplayRole and
+#               col == self.parent.PROGRESS_COL
+#               and self.parent.prefs.get('show_progress_as_percentage', False)):
+#             return self.arraydata[row][self.parent.PROGRESS_COL].text()
+#         elif (role == Qt.DecorationRole and
+#               col == self.parent.PROGRESS_COL
+#               and not self.parent.prefs.get('show_progress_as_percentage', False)):
+#             return self.arraydata[row][self.parent.PROGRESS_COL].picture
+
         elif role == Qt.DisplayRole and col == self.parent.TITLE_COL:
             return self.arraydata[row][self.parent.TITLE_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.AUTHOR_COL:
@@ -104,12 +172,6 @@ class MarkupTableModel(QAbstractTableModel):
         elif role != Qt.DisplayRole:
             return QVariant()
         return QVariant(self.arraydata[index.row()][index.column()])
-
-#     def flags(self, index):
-#         if index.column() == self.parent.ENABLED_COL:
-#             return QAbstractItemModel.flags(self, index) | Qt.ItemIsUserCheckable
-#         else:
-#             return QAbstractItemModel.flags(self, index)
 
     def refresh(self, show_confidence_colors):
         self.show_confidence_colors = show_confidence_colors
@@ -152,24 +214,105 @@ class BookStatusDialog(SizePersistedDialog):
     CHECKMARK = u"\u2713"
     PROGRESS_READ = u"\u25AA"
     PROGRESS_UNREAD = u"\u25AB"
-    UNEQUAL = u"\u2260"
 
-    if isosx:
-        FONT = QFont('Monaco', 11)
-    elif iswindows:
-        FONT = QFont('Lucida Console', 9)
-    elif islinux:
-        FONT = QFont('Monospace', 9)
-        FONT.setStyleHint(QFont.TypeWriter)
-
-    marvin_device_status_changed = pyqtSignal(str)
-
-    def initialize(self, parent):
-        self.flags = {
+    FLAGS = {
             'new': 'NEW',
             'read': 'READ',
             'reading_list': 'READING LIST'
             }
+
+    marvin_device_status_changed = pyqtSignal(str)
+
+    def accept(self):
+        self._log_location()
+        self._save_column_widths()
+        super(BookStatusDialog, self).accept()
+
+    def button_handler(self, button):
+        '''
+        BUTTON_ROLES = ['AcceptRole', 'RejectRole', 'DestructiveRole', 'ActionRole',
+                        'HelpRole', 'YesRole', 'NoRole', 'ApplyRole', 'ResetRole']
+        '''
+        self._log_location()
+        if self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.AcceptRole:
+            self._log("AcceptRole")
+            self.accept()
+        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.ActionRole:
+            if button.objectName() == 'match_quality_button':
+                self.toggle_confidence_colors()
+            elif button.objectName() == 'toggle_checkmarks_button':
+                self.toggle_checkmarks()
+            elif button.objectName() == 'calculate_word_count_button':
+                self._calculate_bulk_word_count()
+            elif button.objectName() == 'generate_deep_view_button':
+                self._generate_deep_view()
+            elif button.objectName() == 'synchronize_collections_button':
+                self._synchronize_collections()
+            elif button.objectName() == 'bind_soft_matches_button':
+                self._bind_soft_matches()
+
+        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
+            self._delete_books()
+        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.HelpRole:
+            self.show_help()
+        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.RejectRole:
+            self.close()
+
+    def capture_sort_column(self, sort_column):
+        sort_order = self.tv.horizontalHeader().sortIndicatorOrder()
+        self.opts.prefs.set('marvin_library_sort_column', sort_column)
+        self.opts.prefs.set('marvin_library_sort_order', sort_order)
+
+    def close(self):
+        self._log_location()
+        self._save_column_widths()
+        super(BookStatusDialog, self).close()
+
+    def context_menu_event(self, action):
+        '''
+        '''
+        self._log_location(action)
+        selected_books = self._get_selected_books()
+        det_msg = ''
+        for cid in selected_books:
+            det_msg += selected_books[cid]['title'] + '\n'
+
+        title = "Set/Clear Flags"
+        msg = ("<p>{0}</p>".format(action) +
+                "<p>Click <b>Show details</b> for affected books</p>")
+
+        MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
+                       show_copy_button=False).exec_()
+
+    def double_click_dispatcher(self, index):
+        '''
+        Display column data for selected book
+        '''
+        col = index.column()
+        row = index.row()
+        clicked = {
+                    'cid': self.tm.arraydata[row][self.CALIBRE_ID_COL],
+                    'col': col,
+                    'column': self.library_header[col],
+                    'mid': self.tm.arraydata[row][self.BOOK_ID_COL],
+                    'path': self.tm.arraydata[row][self.PATH_COL],
+                    'row': row,
+                    'title': str(self.tm.arraydata[row][self.TITLE_COL].text())
+                  }
+
+        if col == self.ARTICLES_COL:
+            self._show_articles(clicked)
+        elif col == self.COLLECTIONS_COL:
+            self._show_collections(clicked)
+        elif col == self.VOCABULARY_COL:
+            self._show_vocabulary(clicked)
+        elif col == self.WORD_COUNT_COL:
+            self._calculate_single_word_count(clicked)
+        else:
+            self._log_location(row, col)
+            self._log("No double-click handler for %s" % clicked['column'])
+
+    def initialize(self, parent):
         self.hash_cache = 'content_hashes.zip'
         self.opts = parent.opts
         self.parent = parent
@@ -181,7 +324,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.reconnect_request_pending = False
         self.remote_cache_folder = '/'.join(['/Library','calibre.mm'])
         self.remote_hash_cache = None
-        self.show_confidence_colors = True
+        self.show_confidence_colors = False
         self.verbose = parent.verbose
 
         # Subscribe to Marvin driver change events
@@ -191,15 +334,16 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         self.installed_books = self._generate_booklist()
-        self._construct_table_data()
 
         # ~~~~~~~~ Create the dialog ~~~~~~~~
-        self.setWindowTitle(u'Marvin Library: %d books' % len(self.tabledata))
+        self.setWindowTitle(u'Marvin Library: %d books' % len(self.installed_books))
         self.setWindowIcon(self.opts.icon)
         self.l = QVBoxLayout(self)
         self.setLayout(self.l)
         self.perfect_width = 0
 
+        # ~~~~~~~~ Create the Table ~~~~~~~~
+        self.tabledata = self._construct_table_data()
         self._construct_table_view()
 
         # ~~~~~~~~ Create the ButtonBox ~~~~~~~~
@@ -237,7 +381,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.bsm_button = self.dialogButtonBox.addButton('Bind soft matches', QDialogButtonBox.ActionRole)
         self.bsm_button.setObjectName('bind_soft_matches_button')
 
-        self.dialogButtonBox.clicked.connect(self.show_installed_books_dialog_clicked)
+        self.dialogButtonBox.clicked.connect(self.button_handler)
         self.l.addWidget(self.dialogButtonBox)
 
         # ~~~~~~~~ Connect signals ~~~~~~~~
@@ -245,49 +389,6 @@ class BookStatusDialog(SizePersistedDialog):
         self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
 
         self.resize_dialog()
-
-    def accept(self):
-        self._log_location()
-        self._save_column_widths()
-        super(BookStatusDialog, self).accept()
-
-    def capture_sort_column(self, sort_column):
-        sort_order = self.tv.horizontalHeader().sortIndicatorOrder()
-        self.opts.prefs.set('marvin_library_sort_column', sort_column)
-        self.opts.prefs.set('marvin_library_sort_order', sort_order)
-
-    def close(self):
-        self._log_location()
-        self._save_column_widths()
-        super(BookStatusDialog, self).close()
-
-    def double_click_dispatcher(self, index):
-        '''
-        Display column data for selected book
-        '''
-        col = index.column()
-        row = index.row()
-        clicked = {
-                    'cid': self.tm.arraydata[row][self.CALIBRE_ID_COL],
-                    'col': col,
-                    'column': self.library_header[col],
-                    'mid': self.tm.arraydata[row][self.BOOK_ID_COL],
-                    'path': self.tm.arraydata[row][self.PATH_COL],
-                    'row': row,
-                    'title': str(self.tm.arraydata[row][self.TITLE_COL].text())
-                  }
-
-        if col == self.ARTICLES_COL:
-            self._show_articles(clicked)
-        elif col == self.COLLECTIONS_COL:
-            self._show_collections(clicked)
-        elif col == self.VOCABULARY_COL:
-            self._show_vocabulary(clicked)
-        elif col == self.WORD_COUNT_COL:
-            self._calculate_single_word_count(clicked)
-        else:
-            self._log_location(row, col)
-            self._log("No double-click handler for %s" % clicked['column'])
 
     def marvin_status_changed(self, command):
         '''
@@ -302,36 +403,6 @@ class BookStatusDialog(SizePersistedDialog):
             if command in ['disconnected', 'yanked']:
                 self._log("closing dialog: %s" % command)
                 self.close()
-
-    def show_installed_books_dialog_clicked(self, button):
-        '''
-        BUTTON_ROLES = ['AcceptRole', 'RejectRole', 'DestructiveRole', 'ActionRole',
-                        'HelpRole', 'YesRole', 'NoRole', 'ApplyRole', 'ResetRole']
-        '''
-        self._log_location()
-        if self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.AcceptRole:
-            self._log("AcceptRole")
-            self.accept()
-        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.ActionRole:
-            if button.objectName() == 'match_quality_button':
-                self.toggle_confidence_colors()
-            elif button.objectName() == 'toggle_checkmarks_button':
-                self.toggle_checkmarks()
-            elif button.objectName() == 'calculate_word_count_button':
-                self._calculate_bulk_word_count()
-            elif button.objectName() == 'generate_deep_view_button':
-                self._generate_deep_view()
-            elif button.objectName() == 'synchronize_collections_button':
-                self._synchronize_collections()
-            elif button.objectName() == 'bind_soft_matches_button':
-                self._bind_soft_matches()
-
-        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
-            self._delete_books()
-        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.HelpRole:
-            self.show_help()
-        elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.RejectRole:
-            self.close()
 
     def show_help(self):
         '''
@@ -510,14 +581,58 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Populate the table data from self.installed_books
         '''
-        self._log_location()
+        def _generate_author(book_data):
+            '''
+            '''
+            if not book_data.author_sort:
+                book_data.author_sort = ', '.join(book_data.author)
+            author = SortableTableWidgetItem(
+                ', '.join(book_data.author),
+                book_data.author_sort.upper())
+            return author
 
-        self.tabledata = []
+        def _generate_collection_match_profile(book_data):
+            '''
+            '''
+            if not book_data.device_collections and not book_data.calibre_collections:
+                base_name = 'collections_empty.png'
+                sort_value = 0
+            elif book_data.device_collections == book_data.calibre_collections:
+                base_name = 'collections_equal.png'
+                sort_value = 2
+            else:
+                base_name = 'collections_unequal.png'
+                sort_value = 1
+            collection_match = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                    'icons', base_name),
+                                                       sort_value)
+            return collection_match
 
-        for book in self.installed_books:
-            book_data = self.installed_books[book]
+        def _generate_flags_profile(book_data):
+            '''
+            Figure out which flags image to use, assign sort value
+            NEW = 4
+            READING LIST = 2
+            READ = 1
+            '''
+            flag_list = book_data.flags
+            index = 0
+            if 'NEW' in flag_list:
+                index += 4
+            if 'READING LIST' in flag_list:
+                index += 2
+            if 'READ' in flag_list:
+                index += 1
+            base_name = "flags%d.png" % index
+            flags = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                         'icons', base_name),
+                                            index)
+            return flags
 
-            # last_opened sorts by timestamp
+        def _generate_last_opened(book_data):
+            '''
+            last_opened sorts by timestamp
+            '''
             last_opened_ts = ''
             last_opened_sort = 0
             if book_data.date_opened:
@@ -527,40 +642,9 @@ class BookStatusDialog(SizePersistedDialog):
             last_opened = SortableTableWidgetItem(
                 last_opened_ts,
                 last_opened_sort)
+            return last_opened
 
-            # title, author sort by title_sort, author_sort
-            if not book_data.title_sort:
-                book_data.title_sort = book_data.title_sort()
-            title = SortableTableWidgetItem(
-                book_data.title,
-                book_data.title_sort.upper())
-
-            if not book_data.author_sort:
-                book_data.author_sort = ', '.join(book_data.author)
-            author = SortableTableWidgetItem(
-                ', '.join(book_data.author),
-                book_data.author_sort.upper())
-
-            # Reading progress
-            percent_read = ''
-            if book_data.progress > 0.01:
-                if self.opts.prefs.get('show_progress_as_percentage', False):
-                    percent_read = "{:3.0f}%".format(book_data.progress * 100)
-                else:
-                    if book_data.progress < 0.25:
-                        percent_read = (1 * self.PROGRESS_READ) + (4 * self.PROGRESS_UNREAD)
-                    elif book_data.progress >= 0.25 and book_data.progress < 0.50:
-                        percent_read = (2 * self.PROGRESS_READ) + (3 * self.PROGRESS_UNREAD)
-                    elif book_data.progress >= 0.50 and book_data.progress < 0.75:
-                        percent_read = (3 * self.PROGRESS_READ) + (2 * self.PROGRESS_UNREAD)
-                    elif book_data.progress >= 0.75 and book_data.progress < 0.95:
-                        percent_read = (4 * self.PROGRESS_READ) + (1 * self.PROGRESS_UNREAD)
-                    else:
-                        percent_read = (5 * self.PROGRESS_READ)
-            progress = SortableTableWidgetItem(
-                percent_read,
-                book_data.progress)
-
+        def _generate_match_quality(book_data):
             # Match quality
             if self.opts.prefs.get('development_mode', False):
                 self._log("%s uuid: %s matches: %s on_device: %s" %
@@ -568,7 +652,6 @@ class BookStatusDialog(SizePersistedDialog):
                              repr(book_data.uuid),
                              repr(book_data.matches),
                              repr(book_data.on_device)))
-
             match_quality = 0
             if (book_data.uuid > '' and
                 [book_data.uuid] == book_data.matches):
@@ -583,22 +666,125 @@ class BookStatusDialog(SizePersistedDialog):
                 match_quality = 2
             if self.opts.prefs.get('development_mode', False):
                 self._log("match_quality: %s" % match_quality)
+            return match_quality
 
-            # Collection status.
-            #  Checkmark: device_collections = calibre_collections
-            #  Unequal
-            #  (empty)
-#             self._log("%s: \n device_collections: %s\n calibre_collections: %s" %
-#                        (book_data.title,
-#                         repr(book_data.device_collections),
-#                         repr(book_data.calibre_collections)))
-            if not book_data.device_collections and not book_data.calibre_collections:
-                collections_match = ''
-            elif book_data.device_collections == book_data.calibre_collections:
-                collections_match = self.CHECKMARK
+        def _generate_reading_progress(book_data):
+            '''
+
+            '''
+            percent_read = ''
+            if self.opts.prefs.get('show_progress_as_percentage', False):
+                percent_read = "{:3.0f}%".format(book_data.progress * 100)
+                progress = SortableTableWidgetItem(
+                    percent_read,
+                    book_data.progress)
+            elif False:
+                if book_data.progress < 0.05:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.05 and book_data.progress < 0.10:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.10 and book_data.progress < 0.15:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.15 and book_data.progress < 0.20:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.20 and book_data.progress < 0.25:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.25 and book_data.progress < 0.30:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.30 and book_data.progress < 0.35:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.35 and book_data.progress < 0.40:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.40 and book_data.progress < 0.45:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.45 and book_data.progress < 0.50:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.50 and book_data.progress < 0.55:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.55 and book_data.progress < 0.60:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.65 and book_data.progress < 0.70:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.75 and book_data.progress < 0.80:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.80 and book_data.progress < 0.85:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.85 and book_data.progress < 0.90:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.90 and book_data.progress < 0.95:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+                elif book_data.progress >= 0.95:
+                    #base_name = "progress%03d.png" % book_data.progress
+                    base_name = "progress050.png"
+
+                progress = SortableImageWidgetItem(self,
+                                            os.path.join(self.parent.opts.resources_path,
+                                                         'icons', base_name),
+                                            book_data.progress)
             else:
-                #collections_match = self.UNEQUAL
-                collections_match = 'x'
+                percent_read = ''
+                if book_data.progress > 0.01:
+                    if self.opts.prefs.get('show_progress_as_percentage', False):
+                        percent_read = "{:3.0f}%".format(book_data.progress * 100)
+                    else:
+                        if book_data.progress < 0.25:
+                            percent_read = (1 * self.PROGRESS_READ) + (4 * self.PROGRESS_UNREAD)
+                        elif book_data.progress >= 0.25 and book_data.progress < 0.50:
+                            percent_read = (2 * self.PROGRESS_READ) + (3 * self.PROGRESS_UNREAD)
+                        elif book_data.progress >= 0.50 and book_data.progress < 0.75:
+                            percent_read = (3 * self.PROGRESS_READ) + (2 * self.PROGRESS_UNREAD)
+                        elif book_data.progress >= 0.75 and book_data.progress < 0.95:
+                            percent_read = (4 * self.PROGRESS_READ) + (1 * self.PROGRESS_UNREAD)
+                        else:
+                            percent_read = (5 * self.PROGRESS_READ)
+                progress = SortableTableWidgetItem(
+                    percent_read,
+                    book_data.progress)
+
+            return progress
+
+        def _generate_title(book_data):
+            '''
+            '''
+            # Title, Author sort by title_sort, author_sort
+            if not book_data.title_sort:
+                book_data.title_sort = book_data.title_sort()
+            title = SortableTableWidgetItem(
+                book_data.title,
+                book_data.title_sort.upper())
+            return title
+
+        self._log_location()
+
+        tabledata = []
+
+        for book in self.installed_books:
+            book_data = self.installed_books[book]
+
+            author = _generate_author(book_data)
+            collection_match = _generate_collection_match_profile(book_data)
+            flags = _generate_flags_profile(book_data)
+            last_opened = _generate_last_opened(book_data)
+            match_quality = _generate_match_quality(book_data)
+            progress = _generate_reading_progress(book_data)
+            title = _generate_title(book_data)
 
             # List order matches self.library_header
             this_book = [
@@ -612,19 +798,21 @@ class BookStatusDialog(SizePersistedDialog):
                 last_opened,
                 book_data.word_count if book_data.word_count > '0' else '',
                 self.CHECKMARK if book_data.has_highlights else '',
-                collections_match,
-                self.CHECKMARK if len(book_data.flags) else '',
+                collection_match,
+                flags,
                 self.CHECKMARK if book_data.deep_view_prepared else '',
                 self.CHECKMARK if book_data.articles else '',
                 self.CHECKMARK if len(book_data.vocabulary) else '',
                 match_quality
                 ]
-            self.tabledata.append(this_book)
+            tabledata.append(this_book)
+        return tabledata
 
     def _construct_table_view(self):
         '''
         '''
-        self.tv = QTableView(self)
+        #self.tv = QTableView(self)
+        self.tv = MyTableView(self)
         self.l.addWidget(self.tv)
         self.library_header = ['uuid', 'cid', 'mid', 'path',
                                'Title', 'Author', 'Progress',
@@ -672,7 +860,15 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.tv.setModel(self.tm)
         self.tv.setShowGrid(False)
-        self.tv.setFont(self.FONT)
+        if self.parent.prefs.get('use_monospace_font', False):
+            if isosx:
+                FONT = QFont('Monaco', 11)
+            elif iswindows:
+                FONT = QFont('Lucida Console', 9)
+            elif islinux:
+                FONT = QFont('Monospace', 9)
+                FONT.setStyleHint(QFont.TypeWriter)
+            self.tv.setFont(FONT)
         self.tvSelectionModel = self.tv.selectionModel()
         self.tv.setAlternatingRowColors(not self.show_confidence_colors)
         self.tv.setShowGrid(False)
@@ -845,7 +1041,6 @@ class BookStatusDialog(SizePersistedDialog):
         cfl = self.prefs.get('collection_field_lookup', '')
         lib_collections = []
         if cfl and cid:
-            self._log("cfl: %s" % cfl)
             db = self.opts.gui.current_db
             mi = db.get_metadata(cid, index_is_id=True)
             lib_collections = mi.get(cfl)
@@ -961,11 +1156,11 @@ class BookStatusDialog(SizePersistedDialog):
             # Get the flag assignments
             flags = []
             if row[b'NewFlag']:
-                flags.append(self.flags['new'])
+                flags.append(self.FLAGS['new'])
             if row[b'ReadingList']:
-                flags.append(self.flags['reading_list'])
+                flags.append(self.FLAGS['reading_list'])
             if row[b'IsRead']:
-                flags.append(self.flags['read'])
+                flags.append(self.FLAGS['read'])
             return flags
 
         def _get_highlights(cur, book_id):
