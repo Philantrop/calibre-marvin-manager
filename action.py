@@ -287,7 +287,7 @@ class MarvinManagerAction(InterfaceAction):
                 if (self.connected_device.ios_reader_app == 'Marvin' and
                     self.connected_device.ios_connection['connected'] is True):
                     self._log("Marvin connected")
-                    ac = self.create_menu_item(m, 'Marvin Library', image=I("dialog_information.png"))
+                    ac = self.create_menu_item(m, 'Explore Marvin Library', image=I("dialog_information.png"))
                     ac.triggered.connect(self.show_installed_books)
 
                     ac = self.create_menu_item(m, 'Backup or Restore Library', image=I("swap.png"))

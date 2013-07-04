@@ -17,6 +17,7 @@ from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QBrush,
                       SIGNAL, pyqtSignal)
 from PyQt4.QtWebKit import QWebView
 
+from calibre import prints
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.oeb.iterator import EbookIterator
@@ -37,52 +38,99 @@ class MyTableView(QTableView):
 
         index = self.indexAt(event.pos())
         col = index.column()
-        if col == self.parent.FLAGS_COL:
-            menu = QMenu(self)
+        row = index.row()
+        menu = QMenu(self)
 
+        if col == self.parent.ARTICLES_COL:
+            ac = menu.addAction("Show articles")
+            ac.setIcon(QIcon(I('exec.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_articles", row))
+        elif col == self.parent.COLLECTIONS_COL:
+            ac = menu.addAction("Show collections")
+            ac.setIcon(QIcon(I("dialog_information.png")))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_collections", row))
+            ac = menu.addAction("Synchronize collections")
+            ac.setIcon(QIcon(I('exec.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "synchronize_collections", row))
+        elif col == self.parent.FLAGS_COL:
             ac = menu.addAction("Clear New")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_new.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event, "clear_new_flag"))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_new_flag", row))
             ac = menu.addAction("Clear Reading list")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_reading.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event, "clear_reading_list_flag"))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_reading_list_flag", row))
             ac = menu.addAction("Clear Read")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_read.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event, "clear_read_flag"))
-
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_read_flag", row))
             menu.addSeparator()
-
             ac = menu.addAction("Set New")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_new.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event, "set_new_flag"))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "set_new_flag", row))
             ac = menu.addAction("Set Reading list")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_reading.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event, "set_reading_list_flag"))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "set_reading_list_flag", row))
             ac = menu.addAction("Set Read")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_read.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event, "set_read_flag"))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "set_read_flag", row))
+        elif col == self.parent.VOCABULARY_COL:
+            ac = menu.addAction("Show vocabulary words")
+            ac.setIcon(QIcon(I('exec.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_vocabulary_words", row))
+        elif col == self.parent.WORD_COUNT_COL:
+            ac = menu.addAction("Calculate word count")
+            ac.setIcon(QIcon(I('exec.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "calculate_word_count", row))
 
-            menu.exec_(event.globalPos())
+        menu.exec_(event.globalPos())
 
-#         elif col == self.parent.COLLECTIONS_COL:
-#             menu = QMenu(self)
-#             ac = menu.addAction("Synchronize collections")
-#             ac.triggered.connect(partial(self.parent.context_menu_event, "synchronize_collections"))
-#             menu.exec_(event.globalPos())
+
+class _SortableImageWidgetItem(QLabel):
+    def __init__(self, parent, path, sort_key, column):
+        super(SortableImageWidgetItem, self).__init__(parent=parent.tv)
+        self.column = column
+        self.parent = parent.tv
+        self.picture = QPixmap(path)
+        self.sort_key = sort_key
+        self.width = self.picture.width()
+        self.setAlignment(Qt.AlignCenter)
+        self.setPixmap(self.picture)
 
 
 class SortableImageWidgetItem(QWidget):
-    def __init__(self, path, sort_key):
-        super(SortableImageWidgetItem, self).__init__(parent=None)
+    def __init__(self, parent, path, sort_key, column):
+        super(SortableImageWidgetItem, self).__init__(parent=parent.tv)
+        self.column = column
+        self.parent_tv = parent.tv
         self.picture = QPixmap(path)
         self.sort_key = sort_key
+        self.width = self.picture.width()
 
     def __lt__(self, other):
         return self.sort_key < other.sort_key
 
-    def paintEvent(self, event):
+    def _paintEvent(self, event):
+        #print("column_width: %s" % (repr(self.parent_tv.columnWidth(self.column))))
+        #print("picture_width: %s" % repr(self.width))
+        #print("event: %s" % dir(event))
+        #print("region: %s" % dir(event.region()))
+        #print("region().boundingRect(): %s" % repr(event.region().boundingRect()))
+        #print("boundingRect: %s" % dir(event.region().boundingRect()))
+        #print("getCoords: %s" % repr(event.region().boundingRect().getCoords()))
+        #print("getRect: %s" % repr(event.region().boundingRect().getRect()))
+        #print("column_viewport_position: %d" % self.parent_tv.columnViewportPosition(self.column))
+        #print("dir(self.parent_tv): %s" % dir(self.parent_tv))
+        #cvp = self.parent_tv.columnViewportPosition(self.column)
+        #painter = QPainter(self.parent_tv.viewport())
         painter = QPainter(self)
-        painter.drawPixmap(0, 0, self.picture)
+        x_off = 0
+        col_width = self.parent_tv.columnWidth(self.column)
+        if col_width > self.width:
+            x_off = int((col_width - self.width) / 2)
+        #print("x_off: %d" % x_off)
+        #painter.drawPixmap(x_off, 0, self.picture)
+        painter.drawPixmap(event.region().boundingRect(), self.picture)
+        painter.end()
+        #QWidget.paintEvent(self, event)
 
 
 class SortableTableWidgetItem(QTableWidgetItem):
@@ -100,7 +148,7 @@ class SortableTableWidgetItem(QTableWidgetItem):
 class MarkupTableModel(QAbstractTableModel):
     #http://www.saltycrane.com/blog/2007/12/pyqt-43-qtableview-qabstracttablemodel/
 
-    def __init__(self, parent=None, columns_to_center=[], right_aligned_columns=[], *args):
+    def __init__(self, parent=None, centered_columns=[], right_aligned_columns=[], *args):
         """
         datain: a list of lists
         headerdata: a list of strings
@@ -108,9 +156,9 @@ class MarkupTableModel(QAbstractTableModel):
         QAbstractTableModel.__init__(self, parent, *args)
         self.parent = parent
         self.arraydata = parent.tabledata
-        self.centered_columns = columns_to_center
+        self.centered_columns = centered_columns
         self.right_aligned_columns = right_aligned_columns
-        self.headerdata = parent.library_header
+        self.headerdata = parent.LIBRARY_HEADER
         self.show_confidence_colors = parent.show_confidence_colors
 
     def rowCount(self, parent):
@@ -146,18 +194,18 @@ class MarkupTableModel(QAbstractTableModel):
         elif role == Qt.DecorationRole and col == self.parent.COLLECTIONS_COL:
             return self.arraydata[row][self.parent.COLLECTIONS_COL].picture
 
-        elif (role == Qt.DisplayRole and
-              col == self.parent.PROGRESS_COL):
-            return self.arraydata[row][self.parent.PROGRESS_COL].text()
-
 #         elif (role == Qt.DisplayRole and
-#               col == self.parent.PROGRESS_COL
-#               and self.parent.prefs.get('show_progress_as_percentage', False)):
+#               col == self.parent.PROGRESS_COL):
 #             return self.arraydata[row][self.parent.PROGRESS_COL].text()
-#         elif (role == Qt.DecorationRole and
-#               col == self.parent.PROGRESS_COL
-#               and not self.parent.prefs.get('show_progress_as_percentage', False)):
-#             return self.arraydata[row][self.parent.PROGRESS_COL].picture
+
+        elif (role == Qt.DisplayRole and
+              col == self.parent.PROGRESS_COL
+              and self.parent.prefs.get('show_progress_as_percentage', False)):
+            return self.arraydata[row][self.parent.PROGRESS_COL].text()
+        elif (role == Qt.DecorationRole and
+              col == self.parent.PROGRESS_COL
+              and not self.parent.prefs.get('show_progress_as_percentage', False)):
+            return self.arraydata[row][self.parent.PROGRESS_COL].picture
 
         elif role == Qt.DisplayRole and col == self.parent.TITLE_COL:
             return self.arraydata[row][self.parent.TITLE_COL].text()
@@ -212,14 +260,61 @@ class BookStatusDialog(SizePersistedDialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     CHECKMARK = u"\u2713"
-    PROGRESS_READ = u"\u25AA"
-    PROGRESS_UNREAD = u"\u25AB"
 
     FLAGS = {
             'new': 'NEW',
             'read': 'READ',
             'reading_list': 'READING LIST'
             }
+
+    # Binary values for updates
+    NEW_FLAG = 4
+    READING_FLAG = 2
+    READ_FLAG = 1
+
+    # The order columns appear in the spreadsheet
+    LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
+                      'Title', 'Author', 'Progress',
+                      'Last Opened', 'Word Count', 'Annotations',
+                      'Collections', 'Flags', 'Deep View', 'Articles',
+                      'Vocabulary', 'Match Quality']
+    ANNOTATIONS_COL = LIBRARY_HEADER.index('Annotations')
+    ARTICLES_COL = LIBRARY_HEADER.index('Articles')
+    AUTHOR_COL = LIBRARY_HEADER.index('Author')
+    BOOK_ID_COL = LIBRARY_HEADER.index('mid')
+    CALIBRE_ID_COL = LIBRARY_HEADER.index('cid')
+    COLLECTIONS_COL = LIBRARY_HEADER.index('Collections')
+    DEEP_VIEW_COL = LIBRARY_HEADER.index('Deep View')
+    FLAGS_COL = LIBRARY_HEADER.index('Flags')
+    LAST_OPENED_COL = LIBRARY_HEADER.index('Last Opened')
+    MATCHED_COL = LIBRARY_HEADER.index('Match Quality')
+    PATH_COL = LIBRARY_HEADER.index('path')
+    PROGRESS_COL = LIBRARY_HEADER.index('Progress')
+    TITLE_COL = LIBRARY_HEADER.index('Title')
+    UUID_COL = LIBRARY_HEADER.index('uuid')
+    VOCABULARY_COL = LIBRARY_HEADER.index('Vocabulary')
+    WORD_COUNT_COL = LIBRARY_HEADER.index('Word Count')
+
+    HIDDEN_COLUMNS =    [
+                         UUID_COL,
+                         CALIBRE_ID_COL,
+                         BOOK_ID_COL,
+                         PATH_COL,
+                         MATCHED_COL,
+                        ]
+    CENTERED_COLUMNS =  [
+                         ANNOTATIONS_COL,
+                         COLLECTIONS_COL,
+                         DEEP_VIEW_COL,
+                         ARTICLES_COL,
+                         LAST_OPENED_COL,
+                         VOCABULARY_COL,
+                         ]
+    RIGHT_ALIGNED_COLUMNS = [
+                         PROGRESS_COL,
+                         WORD_COUNT_COL
+                         ]
+
 
     marvin_device_status_changed = pyqtSignal(str)
 
@@ -243,7 +338,7 @@ class BookStatusDialog(SizePersistedDialog):
             elif button.objectName() == 'toggle_checkmarks_button':
                 self.toggle_checkmarks()
             elif button.objectName() == 'calculate_word_count_button':
-                self._calculate_bulk_word_count()
+                self._calculate_word_count()
             elif button.objectName() == 'generate_deep_view_button':
                 self._generate_deep_view()
             elif button.objectName() == 'synchronize_collections_button':
@@ -268,49 +363,67 @@ class BookStatusDialog(SizePersistedDialog):
         self._save_column_widths()
         super(BookStatusDialog, self).close()
 
-    def context_menu_event(self, action):
+    def context_menu_event_dispatcher(self, action, row):
         '''
         '''
-        self._log_location(action)
-        selected_books = self._get_selected_books()
-        det_msg = ''
-        for cid in selected_books:
-            det_msg += selected_books[cid]['title'] + '\n'
+        self._log_location("%s row: %s" % (repr(action), row))
 
-        title = "Set/Clear Flags"
-        msg = ("<p>{0}</p>".format(action) +
-                "<p>Click <b>Show details</b> for affected books</p>")
+        if action == 'calculate_word_count':
+            self._calculate_word_count()
+        elif action == 'show_articles':
+            self._show_articles(row)
+        elif action == 'show_vocabulary_words':
+            self._show_vocabulary(row)
+        elif action == 'show_collections':
+            self._show_collections(row)
+        elif action == 'synchronize_collections':
+            self._synchronize_collections(row)
+        elif action in ['clear_new_flag', 'clear_reading_list_flag', 'clear_read_flag']:
+            self._clear_flags(action)
+        elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
+            self._set_flags(action)
+        else:
+            selected_books = self._get_selected_books()
+            det_msg = ''
+            for row in selected_books:
+                det_msg += selected_books[row]['title'] + '\n'
 
-        MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
-                       show_copy_button=False).exec_()
+            title = "Context menu event"
+            msg = ("<p>{0}</p>".format(action) +
+                    "<p>Click <b>Show details</b> for affected books</p>")
+
+            MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
+                           show_copy_button=False).exec_()
 
     def double_click_dispatcher(self, index):
         '''
         Display column data for selected book
         '''
-        col = index.column()
-        row = index.row()
-        clicked = {
-                    'cid': self.tm.arraydata[row][self.CALIBRE_ID_COL],
-                    'col': col,
-                    'column': self.library_header[col],
-                    'mid': self.tm.arraydata[row][self.BOOK_ID_COL],
-                    'path': self.tm.arraydata[row][self.PATH_COL],
-                    'row': row,
-                    'title': str(self.tm.arraydata[row][self.TITLE_COL].text())
-                  }
+        self._log_location()
+        if False:
+            col = index.column()
+            row = index.row()
+            clicked = {
+                        'book_id': self.tm.arraydata[row][self.BOOK_ID_COL],
+                        'cid': self.tm.arraydata[row][self.CALIBRE_ID_COL],
+                        'col': col,
+                        'column': self.LIBRARY_HEADER[col],
+                        'path': self.tm.arraydata[row][self.PATH_COL],
+                        'row': row,
+                        'title': str(self.tm.arraydata[row][self.TITLE_COL].text())
+                      }
 
-        if col == self.ARTICLES_COL:
-            self._show_articles(clicked)
-        elif col == self.COLLECTIONS_COL:
-            self._show_collections(clicked)
-        elif col == self.VOCABULARY_COL:
-            self._show_vocabulary(clicked)
-        elif col == self.WORD_COUNT_COL:
-            self._calculate_single_word_count(clicked)
-        else:
-            self._log_location(row, col)
-            self._log("No double-click handler for %s" % clicked['column'])
+            if col == self.ARTICLES_COL:
+                self._show_articles(clicked)
+            elif col == self.COLLECTIONS_COL:
+                self._show_collections(clicked)
+            elif col == self.VOCABULARY_COL:
+                self._show_vocabulary(clicked)
+            elif col == self.WORD_COUNT_COL:
+                self._calculate_single_word_count(clicked)
+            else:
+                self._log_location(row, col)
+                self._log("No double-click handler for %s" % clicked['column'])
 
     def initialize(self, parent):
         self.hash_cache = 'content_hashes.zip'
@@ -343,6 +456,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.perfect_width = 0
 
         # ~~~~~~~~ Create the Table ~~~~~~~~
+        self.tv = MyTableView(self)
         self.tabledata = self._construct_table_data()
         self._construct_table_view()
 
@@ -418,8 +532,8 @@ class BookStatusDialog(SizePersistedDialog):
         self.opts.prefs.set('annotated_books_dialog_show_confidence_as_bg_color', self.show_confidence_colors)
         if self.show_confidence_colors:
             self.show_confidence_button.setText("Hide Match Quality")
-            self.tv.sortByColumn(self.library_header.index('Match Quality'), Qt.DescendingOrder)
-            self.capture_sort_column(self.library_header.index('Match Quality'))
+            self.tv.sortByColumn(self.LIBRARY_HEADER.index('Match Quality'), Qt.DescendingOrder)
+            self.capture_sort_column(self.LIBRARY_HEADER.index('Match Quality'))
         else:
             self.show_confidence_button.setText("Show Match Quality")
         self.tv.setAlternatingRowColors(not self.show_confidence_colors)
@@ -435,9 +549,10 @@ class BookStatusDialog(SizePersistedDialog):
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
-    def _calculate_bulk_word_count(self, selected_books=[]):
+    def _calculate_word_count(self):
         '''
         Calculate word count for each selected book
+        selected_books: {row: {'book_id':, 'cid':, 'path':, 'title':}...}
         '''
         def _extract_body_text(data):
             '''
@@ -453,9 +568,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         self._log_location()
 
-        if not selected_books:
-            selected_books = self._get_selected_books()
-
+        selected_books = self._get_selected_books()
         if selected_books:
             stats = {}
 
@@ -466,11 +579,11 @@ class BookStatusDialog(SizePersistedDialog):
             pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
             pb.show()
 
-            for i, cid in enumerate(selected_books):
-                pb.set_label('{:^100}'.format(selected_books[cid]['title']))
+            for i, row in enumerate(selected_books):
+                pb.set_label('{:^100}'.format(selected_books[row]['title']))
 
                 # Copy the remote epub to local storage
-                path = selected_books[cid]['path']
+                path = selected_books[row]['path']
                 rbp = '/'.join(['/Documents', path])
                 lbp = os.path.join(self.local_cache_folder, path)
 
@@ -498,26 +611,39 @@ class BookStatusDialog(SizePersistedDialog):
 
                 wordcount = get_wordcount_obj(book_text)
 
-                self._log("%s: %d words" % (selected_books[cid]['title'], wordcount.words))
-                stats[selected_books[cid]['title']] = wordcount.words
+                self._log("%s: %d words" % (selected_books[row]['title'], wordcount.words))
+                stats[selected_books[row]['title']] = wordcount.words
 
                 # Delete the local copy
                 os.remove(lbp)
                 pb.increment()
 
+                # Update the model
+                wc = locale.format("%d", wordcount.words, grouping=True)
+                self.tm.arraydata[row][self.WORD_COUNT_COL] = wc
+
+                # Update self.installed_books
+                book_id = selected_books[row]['book_id']
+                self.installed_books[book_id].word_count = wc
+
                 # Update Marvin db
+                self._log("DON'T FORGET TO TELL MARVIN")
+
+            # Update the spreadsheet
+            self.repaint()
 
             pb.hide()
 
-            # Display a summary
-            title = "Word count results"
-            msg = ("<p>Calculated word count for {0} books.</p>".format(total_books) +
-                   "<p>Click <b>Show details</b> for a summary.</p>")
-            dl = ["%s: %s" % (stat, locale.format("%d", stats[stat], grouping=True))
-                   for stat in stats]
-            details = '\n'.join(dl)
-            MessageBox(MessageBox.INFO, title, msg, det_msg=details,
-                           show_copy_button=False).exec_()
+            if False:
+                # Display a summary
+                title = "Word count results"
+                msg = ("<p>Calculated word count for {0} books.</p>".format(total_books) +
+                       "<p>Click <b>Show details</b> for a summary.</p>")
+                dl = ["%s: %s" % (stat, locale.format("%d", stats[stat], grouping=True))
+                       for stat in stats]
+                details = '\n'.join(dl)
+                MessageBox(MessageBox.INFO, title, msg, det_msg=details,
+                               show_copy_button=False).exec_()
         else:
             self._log("No selected books")
             # Display a summary
@@ -526,14 +652,50 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
 
-    def _calculate_single_word_count(self, clicked):
+    def _clear_flags(self, action):
         '''
-        clicked{'row':, 'col':, 'column':, 'cid':, 'mid':, 'path':, 'title':}
+        Clear specified flags for selected books
+        sort_key is the bitfield representing current flag settings
         '''
-        selected_books = {}
-        selected_books[clicked['cid']] = {'title': clicked['title'],
-                                          'path': clicked['path']}
-        self._calculate_bulk_word_count(selected_books=selected_books)
+
+        self._log_location(action)
+        if action == 'clear_new_flag':
+            mask = self.NEW_FLAG
+        elif action == 'clear_reading_list_flag':
+            mask = self.READING_FLAG
+        elif action == 'clear_read_flag':
+            mask = self.READ_FLAG
+
+        selected_books = self._get_selected_books()
+        for row in selected_books:
+            flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
+            if flagbits & mask:
+                # Clear the bit with XOR
+                flagbits = flagbits ^ mask
+                basename = "flags%d.png" % flagbits
+                new_flags_widget = SortableImageWidgetItem(self,
+                                                       os.path.join(self.parent.opts.resources_path,
+                                                         'icons', basename),
+                                                       flagbits, self.FLAGS_COL)
+                # Update the model
+                self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
+
+                # Update self.installed_books flags list
+                book_id = selected_books[row]['book_id']
+                flags = []
+                if flagbits & self.NEW_FLAG:
+                    flags.append(self.FLAGS['new'])
+                if flagbits & self.READING_FLAG:
+                    flags.append(self.FLAGS['reading_list'])
+                if flagbits & self.READ_FLAG:
+                    flags.append(self.FLAGS['read'])
+                self.installed_books[book_id].flags = flags
+
+                # Update Marvin db
+                self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
+
+        self.repaint()
+
 
     def _compute_epub_hash(self, zipfile):
         '''
@@ -603,9 +765,10 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 base_name = 'collections_unequal.png'
                 sort_value = 1
-            collection_match = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+            collection_match = SortableImageWidgetItem(self,
+                                                       os.path.join(self.parent.opts.resources_path,
                                                                     'icons', base_name),
-                                                       sort_value)
+                                                       sort_value, self.COLLECTIONS_COL)
             return collection_match
 
         def _generate_flags_profile(book_data):
@@ -616,17 +779,18 @@ class BookStatusDialog(SizePersistedDialog):
             READ = 1
             '''
             flag_list = book_data.flags
-            index = 0
+            flagbits = 0
             if 'NEW' in flag_list:
-                index += 4
+                flagbits += 4
             if 'READING LIST' in flag_list:
-                index += 2
+                flagbits += 2
             if 'READ' in flag_list:
-                index += 1
-            base_name = "flags%d.png" % index
-            flags = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                flagbits += 1
+            base_name = "flags%d.png" % flagbits
+            flags = SortableImageWidgetItem(self,
+                                            os.path.join(self.parent.opts.resources_path,
                                                          'icons', base_name),
-                                            index)
+                                            flagbits, self.FLAGS_COL)
             return flags
 
         def _generate_last_opened(book_data):
@@ -674,90 +838,47 @@ class BookStatusDialog(SizePersistedDialog):
             '''
             percent_read = ''
             if self.opts.prefs.get('show_progress_as_percentage', False):
-                percent_read = "{:3.0f}%".format(book_data.progress * 100)
+                if book_data.progress < 0.01:
+                    percent_read = ''
+                else:
+                    # Pad the right side for visual comfort, since this col is
+                    # right-aligned
+                    percent_read = "{:3.0f}%   ".format(book_data.progress * 100)
                 progress = SortableTableWidgetItem(
                     percent_read,
                     book_data.progress)
-            elif False:
-                if book_data.progress < 0.05:
-                    #base_name = "progress%03d.png" % book_data.progress
+            else:
+                if book_data.progress < 0.01:
+                    #base_name = "progress000.png"
+                    base_name = "progress_none.png"
+                elif book_data.progress >= 0.01 and book_data.progress < 0.10:
+                    base_name = "progress010.png"
+                elif book_data.progress >= 0.10 and book_data.progress < 0.20:
+                    base_name = "progress020.png"
+                elif book_data.progress >= 0.20 and book_data.progress < 0.30:
+                    base_name = "progress030.png"
+                elif book_data.progress >= 0.30 and book_data.progress < 0.40:
+                    base_name = "progress040.png"
+                elif book_data.progress >= 0.40 and book_data.progress < 0.50:
                     base_name = "progress050.png"
-                elif book_data.progress >= 0.05 and book_data.progress < 0.10:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.10 and book_data.progress < 0.15:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.15 and book_data.progress < 0.20:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.20 and book_data.progress < 0.25:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.25 and book_data.progress < 0.30:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.30 and book_data.progress < 0.35:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.35 and book_data.progress < 0.40:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.40 and book_data.progress < 0.45:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.45 and book_data.progress < 0.50:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.50 and book_data.progress < 0.55:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.55 and book_data.progress < 0.60:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.65 and book_data.progress < 0.70:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.75 and book_data.progress < 0.80:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.80 and book_data.progress < 0.85:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.85 and book_data.progress < 0.90:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
+                elif book_data.progress >= 0.50 and book_data.progress < 0.60:
+                    base_name = "progress060.png"
+                elif book_data.progress >= 0.60 and book_data.progress < 0.70:
+                    base_name = "progress070.png"
+                elif book_data.progress >= 0.70 and book_data.progress < 0.80:
+                    base_name = "progress080.png"
+                elif book_data.progress >= 0.80 and book_data.progress < 0.90:
+                    base_name = "progress080.png"
                 elif book_data.progress >= 0.90 and book_data.progress < 0.95:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
+                    base_name = "progress090.png"
                 elif book_data.progress >= 0.95:
-                    #base_name = "progress%03d.png" % book_data.progress
-                    base_name = "progress050.png"
+                    base_name = "progress100.png"
 
                 progress = SortableImageWidgetItem(self,
                                             os.path.join(self.parent.opts.resources_path,
                                                          'icons', base_name),
-                                            book_data.progress)
-            else:
-                percent_read = ''
-                if book_data.progress > 0.01:
-                    if self.opts.prefs.get('show_progress_as_percentage', False):
-                        percent_read = "{:3.0f}%".format(book_data.progress * 100)
-                    else:
-                        if book_data.progress < 0.25:
-                            percent_read = (1 * self.PROGRESS_READ) + (4 * self.PROGRESS_UNREAD)
-                        elif book_data.progress >= 0.25 and book_data.progress < 0.50:
-                            percent_read = (2 * self.PROGRESS_READ) + (3 * self.PROGRESS_UNREAD)
-                        elif book_data.progress >= 0.50 and book_data.progress < 0.75:
-                            percent_read = (3 * self.PROGRESS_READ) + (2 * self.PROGRESS_UNREAD)
-                        elif book_data.progress >= 0.75 and book_data.progress < 0.95:
-                            percent_read = (4 * self.PROGRESS_READ) + (1 * self.PROGRESS_UNREAD)
-                        else:
-                            percent_read = (5 * self.PROGRESS_READ)
-                progress = SortableTableWidgetItem(
-                    percent_read,
-                    book_data.progress)
-
+                                            book_data.progress,
+                                            self.PROGRESS_COL)
             return progress
 
         def _generate_title(book_data):
@@ -786,7 +907,7 @@ class BookStatusDialog(SizePersistedDialog):
             progress = _generate_reading_progress(book_data)
             title = _generate_title(book_data)
 
-            # List order matches self.library_header
+            # List order matches self.LIBRARY_HEADER
             this_book = [
                 book_data.uuid,
                 book_data.cid,
@@ -812,51 +933,9 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         #self.tv = QTableView(self)
-        self.tv = MyTableView(self)
         self.l.addWidget(self.tv)
-        self.library_header = ['uuid', 'cid', 'mid', 'path',
-                               'Title', 'Author', 'Progress',
-                               'Last Opened', 'Word Count', 'Annotations',
-                               'Collections', 'Flags', 'Deep View', 'Articles',
-                               'Vocabulary', 'Match Quality']
-        self.UUID_COL = self.library_header.index('uuid')
-        self.CALIBRE_ID_COL = self.library_header.index('cid')
-        self.BOOK_ID_COL = self.library_header.index('mid')
-        self.PATH_COL = self.library_header.index('path')
-        self.TITLE_COL = self.library_header.index('Title')
-        self.AUTHOR_COL = self.library_header.index('Author')
-        self.PROGRESS_COL = self.library_header.index('Progress')
-        self.LAST_OPENED_COL = self.library_header.index('Last Opened')
-        self.WORD_COUNT_COL = self.library_header.index('Word Count')
-        self.ANNOTATIONS_COL = self.library_header.index('Annotations')
-        self.COLLECTIONS_COL = self.library_header.index('Collections')
-        self.FLAGS_COL = self.library_header.index('Flags')
-        self.DEEP_VIEW_COL = self.library_header.index('Deep View')
-        self.ARTICLES_COL = self.library_header.index('Articles')
-        self.VOCABULARY_COL = self.library_header.index('Vocabulary')
-        self.MATCHED_COL = self.library_header.index('Match Quality')
-
-        hidden_columns =    [
-                             self.UUID_COL,
-                             self.CALIBRE_ID_COL,
-                             self.BOOK_ID_COL,
-                             self.PATH_COL,
-                             self.MATCHED_COL,
-                            ]
-        centered_columns =  [
-                             self.ANNOTATIONS_COL,
-                             self.COLLECTIONS_COL,
-                             self.DEEP_VIEW_COL,
-                             self.ARTICLES_COL,
-                             self.LAST_OPENED_COL,
-                             self.PROGRESS_COL,
-                             self.VOCABULARY_COL,
-                             ]
-        right_aligned_columns = [
-                             self.WORD_COUNT_COL
-                             ]
-        self.tm = MarkupTableModel(self, columns_to_center=centered_columns,
-                                   right_aligned_columns=right_aligned_columns)
+        self.tm = MarkupTableModel(self, centered_columns=self.CENTERED_COLUMNS,
+                                   right_aligned_columns=self.RIGHT_ALIGNED_COLUMNS)
 
         self.tv.setModel(self.tm)
         self.tv.setShowGrid(False)
@@ -879,7 +958,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.tv.verticalHeader().setVisible(False)
 
         # Hide hidden columns
-        for index in hidden_columns:
+        for index in self.HIDDEN_COLUMNS:
             self.tv.hideColumn(index)
 
         # Set horizontal self.header props
@@ -902,7 +981,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.tv.setSortingEnabled(True)
 
         sort_column = self.opts.prefs.get('marvin_library_sort_column',
-                                          self.library_header.index('Match Quality'))
+                                          self.LIBRARY_HEADER.index('Match Quality'))
         sort_order = self.opts.prefs.get('marvin_library_sort_order',
                                          Qt.DescendingOrder)
         self.tv.sortByColumn(sort_column, sort_order)
@@ -1302,19 +1381,13 @@ class BookStatusDialog(SizePersistedDialog):
         selected_books = {}
 
         for row in self._selected_rows():
-            cid = self.tm.arraydata[row][self.library_header.index('cid')]
-            path = self.tm.arraydata[row][self.library_header.index('path')]
-            title = str(self.tm.arraydata[row][self.library_header.index('Title')].text())
-            selected_books[cid] = {'title': title, 'path': path}
+            cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+            book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+            path = self.tm.arraydata[row][self.PATH_COL]
+            title = str(self.tm.arraydata[row][self.TITLE_COL].text())
+            selected_books[row] = {'book_id': book_id, 'cid': cid, 'title': title, 'path': path}
 
         return selected_books
-
-    def _selected_rows(self):
-        '''
-        Return a list of selected rows
-        '''
-        srs = self.tv.selectionModel().selectedRows()
-        return [sr.row() for sr in srs]
 
     def _localize_hash_cache(self, cached_books):
         '''
@@ -1418,7 +1491,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
         widths = []
-        for (i, c) in enumerate(self.library_header):
+        for (i, c) in enumerate(self.LIBRARY_HEADER):
             widths.append(self.tv.columnWidth(i))
         self.opts.prefs.set('marvin_library_column_widths', widths)
 
@@ -1488,12 +1561,61 @@ class BookStatusDialog(SizePersistedDialog):
 
         return installed_books
 
-    def _show_articles(self, clicked):
+    def _selected_rows(self):
         '''
-        clicked{'row':, 'col':, 'column':, 'cid':, 'mid':, 'path':, 'title':}
+        Return a list of selected rows
         '''
-        self._log_location()
-        articles = self.installed_books[clicked['mid']].articles
+        srs = self.tv.selectionModel().selectedRows()
+        return [sr.row() for sr in srs]
+
+    def _set_flags(self, action):
+        '''
+        Set specified flags for selected books
+        '''
+        self._log_location(action)
+        if action == 'set_new_flag':
+            mask = self.NEW_FLAG
+        elif action == 'set_reading_list_flag':
+            mask = self.READING_FLAG
+        elif action == 'set_read_flag':
+            mask = self.READ_FLAG
+
+        selected_books = self._get_selected_books()
+        for row in selected_books:
+            flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
+            if not flagbits & mask:
+                # Set the bit with OR
+                flagbits = flagbits | mask
+                basename = "flags%d.png" % flagbits
+                new_flags_widget = SortableImageWidgetItem(self,
+                                                       os.path.join(self.parent.opts.resources_path,
+                                                         'icons', basename),
+                                                       flagbits, self.FLAGS_COL)
+                # Update the model
+                self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
+
+                # Update self.installed_books flags list
+                book_id = selected_books[row]['book_id']
+                flags = []
+                if flagbits & self.NEW_FLAG:
+                    flags.append(self.FLAGS['new'])
+                if flagbits & self.READING_FLAG:
+                    flags.append(self.FLAGS['reading_list'])
+                if flagbits & self.READ_FLAG:
+                    flags.append(self.FLAGS['read'])
+                self.installed_books[book_id].flags = flags
+
+                # Update Marvin db
+                self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
+        self.repaint()
+
+    def _show_articles(self, row):
+        '''
+        Show articles associated with selected book
+        '''
+        self._log_location(row)
+        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+        articles = self.installed_books[book_id].articles
         if articles:
             msg = ''
             if 'Pinned' in articles:
@@ -1505,14 +1627,16 @@ class BookStatusDialog(SizePersistedDialog):
         else:
             msg = ("<p>No articles.</p>")
 
-        MessageBox(MessageBox.INFO, clicked['column'], msg,
+        MessageBox(MessageBox.INFO, 'Articles', msg,
                        show_copy_button=False).exec_()
 
-    def _show_collections(self, clicked):
+    def _show_collections(self, row):
         '''
-        clicked{'row':, 'col':, 'column':, 'cid':, 'mid':, 'path':, 'title':}
+        Show collections for calibre and Marvin
         '''
-        device_collections = self.installed_books[clicked['mid']].device_collections
+        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+        cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+        device_collections = self.installed_books[book_id].device_collections
         if device_collections:
             msg = "Marvin: " + ', '.join(sorted(device_collections, key=sort_key))
         else:
@@ -1520,12 +1644,12 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Get calibre collection assignments
         library_collections = []
-        if clicked['cid']:
+        if cid:
             cfl = self.prefs.get('collection_field_lookup', '')
             if cfl:
                 self._log("cfl: %s" % cfl)
                 db = self.opts.gui.current_db
-                mi = db.get_metadata(clicked['cid'], index_is_id=True)
+                mi = db.get_metadata(cid, index_is_id=True)
                 value = mi.get(cfl)
                 if value:
                     if type(value) is list:
@@ -1542,25 +1666,30 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 self._log("collection_field_lookup: %s" % repr(cfl))
 
-        MessageBox(MessageBox.INFO, clicked['column'], msg,
+        MessageBox(MessageBox.INFO, 'Collections', msg,
                        show_copy_button=False).exec_()
 
-    def _show_vocabulary(self, clicked):
+    def _show_vocabulary(self, row):
         '''
-        clicked{'row':, 'col':, 'column':, 'cid':, 'mid':, 'path':, 'title':}
+        Show vocabulary associated with selected book
         '''
-        vocabulary = self.installed_books[clicked['mid']].vocabulary
+        self._log_location(row)
+        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+        vocabulary = self.installed_books[book_id].vocabulary
+        title = self.installed_books[book_id].title
         if vocabulary:
-            msg = ', '.join(sorted(vocabulary, key=sort_key))
+            msg = "<p>Click <b>Show details</b> for vocabulary list.</p>"
+            det_msg = ', '.join(sorted(vocabulary, key=sort_key))
         else:
             msg = ("<p>No vocabulary words.</p>")
-        MessageBox(MessageBox.INFO, clicked['column'], msg,
+            det_msg = ''
+        MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
                        show_copy_button=False).exec_()
 
-    def _synchronize_collections(self):
+    def _synchronize_collections(self, row):
         '''
         '''
-        self._log_location()
+        self._log_location(row)
         title = "Synchronize collections"
         msg = ("<p>Not implemented</p>")
         MessageBox(MessageBox.INFO, title, msg,
