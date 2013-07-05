@@ -110,15 +110,24 @@ class SizePersistedDialog(QDialog):
         self.geom = self.prefs.get(unique_pref_name, None)
         self.finished.connect(self.dialog_closing)
 
+        # Hook ESC key
+        self.esc_action = a = QAction(self)
+        self.addAction(a)
+        a.triggered.connect(self.esc)
+        a.setShortcuts([QKeySequence('Esc', QKeySequence.PortableText)])
+
+    def dialog_closing(self, result):
+        geom = bytearray(self.saveGeometry())
+        self.prefs.set(self.unique_pref_name, geom)
+
+    def esc(self, *args):
+        pass
+
     def resize_dialog(self):
         if self.geom is None:
             self.resize(self.sizeHint())
         else:
             self.restoreGeometry(self.geom)
-
-    def dialog_closing(self, result):
-        geom = bytearray(self.saveGeometry())
-        self.prefs.set(self.unique_pref_name, geom)
 
 
 '''     Exceptions      '''

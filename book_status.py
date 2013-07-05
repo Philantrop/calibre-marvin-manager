@@ -10,9 +10,10 @@ from functools import partial
 from lxml import etree
 
 from PyQt4 import QtCore, QtGui
-from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QBrush,
-                      QCheckBox, QColor, QDialog, QDialogButtonBox, QFont, QIcon, QLabel,
-                      QMenu, QPainter, QPixmap, QTableView, QTableWidgetItem,
+from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QApplication, QBrush,
+                      QCheckBox, QColor, QCursor, QDialog, QDialogButtonBox, QFont, QIcon,
+                      QLabel, QMenu, QModelIndex, QPainter, QPixmap,
+                      QTableView, QTableWidgetItem,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
 from PyQt4.QtWebKit import QWebView
@@ -20,8 +21,10 @@ from PyQt4.QtWebKit import QWebView
 from calibre import prints
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.driver import debug_print
+from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.gui2.dialogs.message_box import MessageBox
+from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.utils.icu import sort_key
 from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
@@ -44,49 +47,55 @@ class MyTableView(QTableView):
         if col == self.parent.ARTICLES_COL:
             ac = menu.addAction("Show articles")
             ac.setIcon(QIcon(I('exec.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_articles", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_articles", row))
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
             ac = menu.addAction("Show collections")
             ac.setIcon(QIcon(I("dialog_information.png")))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_collections", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
+
             ac = menu.addAction("Synchronize collections")
             ac.setIcon(QIcon(I('exec.png')))
             if cfl:
-                ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "synchronize_collections", row))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "synchronize_collections", row))
             else:
                 ac.setEnabled(False)
+
+            ac = menu.addAction("Remove from all collections")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_all.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_all_collections", row))
+
         elif col == self.parent.FLAGS_COL:
             ac = menu.addAction("Clear All")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_all.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_all_flags", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_all_flags", row))
             ac = menu.addAction("Clear New")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_new.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_new_flag", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_new_flag", row))
             ac = menu.addAction("Clear Reading list")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_reading.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_reading_list_flag", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_reading_list_flag", row))
             ac = menu.addAction("Clear Read")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_read.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_read_flag", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_read_flag", row))
             menu.addSeparator()
             ac = menu.addAction("Set New")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_new.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "set_new_flag", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_new_flag", row))
             ac = menu.addAction("Set Reading list")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_reading.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "set_reading_list_flag", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_reading_list_flag", row))
             ac = menu.addAction("Set Read")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_read.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "set_read_flag", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_read_flag", row))
         elif col == self.parent.VOCABULARY_COL:
             ac = menu.addAction("Show vocabulary words")
             ac.setIcon(QIcon(I('exec.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_vocabulary_words", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary_words", row))
         elif col == self.parent.WORD_COUNT_COL:
             ac = menu.addAction("Calculate word count")
             ac.setIcon(QIcon(I('exec.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "calculate_word_count", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "calculate_word_count", row))
 
         menu.exec_(event.globalPos())
 
@@ -240,12 +249,6 @@ class MarkupTableModel(QAbstractTableModel):
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
-#         if col == self.parent.ENABLED_COL:
-#             if self.arraydata[row][self.parent.ENABLED_COL].checkState():
-#                 self.arraydata[row][self.parent.ENABLED_COL].setCheckState(False)
-#             else:
-#                 self.arraydata[row][self.parent.ENABLED_COL].setCheckState(True)
-
         self.emit(SIGNAL("dataChanged(QModelIndex,QModelIndex)"), index, index)
         return True
 
@@ -268,60 +271,70 @@ class BookStatusDialog(SizePersistedDialog):
 
     CHECKMARK = u"\u2713"
 
-    FLAGS = {
-            'new': 'NEW',
-            'read': 'READ',
-            'reading_list': 'READING LIST'
-            }
+    # Flag constants
+    if True:
+        FLAGS = {
+                'new': 'NEW',
+                'read': 'READ',
+                'reading_list': 'READING LIST'
+                }
 
-    # Binary values for updates
-    NEW_FLAG = 4
-    READING_FLAG = 2
-    READ_FLAG = 1
+        # Binary values for flag updates
+        NEW_FLAG = 4
+        READING_FLAG = 2
+        READ_FLAG = 1
 
-    # The order columns appear in the spreadsheet
-    LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
-                      'Title', 'Author', 'Progress',
-                      'Last Opened', 'Word Count', 'Annotations',
-                      'Collections', 'Flags', 'Deep View', 'Articles',
-                      'Vocabulary', 'Match Quality']
-    ANNOTATIONS_COL = LIBRARY_HEADER.index('Annotations')
-    ARTICLES_COL = LIBRARY_HEADER.index('Articles')
-    AUTHOR_COL = LIBRARY_HEADER.index('Author')
-    BOOK_ID_COL = LIBRARY_HEADER.index('mid')
-    CALIBRE_ID_COL = LIBRARY_HEADER.index('cid')
-    COLLECTIONS_COL = LIBRARY_HEADER.index('Collections')
-    DEEP_VIEW_COL = LIBRARY_HEADER.index('Deep View')
-    FLAGS_COL = LIBRARY_HEADER.index('Flags')
-    LAST_OPENED_COL = LIBRARY_HEADER.index('Last Opened')
-    MATCHED_COL = LIBRARY_HEADER.index('Match Quality')
-    PATH_COL = LIBRARY_HEADER.index('path')
-    PROGRESS_COL = LIBRARY_HEADER.index('Progress')
-    TITLE_COL = LIBRARY_HEADER.index('Title')
-    UUID_COL = LIBRARY_HEADER.index('uuid')
-    VOCABULARY_COL = LIBRARY_HEADER.index('Vocabulary')
-    WORD_COUNT_COL = LIBRARY_HEADER.index('Word Count')
+    # Column assignments
+    if True:
+        LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
+                          'Title', 'Author', 'Progress',
+                          'Last Opened', 'Word Count', 'Annotations',
+                          'Collections', 'Flags', 'Deep View', 'Articles',
+                          'Vocabulary', 'Match Quality']
+        ANNOTATIONS_COL = LIBRARY_HEADER.index('Annotations')
+        ARTICLES_COL = LIBRARY_HEADER.index('Articles')
+        AUTHOR_COL = LIBRARY_HEADER.index('Author')
+        BOOK_ID_COL = LIBRARY_HEADER.index('mid')
+        CALIBRE_ID_COL = LIBRARY_HEADER.index('cid')
+        COLLECTIONS_COL = LIBRARY_HEADER.index('Collections')
+        DEEP_VIEW_COL = LIBRARY_HEADER.index('Deep View')
+        FLAGS_COL = LIBRARY_HEADER.index('Flags')
+        LAST_OPENED_COL = LIBRARY_HEADER.index('Last Opened')
+        MATCHED_COL = LIBRARY_HEADER.index('Match Quality')
+        PATH_COL = LIBRARY_HEADER.index('path')
+        PROGRESS_COL = LIBRARY_HEADER.index('Progress')
+        TITLE_COL = LIBRARY_HEADER.index('Title')
+        UUID_COL = LIBRARY_HEADER.index('uuid')
+        VOCABULARY_COL = LIBRARY_HEADER.index('Vocabulary')
+        WORD_COUNT_COL = LIBRARY_HEADER.index('Word Count')
 
-    HIDDEN_COLUMNS =    [
-                         UUID_COL,
-                         CALIBRE_ID_COL,
-                         BOOK_ID_COL,
-                         PATH_COL,
-                         MATCHED_COL,
-                        ]
-    CENTERED_COLUMNS =  [
-                         ANNOTATIONS_COL,
-                         COLLECTIONS_COL,
-                         DEEP_VIEW_COL,
-                         ARTICLES_COL,
-                         LAST_OPENED_COL,
-                         VOCABULARY_COL,
-                         ]
-    RIGHT_ALIGNED_COLUMNS = [
-                         PROGRESS_COL,
-                         WORD_COUNT_COL
-                         ]
+        HIDDEN_COLUMNS =    [
+                             UUID_COL,
+                             CALIBRE_ID_COL,
+                             BOOK_ID_COL,
+                             PATH_COL,
+                             MATCHED_COL,
+                            ]
+        CENTERED_COLUMNS =  [
+                             ANNOTATIONS_COL,
+                             COLLECTIONS_COL,
+                             DEEP_VIEW_COL,
+                             ARTICLES_COL,
+                             LAST_OPENED_COL,
+                             VOCABULARY_COL,
+                             ]
+        RIGHT_ALIGNED_COLUMNS = [
+                             PROGRESS_COL,
+                             WORD_COUNT_COL
+                             ]
 
+    # Marvin XML command template
+    if True:
+        COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
+        <{0} timestamp=\'{1}\'>
+        <manifest>
+        </manifest>
+        </{0}>'''
 
     marvin_device_status_changed = pyqtSignal(str)
 
@@ -330,7 +343,17 @@ class BookStatusDialog(SizePersistedDialog):
         self._save_column_widths()
         super(BookStatusDialog, self).accept()
 
-    def button_handler(self, button):
+    def capture_sort_column(self, sort_column):
+        sort_order = self.tv.horizontalHeader().sortIndicatorOrder()
+        self.opts.prefs.set('marvin_library_sort_column', sort_column)
+        self.opts.prefs.set('marvin_library_sort_order', sort_order)
+
+    def close(self):
+        self._log_location()
+        self._save_column_widths()
+        super(BookStatusDialog, self).close()
+
+    def dispatch_button_click(self, button):
         '''
         BUTTON_ROLES = ['AcceptRole', 'RejectRole', 'DestructiveRole', 'ActionRole',
                         'HelpRole', 'YesRole', 'NoRole', 'ApplyRole', 'ResetRole']
@@ -342,8 +365,6 @@ class BookStatusDialog(SizePersistedDialog):
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.ActionRole:
             if button.objectName() == 'match_quality_button':
                 self.toggle_confidence_colors()
-            elif button.objectName() == 'toggle_checkmarks_button':
-                self.toggle_checkmarks()
             elif button.objectName() == 'calculate_word_count_button':
                 self._calculate_word_count()
             elif button.objectName() == 'generate_deep_view_button':
@@ -360,17 +381,7 @@ class BookStatusDialog(SizePersistedDialog):
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.RejectRole:
             self.close()
 
-    def capture_sort_column(self, sort_column):
-        sort_order = self.tv.horizontalHeader().sortIndicatorOrder()
-        self.opts.prefs.set('marvin_library_sort_column', sort_column)
-        self.opts.prefs.set('marvin_library_sort_order', sort_order)
-
-    def close(self):
-        self._log_location()
-        self._save_column_widths()
-        super(BookStatusDialog, self).close()
-
-    def context_menu_event_dispatcher(self, action, row):
+    def dispatch_context_menu_event(self, action, row):
         '''
         '''
         self._log_location("%s row: %s" % (repr(action), row))
@@ -386,13 +397,15 @@ class BookStatusDialog(SizePersistedDialog):
             self._show_articles(row)
         elif action == 'show_collections':
             self._show_collections(row)
+        elif action == 'clear_all_collections':
+            self._clear_all_collections(row)
         elif action == 'show_vocabulary_words':
             self._show_vocabulary(row)
         elif action == 'synchronize_collections':
             self._synchronize_collections(row)
 
         else:
-            selected_books = self._get_selected_books()
+            selected_books = self._selected_books()
             det_msg = ''
             for row in selected_books:
                 det_msg += selected_books[row]['title'] + '\n'
@@ -404,7 +417,7 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
                            show_copy_button=False).exec_()
 
-    def double_click_dispatcher(self, index):
+    def dispatch_double_click(self, index):
         '''
         Display column data for selected book
         '''
@@ -433,6 +446,13 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 self._log_location(row, col)
                 self._log("No double-click handler for %s" % clicked['column'])
+
+    def esc(self, *args):
+        '''
+        Clear any active selections
+        '''
+        self._log_location()
+        self._clear_selected_rows()
 
     def initialize(self, parent):
         self.hash_cache = 'content_hashes.zip'
@@ -507,17 +527,18 @@ class BookStatusDialog(SizePersistedDialog):
         self.bsm_button = self.dialogButtonBox.addButton('Bind soft matches', QDialogButtonBox.ActionRole)
         self.bsm_button.setObjectName('bind_soft_matches_button')
 
-        self.dialogButtonBox.clicked.connect(self.button_handler)
+        self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
         self.l.addWidget(self.dialogButtonBox)
 
         # ~~~~~~~~ Connect signals ~~~~~~~~
-        self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.double_click_dispatcher)
+        self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.dispatch_double_click)
         self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
 
         self.resize_dialog()
 
     def marvin_status_changed(self, command):
         '''
+
         '''
         self.marvin_device_status_changed.emit(command)
 
@@ -580,7 +601,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         self._log_location()
 
-        selected_books = self._get_selected_books()
+        selected_books = self._selected_books()
         if selected_books:
             stats = {}
 
@@ -673,6 +694,11 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
 
+    def _clear_all_collections(self, row):
+        '''
+        '''
+        self._log_location()
+
     def _clear_flags(self, action):
         '''
         Clear specified flags for selected books
@@ -689,7 +715,7 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'clear_all_flags':
             mask = 0
 
-        selected_books = self._get_selected_books()
+        selected_books = self._selected_books()
         for row in selected_books:
             flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
             if mask == 0:
@@ -734,6 +760,13 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
 
         self.repaint()
+
+    def _clear_selected_rows(self):
+        '''
+        Clear any active selections
+        '''
+        self._log_location()
+        self.tv.clearSelection()
 
     def _compute_epub_hash(self, zipfile):
         '''
@@ -1038,19 +1071,64 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         self._log_location()
-        for sr in self._selected_rows():
-            self._log("row %d" % sr)
 
-        title = "Delete books"
-        msg = ("<p>Are you sure, blah blah?</p>")
-        d = MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False)
-        if d.exec_():
-            # Set the reconnect_request flag in the driver
-            self.reconnect_request_pending = True
-            self.parent.connected_device.set_reconnect_request(True)
+        btd = self._selected_books()
+        books_to_delete = sorted([btd[b]['title'] for b in btd], key=sort_key)
+        if books_to_delete:
+            title = "Delete %s" % ("%d books?" % len(books_to_delete)
+                                                  if len(books_to_delete) > 1 else "1 book?")
+            msg = ("<p>Click <b>Show details</b> for a list of books that will be deleted " +
+                   "from your Marvin library.</p>" +
+                   "<p>After clicking <b>Yes</b>, the Marvin Library window will disappear " +
+                   "briefly while Marvin is updating.</p>")
+            det_msg = '\n'.join(books_to_delete)
+            d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
+                           show_copy_button=False)
+            if d.exec_():
+                QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+                if self.prefs.get('execute_marvin_commands', False):
+                    # Build the command file
+                    command_name = 'delete_books'
+                    command_element = 'deletebooks'
+                    command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                                                      command_element,
+                                                      time.mktime(time.localtime())))
+                    books_to_delete = self._selected_books()
+                    for i, book_id in enumerate(books_to_delete):
+                        book_tag = Tag(command_soup, 'book')
+                        book_tag['author'] = books_to_delete[book_id]['author']
+                        book_tag['title'] = books_to_delete[book_id]['title']
+                        book_tag['uuid'] = books_to_delete[book_id]['uuid']
+                        book_tag['filename'] = books_to_delete[book_id]['path']
+                        command_soup.manifest.insert(i, book_tag)
+
+                    # Call the Marvin driver to copy the command file to the staging folder
+                    self._log("staging command file")
+                    self.parent.connected_device._stage_command_file(command_name, command_soup,
+                        show_command=self.prefs.get('development_mode', False))
+
+                    # Wait for completion
+                    self._log("waiting for completion")
+                    self.parent.connected_device._wait_for_command_completion(command_name)
+
+                else:
+                    self._log("execute_marvin_commands disabled in JSON file")
+
+                # Set the reconnect_request flag in the driver
+                self.reconnect_request_pending = True
+                self.parent.connected_device.set_reconnect_request(True)
+
+                # Delete the rows in the visible model to reassure the user
+                rows_to_delete = self._selected_rows()
+                for row in sorted(rows_to_delete, reverse=True):
+                    self.tm.beginRemoveRows(QModelIndex(), row, row)
+                    del self.tm.arraydata[row]
+                    self.tm.endRemoveRows()
+
+            else:
+                self._log("delete cancelled")
         else:
-            self._log("delete cancelled")
+            self._log("no books selected")
 
     def _fetch_marvin_content_hash(self, path):
         '''
@@ -1426,21 +1504,6 @@ class BookStatusDialog(SizePersistedDialog):
                                                  repr(installed_books[book].word_count)))
         return installed_books
 
-    def _get_selected_books(self):
-        '''
-        Generate a dict of books selected in the dialog
-        '''
-        selected_books = {}
-
-        for row in self._selected_rows():
-            cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
-            book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
-            path = self.tm.arraydata[row][self.PATH_COL]
-            title = str(self.tm.arraydata[row][self.TITLE_COL].text())
-            selected_books[row] = {'book_id': book_id, 'cid': cid, 'title': title, 'path': path}
-
-        return selected_books
-
     def _localize_hash_cache(self, cached_books):
         '''
         Check for existence of hash cache on iDevice. Confirm/create folder
@@ -1457,7 +1520,6 @@ class BookStatusDialog(SizePersistedDialog):
         rhc = '/'.join([self.remote_cache_folder, self.hash_cache])
 
         cache_exists = (self.parent.ios.exists(rhc) and
-                        not self.parent.marvin_content_invalid and
                         not self.opts.prefs.get('hash_caching_disabled'))
         if cache_exists:
             # Copy from existing remote cache to local cache
@@ -1479,9 +1541,9 @@ class BookStatusDialog(SizePersistedDialog):
             zfw.writestr('Marvin hash cache', '')
             zfw.close()
 
-            # Clear the marvin_content_invalid flag
-            if self.parent.marvin_content_invalid:
-                self.parent.marvin_content_invalid = False
+            # Clear the marvin_content_updated flag
+            if self.parent.marvin_content_updated:
+                self.parent.marvin_content_updated = False
 
         self.local_hash_cache = lhc
         self.remote_hash_cache = rhc
@@ -1631,6 +1693,30 @@ class BookStatusDialog(SizePersistedDialog):
 
         return installed_books
 
+    def _selected_books(self):
+        '''
+        Generate a dict of books selected in the dialog
+        '''
+        selected_books = {}
+
+        for row in self._selected_rows():
+            author = str(self.tm.arraydata[row][self.AUTHOR_COL].text())
+            cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+            book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+            path = self.tm.arraydata[row][self.PATH_COL]
+            title = str(self.tm.arraydata[row][self.TITLE_COL].text())
+            uuid = self.tm.arraydata[row][self.UUID_COL]
+            selected_books[row] = {
+                                   'author': author,
+                                   'book_id': book_id,
+                                   'cid': cid,
+                                   'path': path,
+                                   'title': title,
+                                   'uuid': uuid
+                                  }
+
+        return selected_books
+
     def _selected_rows(self):
         '''
         Return a list of selected rows
@@ -1650,7 +1736,7 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'set_read_flag':
             mask = self.READ_FLAG
 
-        selected_books = self._get_selected_books()
+        selected_books = self._selected_books()
         for row in selected_books:
             flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
             if not flagbits & mask:
@@ -1717,7 +1803,6 @@ class BookStatusDialog(SizePersistedDialog):
         if cid:
             cfl = self.prefs.get('collection_field_lookup', '')
             if cfl:
-                self._log("cfl: %s" % cfl)
                 db = self.opts.gui.current_db
                 mi = db.get_metadata(cid, index_is_id=True)
                 value = mi.get(cfl)
@@ -1731,7 +1816,6 @@ class BookStatusDialog(SizePersistedDialog):
                     else:
                         self._log("value is unexpected type: '%s'" % type(value))
                 else:
-                    self._log("no value for '%s'" % cfl)
                     msg += '\n' + "Calibre: No collections assigned"
 
         MessageBox(MessageBox.INFO, 'Collections', msg,

@@ -12,7 +12,8 @@ import os, sys, threading, time
 
 from zipfile import ZipFile
 
-from PyQt4.Qt import (pyqtSignal, QIcon, QMenu, QTimer, QToolButton, QUrl)
+from PyQt4.Qt import (pyqtSignal, QApplication, QCursor, QIcon, QMenu,
+                      QTimer, QToolButton, QUrl)
 
 from calibre.constants import DEBUG, isosx, iswindows
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
@@ -73,7 +74,7 @@ class MarvinManagerAction(InterfaceAction):
         # General initialization, occurs when calibre launches
         self.book_status_dialog = None
         self.connected_device = None
-        self.marvin_content_invalid = False
+        self.marvin_content_updated = False
         self.menus_lock = threading.RLock()
         self.sync_lock = threading.RLock()
         self.connected_device = None
@@ -243,7 +244,7 @@ class MarvinManagerAction(InterfaceAction):
 
         self._log_location(command)
         if command in ['delete_books', 'upload_books']:
-            self.marvin_content_invalid = True
+            self.marvin_content_updated = True
 
     def on_device_connection_changed(self, is_connected):
         '''
@@ -255,14 +256,15 @@ class MarvinManagerAction(InterfaceAction):
 
             self._log_location(self.connected_device.gui_name)
 
+            # Subscribe to Marvin driver change events
+            self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
+                self.marvin_status_changed)
+
+            # If reconnecting, no need to rescan calibre library
             if (hasattr(self.connected_device, 'ios_reader_app') and
                 self.connected_device.ios_reader_app == 'Marvin'):
                 if not self.reconnect_request_pending:
                     self.launch_library_scanner()
-
-                    # Subscribe to Marvin driver change events
-                    self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
-                        self.marvin_status_changed)
                 else:
                     self._log("reconnect request pending…")
 
@@ -312,6 +314,8 @@ class MarvinManagerAction(InterfaceAction):
                     if self.reconnect_request_pending:
                         self.reconnect_request_pending = False
                         QTimer.singleShot(100, self.show_installed_books)
+                        QApplication.restoreOverrideCursor()
+
                 else:
                     self._log("Marvin not connected")
                     ac = self.create_menu_item(m, 'Marvin not connected')
