@@ -25,8 +25,8 @@ from calibre.utils.config import config_dir
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
-from calibre_plugins.marvin_manager.common_utils import (IndexLibrary,
-    ProgressBar, Struct,
+from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
+    IndexLibrary, ProgressBar, Struct,
     get_icon, set_plugin_icon_resources)
 import calibre_plugins.marvin_manager.config as cfg
 
@@ -71,6 +71,7 @@ class MarvinManagerAction(InterfaceAction):
         self._log_location("v%d.%d.%d" % MarvinManagerPlugin.version)
 
         # General initialization, occurs when calibre launches
+        self.book_status_dialog = None
         self.connected_device = None
         self.marvin_content_invalid = False
         self.menus_lock = threading.RLock()
@@ -218,13 +219,18 @@ class MarvinManagerAction(InterfaceAction):
 
     def main_menu_button_clicked(self):
         '''
-        This isn't being called
+        Primary click on menu button
         '''
         self._log_location()
         if self.connected_device:
-            self.show_installed_books()
+            if not self.book_status_dialog:
+                try:
+                    self.show_installed_books()
+                except AbortRequestException, e:
+                    self._log(e)
+                    self.book_status_dialog = None
         else:
-            self.show_configuration()
+            self.show_help()
 
     def marvin_status_changed(self, command):
         '''
@@ -266,10 +272,12 @@ class MarvinManagerAction(InterfaceAction):
             self.connected_device = None
             self.library_scanner.hash_map = None
 
-            if hasattr(self, 'book_status_dialog') and self.book_status_dialog.reconnect_request_pending:
-                self.reconnect_request_pending = True
-                self.book_status_dialog.close()
-                self.book_status_dialog = None
+            if hasattr(self, 'book_status_dialog'):
+                if (hasattr(self.book_status_dialog, 'reconnect_request_pending') and
+                    self.book_status_dialog.reconnect_request_pending):
+                    self.reconnect_request_pending = True
+                    self.book_status_dialog.close()
+                    self.book_status_dialog = None
 
         self.rebuild_menus()
 
@@ -353,6 +361,7 @@ class MarvinManagerAction(InterfaceAction):
         self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
         self.book_status_dialog.initialize(self)
         self.book_status_dialog.exec_()
+        self.book_status_dialog = None
 
     # subclass override
     def shutting_down(self):

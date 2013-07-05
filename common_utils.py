@@ -123,6 +123,11 @@ class SizePersistedDialog(QDialog):
 
 '''     Exceptions      '''
 
+class AbortRequestException(Exception):
+    ''' '''
+    pass
+
+
 class DeviceNotMountedException(Exception):
     ''' '''
     pass
@@ -186,6 +191,12 @@ class ProgressBar(QDialog):
         self.progressBar.setRange(0, max_items)
         self.progressBar.setValue(0)
         self.l.addWidget(self.progressBar)
+
+        self.close_requested = False
+
+    def closeEvent(self, event):
+        debug_print("ProgressBar:closeEvent()")
+        self.close_requested = True
 
     def increment(self):
         self.progressBar.setValue(self.progressBar.value() + 1)

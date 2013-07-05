@@ -27,7 +27,7 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    Book, HelpView, ProgressBar, SizePersistedDialog)
+    AbortRequestException, Book, HelpView, ProgressBar, SizePersistedDialog)
 
 class MyTableView(QTableView):
     def __init__(self, parent):
@@ -46,13 +46,20 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(I('exec.png')))
             ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_articles", row))
         elif col == self.parent.COLLECTIONS_COL:
+            cfl = self.parent.prefs.get('collection_field_lookup', '')
             ac = menu.addAction("Show collections")
             ac.setIcon(QIcon(I("dialog_information.png")))
             ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "show_collections", row))
             ac = menu.addAction("Synchronize collections")
             ac.setIcon(QIcon(I('exec.png')))
-            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "synchronize_collections", row))
+            if cfl:
+                ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "synchronize_collections", row))
+            else:
+                ac.setEnabled(False)
         elif col == self.parent.FLAGS_COL:
+            ac = menu.addAction("Clear All")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_all.png')))
+            ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_all_flags", row))
             ac = menu.addAction("Clear New")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_new.png')))
             ac.triggered.connect(partial(self.parent.context_menu_event_dispatcher, "clear_new_flag", row))
@@ -370,18 +377,20 @@ class BookStatusDialog(SizePersistedDialog):
 
         if action == 'calculate_word_count':
             self._calculate_word_count()
-        elif action == 'show_articles':
-            self._show_articles(row)
-        elif action == 'show_vocabulary_words':
-            self._show_vocabulary(row)
-        elif action == 'show_collections':
-            self._show_collections(row)
-        elif action == 'synchronize_collections':
-            self._synchronize_collections(row)
-        elif action in ['clear_new_flag', 'clear_reading_list_flag', 'clear_read_flag']:
+        elif action in ['clear_new_flag', 'clear_reading_list_flag',
+                        'clear_read_flag', 'clear_all_flags']:
             self._clear_flags(action)
         elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._set_flags(action)
+        elif action == 'show_articles':
+            self._show_articles(row)
+        elif action == 'show_collections':
+            self._show_collections(row)
+        elif action == 'show_vocabulary_words':
+            self._show_vocabulary(row)
+        elif action == 'synchronize_collections':
+            self._synchronize_collections(row)
+
         else:
             selected_books = self._get_selected_books()
             det_msg = ''
@@ -467,7 +476,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.delete_button.setText('Delete')
 
         self.done_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Ok)
-        self.done_button.setText('Done')
+        self.done_button.setText('Close')
 
         self.dialogButtonBox.setOrientation(Qt.Horizontal)
         self.dialogButtonBox.setCenterButtons(False)
@@ -490,6 +499,9 @@ class BookStatusDialog(SizePersistedDialog):
         # Synchronize collections
         self.sc_button = self.dialogButtonBox.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
         self.sc_button.setObjectName('synchronize_collections_button')
+        cfl = self.prefs.get('collection_field_lookup', '')
+        if not cfl:
+            self.sc_button.setEnabled(False)
 
         # Bind soft matches
         self.bsm_button = self.dialogButtonBox.addButton('Bind soft matches', QDialogButtonBox.ActionRole)
@@ -572,14 +584,20 @@ class BookStatusDialog(SizePersistedDialog):
         if selected_books:
             stats = {}
 
-            pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word count", on_top=True)
+            pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word count",
+                             on_top=True)
             total_books = len(selected_books)
             pb.set_maximum(total_books)
             pb.set_value(0)
             pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
             pb.show()
 
+            close_requested = False
             for i, row in enumerate(selected_books):
+                if pb.close_requested:
+                    close_requested = True
+                    break
+
                 pb.set_label('{:^100}'.format(selected_books[row]['title']))
 
                 # Copy the remote epub to local storage
@@ -634,6 +652,9 @@ class BookStatusDialog(SizePersistedDialog):
 
             pb.hide()
 
+            if close_requested:
+                self._log("user cancelled, partial results delivered")
+
             if False:
                 # Display a summary
                 title = "Word count results"
@@ -665,11 +686,29 @@ class BookStatusDialog(SizePersistedDialog):
             mask = self.READING_FLAG
         elif action == 'clear_read_flag':
             mask = self.READ_FLAG
+        elif action == 'clear_all_flags':
+            mask = 0
 
         selected_books = self._get_selected_books()
         for row in selected_books:
             flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
-            if flagbits & mask:
+            if mask == 0:
+                flagbits = 0
+                basename = "flags0.png"
+                new_flags_widget = SortableImageWidgetItem(self,
+                                                       os.path.join(self.parent.opts.resources_path,
+                                                         'icons', basename),
+                                                       flagbits, self.FLAGS_COL)
+                # Update the model
+                self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
+                # Update self.installed_books flags list
+                book_id = selected_books[row]['book_id']
+                self.installed_books[book_id].flags = 0
+
+                # Update Marvin db
+                self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE CLEARED FLAGS ***")
+
+            elif flagbits & mask:
                 # Clear the bit with XOR
                 flagbits = flagbits ^ mask
                 basename = "flags%d.png" % flagbits
@@ -695,7 +734,6 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
 
         self.repaint()
-
 
     def _compute_epub_hash(self, zipfile):
         '''
@@ -755,8 +793,18 @@ class BookStatusDialog(SizePersistedDialog):
 
         def _generate_collection_match_profile(book_data):
             '''
+            If no custom collections field assigned, always return 0
             '''
-            if not book_data.device_collections and not book_data.calibre_collections:
+            if (book_data.calibre_collections is None and
+                book_data.device_collections == []):
+                base_name = 'collections_empty.png'
+                sort_value = 0
+            elif (book_data.calibre_collections is None and
+                book_data.device_collections > []):
+                base_name = 'collections_info.png'
+                sort_value = 0
+            elif (book_data.device_collections == [] and
+                  book_data.calibre_collections == []):
                 base_name = 'collections_empty.png'
                 sort_value = 0
             elif book_data.device_collections == book_data.calibre_collections:
@@ -1115,18 +1163,22 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _get_calibre_collections(self, cid):
         '''
-        Return a sorted list of current calibre collection assignments
+        Return a sorted list of current calibre collection assignments or
+        None if no collection_field_lookup assigned
         '''
         cfl = self.prefs.get('collection_field_lookup', '')
-        lib_collections = []
-        if cfl and cid:
-            db = self.opts.gui.current_db
-            mi = db.get_metadata(cid, index_is_id=True)
-            lib_collections = mi.get(cfl)
-            if lib_collections:
-                if type(lib_collections) is not list:
-                    lib_collections = [lib_collections]
-        return sorted(lib_collections, key=sort_key)
+        if cfl == '':
+            return None
+        else:
+            lib_collections = []
+            if cfl and cid:
+                db = self.opts.gui.current_db
+                mi = db.get_metadata(cid, index_is_id=True)
+                lib_collections = mi.get(cfl)
+                if lib_collections:
+                    if type(lib_collections) is not list:
+                        lib_collections = [lib_collections]
+            return sorted(lib_collections, key=sort_key)
 
     def _get_installed_books(self):
         '''
@@ -1514,7 +1566,7 @@ class BookStatusDialog(SizePersistedDialog):
         pb.show()
 
         db = self.opts.gui.current_db
-
+        close_requested = False
         for i, uuid in enumerate(uuid_map):
             pb.set_label('{:^100}'.format("%d of %d" % (i+1, total_books)))
 
@@ -1524,8 +1576,17 @@ class BookStatusDialog(SizePersistedDialog):
             os.remove(path)
             pb.increment()
 
-        hash_map = library_scanner.build_hash_map()
+            if pb.close_requested:
+                close_requested = True
+                break
+        else:
+            # Only build the hash map if we completed without a close request
+            hash_map = library_scanner.build_hash_map()
+
         pb.hide()
+
+        if close_requested:
+            raise AbortRequestException("user cancelled library scan")
 
         return hash_map
 
@@ -1546,6 +1607,7 @@ class BookStatusDialog(SizePersistedDialog):
         pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
         pb.show()
 
+        close_requested = False
         installed_books = {}
         for i, path in enumerate(cached_books):
             this_book = {}
@@ -1554,10 +1616,18 @@ class BookStatusDialog(SizePersistedDialog):
 
             installed_books[path] = this_book
             pb.increment()
+
+            if pb.close_requested:
+                close_requested = True
+                break
+        else:
+            # Push the local hash to the iDevice
+            self._update_remote_hash_cache()
+
         pb.hide()
 
-        # Push the local hash to the iDevice
-        self._update_remote_hash_cache()
+        if close_requested:
+            raise AbortRequestException("user cancelled Marvin scan")
 
         return installed_books
 
@@ -1663,8 +1733,6 @@ class BookStatusDialog(SizePersistedDialog):
                 else:
                     self._log("no value for '%s'" % cfl)
                     msg += '\n' + "Calibre: No collections assigned"
-            else:
-                self._log("collection_field_lookup: %s" % repr(cfl))
 
         MessageBox(MessageBox.INFO, 'Collections', msg,
                        show_copy_button=False).exec_()
@@ -1688,6 +1756,8 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _synchronize_collections(self, row):
         '''
+        For books whose Marvin collections and calibre collection assignments do not match,
+        merge the two lists and apply to both Marvin and calibre.
         '''
         self._log_location(row)
         title = "Synchronize collections"
