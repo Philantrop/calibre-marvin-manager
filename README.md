@@ -11,7 +11,7 @@
 * `hash_caching_disabled` forces a reload of Marvin content every time
 * `show_progress_as_percentage` changes the display of reading progress to numeric
 * `use_monospace_font` changes the text style
-* `execute_marvin_commands` prevents commands from being sent to Marvin if false (default: false)
+* `execute_marvin_commands` prevents commands from being sent to Marvin if false (default: true)
 
 ---
 Last update July 1, 2013 3:37:30 AM MDT

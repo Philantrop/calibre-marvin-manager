@@ -33,7 +33,7 @@ import calibre_plugins.marvin_manager.config as cfg
 
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
-PLUGIN_ICONS = ['images/icon.png']
+PLUGIN_ICONS = ['images/disconnected.png', 'images/connected.png']
 
 class MarvinManagerAction(InterfaceAction):
 
@@ -256,6 +256,9 @@ class MarvinManagerAction(InterfaceAction):
 
             self._log_location(self.connected_device.gui_name)
 
+            # Change our icon
+            self.qaction.setIcon(get_icon("images/connected.png"))
+
             # Subscribe to Marvin driver change events
             self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
                 self.marvin_status_changed)
@@ -270,6 +273,10 @@ class MarvinManagerAction(InterfaceAction):
 
         else:
             self._log_location("device disconnected")
+
+            # Change our icon
+            self.qaction.setIcon(get_icon("images/disconnected.png"))
+
             self.connected_device.marvin_device_signals.reader_app_status_changed.disconnect()
             self.connected_device = None
             self.library_scanner.hash_map = None

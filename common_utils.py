@@ -76,7 +76,10 @@ class Book(Metadata):
     See ebooks.metadata.book.base #46
     '''
     def __init__(self, title, author):
-        Metadata.__init__(self, title, authors=[author])
+        if type(author) is list:
+            Metadata.__init__(self, title, authors=author)
+        else:
+            Metadata.__init__(self, title, authors=[author])
 
     @property
     def title_sorter(self):

@@ -6,6 +6,7 @@ __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
 import hashlib, locale, operator, os, re, sqlite3, sys, time
+from datetime import datetime
 from functools import partial
 from lxml import etree
 
@@ -18,7 +19,7 @@ from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QApplication,
                       SIGNAL, pyqtSignal)
 from PyQt4.QtWebKit import QWebView
 
-from calibre import prints
+from calibre import prints, strftime
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
@@ -30,7 +31,7 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, Book, HelpView, ProgressBar, SizePersistedDialog)
+    AbortRequestException, Book, HelpView, ProgressBar, SizePersistedDialog, Struct)
 
 class MyTableView(QTableView):
     def __init__(self, parent):
@@ -371,8 +372,8 @@ class BookStatusDialog(SizePersistedDialog):
                 self._generate_deep_view()
             elif button.objectName() == 'synchronize_collections_button':
                 self._synchronize_collections()
-            elif button.objectName() == 'bind_soft_matches_button':
-                self._bind_soft_matches()
+            elif button.objectName() == 'synchronize_metadata_button':
+                self._synchronize_metadata()
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
             self._delete_books()
@@ -524,8 +525,8 @@ class BookStatusDialog(SizePersistedDialog):
             self.sc_button.setEnabled(False)
 
         # Bind soft matches
-        self.bsm_button = self.dialogButtonBox.addButton('Bind soft matches', QDialogButtonBox.ActionRole)
-        self.bsm_button.setObjectName('bind_soft_matches_button')
+        self.bsm_button = self.dialogButtonBox.addButton('Synchronize metadata', QDialogButtonBox.ActionRole)
+        self.bsm_button.setObjectName('synchronize_metadata_button')
 
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
         self.l.addWidget(self.dialogButtonBox)
@@ -573,15 +574,6 @@ class BookStatusDialog(SizePersistedDialog):
         self.tm.refresh(self.show_confidence_colors)
 
     # Helpers
-    def _bind_soft_matches(self):
-        '''
-        '''
-        self._log_location()
-        title = "Bind soft matches"
-        msg = ("<p>Not implemented</p>")
-        MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
-
     def _calculate_word_count(self):
         '''
         Calculate word count for each selected book
@@ -1086,7 +1078,7 @@ class BookStatusDialog(SizePersistedDialog):
                            show_copy_button=False)
             if d.exec_():
                 QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-                if self.prefs.get('execute_marvin_commands', False):
+                if self.prefs.get('execute_marvin_commands', True):
                     # Build the command file
                     command_name = 'delete_books'
                     command_element = 'deletebooks'
@@ -1322,25 +1314,28 @@ class BookStatusDialog(SizePersistedDialog):
 
         def _get_calibre_id(uuid, title, author):
             '''
-            Find book in library, return cid
+            Find book in library, return cid, mi
             '''
             if self.opts.prefs.get('development_mode', False):
                 self._log_location("%s %s" % (repr(title), repr(author)))
-            ans = None
+            cid = None
+            mi = None
             db = self.opts.gui.current_db
             if uuid in self.library_uuid_map:
-                ans = self.library_uuid_map[uuid]['id']
+                cid = self.library_uuid_map[uuid]['id']
+                mi = db.get_metadata(cid, index_is_id=True)
                 if self.opts.prefs.get('development_mode', False):
                     self._log("UUID match")
             elif title in self.library_title_map:
-                cid = self.library_title_map[title]['id']
-                mi = db.get_metadata(cid, index_is_id=True)
+                _cid = self.library_title_map[title]['id']
+                _mi = db.get_metadata(_cid, index_is_id=True)
                 authors = author.split(', ')
-                if authors == mi.authors:
-                    ans = cid
+                if authors == _mi.authors:
+                    cid = _cid
+                    mi = _mi
                     if self.opts.prefs.get('development_mode', False):
                         self._log("TITLE/AUTHOR match")
-            return ans
+            return cid, mi
 
         def _get_collections(cur, book_id):
             # Get the collection assignments
@@ -1387,6 +1382,92 @@ class BookStatusDialog(SizePersistedDialog):
                 return True
             else:
                 return False
+
+        def _get_marvin_genres(book_id):
+            # Return sorted genre(s) for this book
+            genre_cur = con.cursor()
+            genre_cur.execute('''SELECT
+                                    Subject
+                                 FROM BookSubjects
+                                 WHERE BookID = '{0}'
+                              '''.format(book_id))
+            genres = []
+            genre_rows = genre_cur.fetchall()
+            if genre_rows is not None:
+                genres = sorted([genre[b'Subject'] for genre in genre_rows])
+            genre_cur.close()
+            return sorted(genres, key=sort_key)
+
+        def _get_metadata_mismatches(cur, book_id, row, mi, this_book):
+            '''
+            Return True/False for metadata match:
+            author, author_sort, pubdate, publisher, series, series_index, title,
+            title_sort, description, subjects, collections, cover
+            '''
+            self._log_location(row[b'Title'])
+            mm = {}
+            if mi is not None:
+                if mi.authors != this_book.authors:
+                    mm['authors'] = {'calibre': mi.authors,
+                                     'Marvin': this_book.authors}
+
+                if mi.author_sort != row[b'AuthorSort']:
+                    mm['author_sort'] = {'calibre': mi.author_sort,
+                                         'Marvin': row[b'AuthorSort']}
+
+                # Get both pubdates as datetime.datetime objects, compare .year, .month, .day
+                if bool(row[b'DatePublished']) or bool(mi.pubdate):
+                    try:
+                        mb_pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
+                    except:
+                        mb_pubdate = Struct(year=0, month=0, day=0)
+
+                    if (mi.pubdate.year != mb_pubdate.year or
+                        mi.pubdate.month != mb_pubdate.month or
+                        mi.pubdate.day != mb_pubdate.day):
+                        mm['pubdate'] = {'calibre': (mi.pubdate.year, mi.pubdate.month, mi.pubdate.day),
+                                         'Marvin': (mb_pubdate.year, mb_pubdate.month, mb_pubdate.day) }
+
+                if mi.publisher != row[b'Publisher']:
+                    mm['publisher'] = {'calibre': mi.publisher,
+                                       'Marvin': row[b'Publisher']}
+
+                if bool(mi.series) or bool(row[b'CalibreSeries']):
+                    if mi.series != row[b'CalibreSeries']:
+                        mm['series'] = {'calibre': mi.series,
+                                        'Marvin': row[b'CalibreSeries']}
+
+                if bool(mi.series_index) or bool(float(row[b'CalibreSeriesIndex'])):
+                    if mi.series_index != float(row[b'CalibreSeriesIndex']):
+                        mm['series_index'] = {'calibre': mi.series_index,
+                                              'Marvin': row[b'CalibreSeriesIndex']}
+
+                if mi.title != row[b'Title']:
+                    mm['title'] = {'calibre': mi.title,
+                                   'Marvin': row[b'Title']}
+
+                if mi.title_sort != row[b'CalibreTitleSort']:
+                    mm['title_sort'] = {'calibre': mi.title_sort,
+                                        'Marvin': row[b'CalibreTitleSort']}
+
+                if bool(mi.comments) or bool(row[b'Description']):
+                    if mi.comments != row[b'Description']:
+                        mm['comments'] = {'calibre': mi.comments,
+                                          'Marvin': row[b'Description']}
+
+                if sorted(mi.tags, key=sort_key) != _get_marvin_genres(book_id):
+                    mm['tags'] = {'calibre': mi.tags,
+                                  'Marvin': _get_marvin_genres(book_id)}
+
+                # *** Not testing cover or collections here ***
+
+            else:
+                self._log("(no calibre metadata for %s)" % row[b'Title'])
+
+            if mm:
+                self._log(mm)
+            return mm
+
 
         def _get_on_device_status(cid):
             '''
@@ -1455,13 +1536,18 @@ class BookStatusDialog(SizePersistedDialog):
                             Author,
                             AuthorSort,
                             Books.ID as id_,
+                            CalibreSeries,
+                            CalibreSeriesIndex,
                             CalibreTitleSort,
                             DateOpened,
+                            DatePublished,
                             DeepViewPrepared,
+                            Description,
                             FileName,
                             IsRead,
                             NewFlag,
                             Progress,
+                            Publisher,
                             ReadingList,
                             Title,
                             UUID,
@@ -1472,14 +1558,16 @@ class BookStatusDialog(SizePersistedDialog):
             rows = cur.fetchall()
             book_count = len(rows)
             for i, row in enumerate(rows):
+                cid, mi = _get_calibre_id(row[b'UUID'],
+                                          row[b'Title'],
+                                          row[b'Author'])
+
                 book_id = row[b'id_']
                 # Get the primary metadata from Books
-                this_book = Book(row[b'Title'], row[b'Author'])
+                this_book = Book(row[b'Title'], row[b'Author'].split(', '))
                 this_book.articles = _get_articles(cur, book_id)
                 this_book.author_sort = row[b'AuthorSort']
-                this_book.cid = _get_calibre_id(row[b'UUID'],
-                                                row[b'Title'],
-                                                row[b'Author'])
+                this_book.cid = cid
                 this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
                 this_book.device_collections = _get_collections(cur, book_id)
                 this_book.date_opened = row[b'DateOpened']
@@ -1487,6 +1575,7 @@ class BookStatusDialog(SizePersistedDialog):
                 this_book.flags = _get_flags(cur, row)
                 this_book.hash = hashes[row[b'FileName']]['hash']
                 this_book.has_highlights = _get_highlights(cur, book_id)
+                this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
                 this_book.mid = book_id
                 this_book.on_device = _get_on_device_status(this_book.cid)
                 this_book.path = row[b'FileName']
@@ -1845,6 +1934,15 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location(row)
         title = "Synchronize collections"
+        msg = ("<p>Not implemented</p>")
+        MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
+
+    def _synchronize_metadata(self):
+        '''
+        '''
+        self._log_location()
+        title = "Synchronize metadata"
         msg = ("<p>Not implemented</p>")
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
