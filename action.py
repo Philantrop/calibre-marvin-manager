@@ -21,6 +21,7 @@ from calibre.gui2 import open_url
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
+from calibre.gui2.dialogs.progress import BlockingBusy
 from calibre.devices.usbms.driver import debug_print
 from calibre.utils.config import config_dir
 
@@ -33,7 +34,7 @@ import calibre_plugins.marvin_manager.config as cfg
 
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
-PLUGIN_ICONS = ['images/disconnected.png', 'images/connected.png']
+PLUGIN_ICONS = ['images/connected.png', 'images/disconnected.png']
 
 class MarvinManagerAction(InterfaceAction):
 
@@ -57,6 +58,19 @@ class MarvinManagerAction(InterfaceAction):
     def about_to_show_menu(self):
         self.rebuild_menus()
 
+#     def animate_menu_icon(self):
+#         '''
+#         Call ourselves to cycle the menu icon until reconnect complete
+#         '''
+#         self._log_location()
+#         if self.reconnect_request_pending:
+#             self.animation_step += 1
+#             if self.animation_step & 1:
+#                 self.qaction.setIcon(get_icon("images/connected.png"))
+#             else:
+#                 self.qaction.setIcon(get_icon("images/disconnected.png"))
+#             QTimer.singleShot(500, self.animate_menu_icon)
+
     def backup_restore(self):
         self._log_location("not implemented")
 
@@ -73,6 +87,7 @@ class MarvinManagerAction(InterfaceAction):
 
         # General initialization, occurs when calibre launches
         self.book_status_dialog = None
+        self.blocking_busy = BlockingBusy("Reloading Marvin Library…")
         self.connected_device = None
         self.marvin_content_updated = False
         self.menus_lock = threading.RLock()
@@ -270,7 +285,8 @@ class MarvinManagerAction(InterfaceAction):
                     self.launch_library_scanner()
                 else:
                     self._log("reconnect request pending…")
-
+                    self.blocking_busy.accept()
+                    #del self.blocking_busy
         else:
             self._log_location("device disconnected")
 
@@ -286,7 +302,9 @@ class MarvinManagerAction(InterfaceAction):
                     self.book_status_dialog.reconnect_request_pending):
                     self.reconnect_request_pending = True
                     self.book_status_dialog.close()
-                    self.book_status_dialog = None
+                    del self.book_status_dialog
+                    self.blocking_busy.show()
+                    self.blocking_busy.start()
 
         self.rebuild_menus()
 

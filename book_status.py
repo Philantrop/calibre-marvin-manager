@@ -13,7 +13,7 @@ from lxml import etree
 from PyQt4 import QtCore, QtGui
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QApplication, QBrush,
                       QCheckBox, QColor, QCursor, QDialog, QDialogButtonBox, QFont, QIcon,
-                      QLabel, QMenu, QModelIndex, QPainter, QPixmap,
+                      QLabel, QMenu, QModelIndex, QPainter, QPixmap, QString,
                       QTableView, QTableWidgetItem,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
@@ -89,10 +89,17 @@ class MyTableView(QTableView):
             ac = menu.addAction("Set Read")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_read.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_read_flag", row))
+
+        elif col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
+            ac = menu.addAction("Show metadata")
+            ac.setIcon(QIcon(I('dialog_information.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_metadata", row))
+
         elif col == self.parent.VOCABULARY_COL:
             ac = menu.addAction("Show vocabulary words")
             ac.setIcon(QIcon(I('exec.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary_words", row))
+
         elif col == self.parent.WORD_COUNT_COL:
             ac = menu.addAction("Calculate word count")
             ac.setIcon(QIcon(I('exec.png')))
@@ -188,6 +195,7 @@ class MarkupTableModel(QAbstractTableModel):
         row, col = index.row(), index.column()
         if not index.isValid():
             return QVariant()
+
         elif role == Qt.BackgroundRole and self.show_confidence_colors:
             match_quality = self.arraydata[row][self.parent.MATCHED_COL]
             saturation = 0.40
@@ -211,10 +219,6 @@ class MarkupTableModel(QAbstractTableModel):
         elif role == Qt.DecorationRole and col == self.parent.COLLECTIONS_COL:
             return self.arraydata[row][self.parent.COLLECTIONS_COL].picture
 
-#         elif (role == Qt.DisplayRole and
-#               col == self.parent.PROGRESS_COL):
-#             return self.arraydata[row][self.parent.PROGRESS_COL].text()
-
         elif (role == Qt.DisplayRole and
               col == self.parent.PROGRESS_COL
               and self.parent.prefs.get('show_progress_as_percentage', False)):
@@ -234,8 +238,14 @@ class MarkupTableModel(QAbstractTableModel):
             return Qt.AlignHCenter
         elif role == Qt.TextAlignmentRole and (col in self.right_aligned_columns):
             return Qt.AlignRight
+
+#         elif role == Qt.ToolTipRole:
+#             return "I'm a tooltip!"
+
         elif role != Qt.DisplayRole:
             return QVariant()
+
+
         return QVariant(self.arraydata[index.row()][index.column()])
 
     def refresh(self, show_confidence_colors):
@@ -244,8 +254,13 @@ class MarkupTableModel(QAbstractTableModel):
                               self.createIndex(self.rowCount(0), self.columnCount(0)))
 
     def headerData(self, col, orientation, role):
-        if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return QVariant(self.headerdata[col])
+        if role == Qt.DisplayRole:
+            if orientation == Qt.Horizontal:
+                return QVariant(self.headerdata[col])
+#         if role == Qt.ToolTipRole:
+#             if orientation == Qt.Horizontal:
+#                 return QString("Tooltip for col %d" % col)
+
         return QVariant()
 
     def setData(self, index, value, role):
@@ -400,6 +415,8 @@ class BookStatusDialog(SizePersistedDialog):
             self._show_collections(row)
         elif action == 'clear_all_collections':
             self._clear_all_collections(row)
+        elif action == 'show_metadata':
+            self._show_metadata(row)
         elif action == 'show_vocabulary_words':
             self._show_vocabulary(row)
         elif action == 'synchronize_collections':
@@ -503,9 +520,9 @@ class BookStatusDialog(SizePersistedDialog):
         self.dialogButtonBox.setCenterButtons(False)
 
         # Show/Hide Match Quality
-        smq_text = 'Show Match Quality'
+        smq_text = 'Show Matches'
         if self.show_confidence_colors:
-            smq_text = "Hide Match Quality"
+            smq_text = "Hide Matches"
         self.show_confidence_button = self.dialogButtonBox.addButton(smq_text, QDialogButtonBox.ActionRole)
         self.show_confidence_button.setObjectName('match_quality_button')
 
@@ -565,11 +582,11 @@ class BookStatusDialog(SizePersistedDialog):
         self.show_confidence_colors = not self.show_confidence_colors
         self.opts.prefs.set('annotated_books_dialog_show_confidence_as_bg_color', self.show_confidence_colors)
         if self.show_confidence_colors:
-            self.show_confidence_button.setText("Hide Match Quality")
+            self.show_confidence_button.setText("Hide Matches")
             self.tv.sortByColumn(self.LIBRARY_HEADER.index('Match Quality'), Qt.DescendingOrder)
             self.capture_sort_column(self.LIBRARY_HEADER.index('Match Quality'))
         else:
-            self.show_confidence_button.setText("Show Match Quality")
+            self.show_confidence_button.setText("Show Matches")
         self.tv.setAlternatingRowColors(not self.show_confidence_colors)
         self.tm.refresh(self.show_confidence_colors)
 
@@ -889,18 +906,22 @@ class BookStatusDialog(SizePersistedDialog):
                              repr(book_data.uuid),
                              repr(book_data.matches),
                              repr(book_data.on_device)))
+                self._log("metadata_mismatches: %s" % repr(book_data.metadata_mismatches))
             match_quality = 0
+
             if (book_data.uuid > '' and
-                [book_data.uuid] == book_data.matches):
-                # Exact uuid match
+                [book_data.uuid] == book_data.matches and
+                not book_data.metadata_mismatches):
+                # Exact uuid match, no metadata mismatches
                 match_quality = 3
+            elif (book_data.on_device == 'Main' and
+                  book_data.metadata_mismatches):
+                # Soft match
+                match_quality = 2
             elif (book_data.uuid > '' and
                   book_data.uuid in book_data.matches):
                 # Duplicates
                 match_quality = 1
-            elif book_data.on_device == 'Main':
-                # Soft match
-                match_quality = 2
             if self.opts.prefs.get('development_mode', False):
                 self._log("match_quality: %s" % match_quality)
             return match_quality
@@ -1116,7 +1137,6 @@ class BookStatusDialog(SizePersistedDialog):
                     self.tm.beginRemoveRows(QModelIndex(), row, row)
                     del self.tm.arraydata[row]
                     self.tm.endRemoveRows()
-
             else:
                 self._log("delete cancelled")
         else:
@@ -1459,15 +1479,15 @@ class BookStatusDialog(SizePersistedDialog):
                     mm['tags'] = {'calibre': mi.tags,
                                   'Marvin': _get_marvin_genres(book_id)}
 
+                if mi.uuid != row[b'UUID']:
+                    mm['uuid'] = {'calibre': mi.uuid,
+                                   'Marvin': row[b'UUID']}
+
                 # *** Not testing cover or collections here ***
 
             else:
                 self._log("(no calibre metadata for %s)" % row[b'Title'])
-
-            if mm:
-                self._log(mm)
             return mm
-
 
         def _get_on_device_status(cid):
             '''
@@ -1908,6 +1928,28 @@ class BookStatusDialog(SizePersistedDialog):
                     msg += '\n' + "Calibre: No collections assigned"
 
         MessageBox(MessageBox.INFO, 'Collections', msg,
+                       show_copy_button=False).exec_()
+
+    def _show_metadata(self, row):
+        '''
+        '''
+        self._log_location(row)
+
+        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+        cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+        title = self.installed_books[book_id].title
+
+        if not cid:
+            msg = "<p>'{0}': not found in calibre library</p>".format(title)
+            det_msg = ''
+        elif cid and not self.installed_books[book_id].metadata_mismatches:
+            msg = "<p>'{0}': metadata matches</p>".format(title)
+            det_msg = ''
+        else:
+            msg = "<p>'{0}': metadata mismatches detected. Click <b>Show details</b> for summary.</p>".format(title)
+            det_msg = repr(self.installed_books[book_id].metadata_mismatches)
+
+        MessageBox(MessageBox.INFO, "Show metadata", msg, det_msg=det_msg,
                        show_copy_button=False).exec_()
 
     def _show_vocabulary(self, row):
