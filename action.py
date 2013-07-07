@@ -42,6 +42,7 @@ class MarvinManagerAction(InterfaceAction):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     icon = PLUGIN_ICONS[0]
+    minimum_ios_driver_version = (1, 0, 5)
     name = 'Marvin Mangler'
     prefs = cfg.plugin_prefs
     verbose = prefs.get('debug_plugin', False)
@@ -87,8 +88,9 @@ class MarvinManagerAction(InterfaceAction):
 
         # General initialization, occurs when calibre launches
         self.book_status_dialog = None
-        self.blocking_busy = BlockingBusy("Reloading Marvin Library…")
+        self.blocking_busy = BlockingBusy("Updating Marvin Library…")
         self.connected_device = None
+        self.ios = None
         self.marvin_content_updated = False
         self.menus_lock = threading.RLock()
         self.sync_lock = threading.RLock()
@@ -99,20 +101,17 @@ class MarvinManagerAction(InterfaceAction):
         self.reconnect_request_pending = False
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
 
+        # Build a current opts object
+        self.opts = self.init_options()
+
         # Read the plugin icons and store for potential sharing with the config widget
         icon_resources = self.load_resources(PLUGIN_ICONS)
         set_plugin_icon_resources(self.name, icon_resources)
 
-        # Piggyback on the device driver's connection to Marvin
-        self.ios = None
-
-        # Build an opts object
-        self.opts = self.init_options()
-
         # Assign our menu to this action and an icon
         self.menu = QMenu(self.gui)
         self.qaction.setMenu(self.menu)
-        self.qaction.setIcon(get_icon(PLUGIN_ICONS[0]))
+        self.qaction.setIcon(get_icon("images/disconnected.png"))
         self.qaction.triggered.connect(self.main_menu_button_clicked)
         self.menu.aboutToShow.connect(self.about_to_show_menu)
 
@@ -285,8 +284,8 @@ class MarvinManagerAction(InterfaceAction):
                     self.launch_library_scanner()
                 else:
                     self._log("reconnect request pending…")
+                    self.blocking_busy.stop()
                     self.blocking_busy.accept()
-                    #del self.blocking_busy
         else:
             self._log_location("device disconnected")
 
@@ -387,10 +386,22 @@ class MarvinManagerAction(InterfaceAction):
         Show Marvin Library spreadsheet
         '''
         self._log_location()
-        self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
-        self.book_status_dialog.initialize(self)
-        self.book_status_dialog.exec_()
-        self.book_status_dialog = None
+
+        if self.connected_device.version < self.minimum_ios_driver_version:
+            title = "Update required"
+            msg = "<p>{0} requires v{1}.{2}.{3} (or later) of the iOS reader applications device driver.</p>".format(
+                    self.name,
+                    self.minimum_ios_driver_version[0],
+                    self.minimum_ios_driver_version[1],
+                    self.minimum_ios_driver_version[2])
+            MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+        else:
+            # Update opts object
+            self.opts = self.init_options()
+            self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
+            self.book_status_dialog.initialize(self)
+            self.book_status_dialog.exec_()
+            self.book_status_dialog = None
 
     # subclass override
     def shutting_down(self):

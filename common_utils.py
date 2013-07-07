@@ -136,9 +136,14 @@ class SizePersistedDialog(QDialog):
 '''     Exceptions      '''
 
 class AbortRequestException(Exception):
-    ''' '''
+    '''
+    '''
     pass
 
+class IOTimeoutException(Exception):
+    '''
+    '''
+    pass
 
 class DeviceNotMountedException(Exception):
     ''' '''
@@ -332,26 +337,15 @@ def get_local_images_dir(subfolder=None):
 def get_pixmap(icon_name):
     '''
     Retrieve a QPixmap for the named image
-    Any icons belonging to the plugin must be prefixed with 'images/'
+    Any zipped icons belonging to the plugin must be prefixed with 'images/'
     '''
-    global plugin_icon_resources, plugin_name
+    global plugin_icon_resources
 
     if not icon_name.startswith('images/'):
         # We know this is definitely not an icon belonging to this plugin
         pixmap = QPixmap()
         pixmap.load(I(icon_name))
         return pixmap
-
-    # Check to see whether the icon exists as a Calibre resource
-    # This will enable skinning if the user stores icons within a folder like:
-    # ...\AppData\Roaming\calibre\resources\images\Plugin Name\
-    if plugin_name:
-        local_images_dir = get_local_images_dir(plugin_name)
-        local_image_path = os.path.join(local_images_dir, icon_name.replace('images/', ''))
-        if os.path.exists(local_image_path):
-            pixmap = QPixmap()
-            pixmap.load(local_image_path)
-            return pixmap
 
     # As we did not find an icon elsewhere, look within our zip resources
     if icon_name in plugin_icon_resources:

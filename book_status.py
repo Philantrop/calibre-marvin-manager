@@ -9,6 +9,8 @@ import hashlib, locale, operator, os, re, sqlite3, sys, time
 from datetime import datetime
 from functools import partial
 from lxml import etree
+from threading import Timer
+
 
 from PyQt4 import QtCore, QtGui
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QApplication, QBrush,
@@ -31,7 +33,8 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, Book, HelpView, ProgressBar, SizePersistedDialog, Struct)
+    AbortRequestException, Book, HelpView, IOTimeoutException,
+    ProgressBar, SizePersistedDialog, Struct)
 
 class MyTableView(QTableView):
     def __init__(self, parent):
@@ -94,6 +97,12 @@ class MyTableView(QTableView):
             ac = menu.addAction("Show metadata")
             ac.setIcon(QIcon(I('dialog_information.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_metadata", row))
+            ac = menu.addAction("Sync metadata from calibre to Marvin")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_to_marvin", row))
+            ac = menu.addAction("Sync metadata from Marvin to calibre")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_from_marvin", row))
 
         elif col == self.parent.VOCABULARY_COL:
             ac = menu.addAction("Show vocabulary words")
@@ -201,13 +210,16 @@ class MarkupTableModel(QAbstractTableModel):
             saturation = 0.40
             value = 1.0
             red_hue = 0.0
-            green_hue = 0.333
+            orange_hue = 0.08325
             yellow_hue = 0.1665
+            green_hue = 0.333
             white_hue = 1.0
-            if match_quality == 3:
+            if match_quality == 4:
                 return QVariant(QBrush(QColor.fromHsvF(green_hue, saturation, value)))
-            elif match_quality == 2:
+            elif match_quality == 3:
                 return QVariant(QBrush(QColor.fromHsvF(yellow_hue, saturation, value)))
+            elif match_quality == 2:
+                return QVariant(QBrush(QColor.fromHsvF(orange_hue, saturation, value)))
             elif match_quality == 1:
                 return QVariant(QBrush(QColor.fromHsvF(red_hue, saturation, value)))
             else:
@@ -474,6 +486,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     def initialize(self, parent):
         self.hash_cache = 'content_hashes.zip'
+        self.ios = parent.opts.ios
         self.opts = parent.opts
         self.parent = parent
         self.prefs = parent.opts.prefs
@@ -525,14 +538,23 @@ class BookStatusDialog(SizePersistedDialog):
             smq_text = "Hide Matches"
         self.show_confidence_button = self.dialogButtonBox.addButton(smq_text, QDialogButtonBox.ActionRole)
         self.show_confidence_button.setObjectName('match_quality_button')
+        self.show_confidence_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                   'icons',
+                                                   'show_matches.png')))
 
         # Word count
         self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
         self.wc_button.setObjectName('calculate_word_count_button')
+        self.wc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                   'icons',
+                                                   'word_count.png')))
 
         # Generate DV content
         self.bsm_button = self.dialogButtonBox.addButton('Generate Deep View', QDialogButtonBox.ActionRole)
         self.bsm_button.setObjectName('generate_deep_view_button')
+        self.bsm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                   'icons',
+                                                   'deep_view.png')))
 
         # Synchronize collections
         self.sc_button = self.dialogButtonBox.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
@@ -541,8 +563,8 @@ class BookStatusDialog(SizePersistedDialog):
         if not cfl:
             self.sc_button.setEnabled(False)
 
-        # Bind soft matches
-        self.bsm_button = self.dialogButtonBox.addButton('Synchronize metadata', QDialogButtonBox.ActionRole)
+        # Update metadata
+        self.bsm_button = self.dialogButtonBox.addButton('Update metadata', QDialogButtonBox.ActionRole)
         self.bsm_button.setObjectName('synchronize_metadata_button')
 
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
@@ -636,10 +658,9 @@ class BookStatusDialog(SizePersistedDialog):
                 lbp = os.path.join(self.local_cache_folder, path)
 
                 # Set the driver busy flag, copy the file
-                self._wait_for_driver_not_busy()
-                self.parent.connected_device.set_busy_flag(True)
+                self._wait_for_driver_not_busy(set_busy=True)
                 with open(lbp, 'wb') as out:
-                    self.parent.ios.copy_from_idevice(str(rbp), out)
+                    self.ios.copy_from_idevice(str(rbp), out)
                 self.parent.connected_device.set_busy_flag(False)
 
                 # Open the file
@@ -779,7 +800,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _compute_epub_hash(self, zipfile):
         '''
-        Generate a hash of all *.*html files names, sizes
+        Generate a hash of all text and css files in epub
         '''
         if self.opts.prefs.get('development_mode', False):
             self._log_location(os.path.basename(zipfile))
@@ -795,7 +816,7 @@ class BookStatusDialog(SizePersistedDialog):
             for item in manifest.iterchildren():
                 #self._log(etree.tostring(item, pretty_print=True))
                 mt = item.get('media-type')
-                if item.get('media-type') == 'application/xhtml+xml':
+                if item.get('media-type') in ['application/xhtml+xml', 'text/css']:
                     text_hrefs.append(item.get('href').split('/')[-1])
             zf.close()
         except:
@@ -899,31 +920,47 @@ class BookStatusDialog(SizePersistedDialog):
             return last_opened
 
         def _generate_match_quality(book_data):
+            '''
+            4: Marvin uuid matches calibre uuid (hard match): Green
+            3: Marvin hash matches calibre hash (soft match): Yellow
+            2: Marvin hash duplicates: Orange
+            1: Calibre hash duplicates: Red
+            0: Marvin only, single copy
+            '''
             # Match quality
             if self.opts.prefs.get('development_mode', False):
-                self._log("%s uuid: %s matches: %s on_device: %s" %
+                self._log("%s uuid: %s matches: %s on_device: %s hash: %s" %
                             (book_data.title,
                              repr(book_data.uuid),
                              repr(book_data.matches),
-                             repr(book_data.on_device)))
+                             repr(book_data.on_device),
+                             repr(book_data.hash)))
                 self._log("metadata_mismatches: %s" % repr(book_data.metadata_mismatches))
             match_quality = 0
 
             if (book_data.uuid > '' and
                 [book_data.uuid] == book_data.matches and
                 not book_data.metadata_mismatches):
-                # Exact uuid match, no metadata mismatches
+                # GREEN: Hard match - uuid match, metadata match
+                match_quality = 4
+
+            elif ((book_data.on_device == 'Main' and
+                   book_data.metadata_mismatches) or
+                  ([book_data.uuid] == book_data.matches)):
+                # YELLOW: Soft match - hash match,
                 match_quality = 3
-            elif (book_data.on_device == 'Main' and
-                  book_data.metadata_mismatches):
-                # Soft match
+
+            elif (book_data.uuid in book_data.matches):
+                # ORANGE: Duplicate of calibre copy
                 match_quality = 2
-            elif (book_data.uuid > '' and
-                  book_data.uuid in book_data.matches):
-                # Duplicates
+
+            elif (book_data.hash in self.marvin_hash_map and
+                  len(self.marvin_hash_map[book_data.hash]) > 1):
+                # RED: Marvin-only duplicate
                 match_quality = 1
+
             if self.opts.prefs.get('development_mode', False):
-                self._log("match_quality: %s" % match_quality)
+                self._log("%s match_quality: %s" % (book_data.title, match_quality))
             return match_quality
 
         def _generate_reading_progress(book_data):
@@ -1099,33 +1136,52 @@ class BookStatusDialog(SizePersistedDialog):
                            show_copy_button=False)
             if d.exec_():
                 QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-                if self.prefs.get('execute_marvin_commands', True):
-                    # Build the command file
-                    command_name = 'delete_books'
-                    command_element = 'deletebooks'
-                    command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-                                                      command_element,
-                                                      time.mktime(time.localtime())))
-                    books_to_delete = self._selected_books()
-                    for i, book_id in enumerate(books_to_delete):
-                        book_tag = Tag(command_soup, 'book')
-                        book_tag['author'] = books_to_delete[book_id]['author']
-                        book_tag['title'] = books_to_delete[book_id]['title']
-                        book_tag['uuid'] = books_to_delete[book_id]['uuid']
-                        book_tag['filename'] = books_to_delete[book_id]['path']
-                        command_soup.manifest.insert(i, book_tag)
 
+                # Build the command file
+                command_name = 'delete_books'
+                command_element = 'deletebooks'
+                command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                                                  command_element,
+                                                  time.mktime(time.localtime())))
+                books_to_delete = self._selected_books()
+                for i, book_id in enumerate(books_to_delete):
+                    book_tag = Tag(command_soup, 'book')
+                    book_tag['author'] = books_to_delete[book_id]['author']
+                    book_tag['title'] = books_to_delete[book_id]['title']
+                    book_tag['uuid'] = books_to_delete[book_id]['uuid']
+                    book_tag['filename'] = books_to_delete[book_id]['path']
+                    command_soup.manifest.insert(i, book_tag)
+
+                if self.prefs.get('execute_marvin_commands', True):
                     # Call the Marvin driver to copy the command file to the staging folder
                     self._log("staging command file")
-                    self.parent.connected_device._stage_command_file(command_name, command_soup,
+                    self._stage_command_file(command_name, command_soup,
                         show_command=self.prefs.get('development_mode', False))
 
                     # Wait for completion
                     self._log("waiting for completion")
-                    self.parent.connected_device._wait_for_command_completion(command_name)
+                    self._wait_for_command_completion(command_name)
 
                 else:
-                    self._log("execute_marvin_commands disabled in JSON file")
+                    self._log("{:*^80}".format(" command execution disabled in JSON file "))
+                    if command_name == 'update_metadata':
+                        soup = BeautifulStoneSoup(command_soup.renderContents())
+                        # <descriptions>
+                        descriptions = soup.findAll('description')
+                        for description in descriptions:
+                            d_tag = Tag(soup, 'description')
+                            d_tag.insert(0, "(description removed for debug stream)")
+                            description.replaceWith(d_tag)
+                        # <covers>
+                        covers = soup.findAll('cover')
+                        for cover in covers:
+                            cover_tag = Tag(soup, 'cover')
+                            cover_tag.insert(0, "(cover removed for debug stream)")
+                            cover.replaceWith(cover_tag)
+                        self._log(soup.prettify())
+                    else:
+                        self._log("command_name: %s" % command_name)
+                        self._log(command_soup.prettify())
 
                 # Set the reconnect_request flag in the driver
                 self.reconnect_request_pending = True
@@ -1168,10 +1224,9 @@ class BookStatusDialog(SizePersistedDialog):
         lbp = os.path.join(self.local_cache_folder, path)
 
         # Set the driver busy flag, copy the file
-        self._wait_for_driver_not_busy()
-        self.parent.connected_device.set_busy_flag(True)
+        self._wait_for_driver_not_busy(set_busy=True)
         with open(lbp, 'wb') as out:
-            self.parent.ios.copy_from_idevice(str(rbp), out)
+            self.ios.copy_from_idevice(str(rbp), out)
         self.parent.connected_device.set_busy_flag(False)
 
         hash = self._compute_epub_hash(lbp)
@@ -1185,7 +1240,9 @@ class BookStatusDialog(SizePersistedDialog):
     def _find_fuzzy_matches(self, library_scanner, installed_books):
         '''
         Compare computed hashes of installed books to library books.
-        Look for potential dupes
+        Look for potential dupes.
+        Add .matches property to installed_books, a list of all Marvin uuids matching
+        our hash
         '''
         self._log_location()
 
@@ -1237,6 +1294,9 @@ class BookStatusDialog(SizePersistedDialog):
         # Scan Marvin
         installed_books = self._get_installed_books()
 
+        # Generate a map of Marvin hashes to book_ids
+        self.marvin_hash_map = self._generate_marvin_hash_map(installed_books)
+
         # Update installed_books with library matches
         self._find_fuzzy_matches(self.parent.library_scanner, installed_books)
 
@@ -1250,6 +1310,27 @@ class BookStatusDialog(SizePersistedDialog):
         msg = ("<p>Not implemented</p>")
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
+
+    def _generate_marvin_hash_map(self, installed_books):
+        '''
+        Generate a map of book_ids to hash values
+        {hash: [book_id, book_id,...], ...}
+        '''
+        self._log_location()
+        hash_map = {}
+        for book_id in installed_books:
+            hash = installed_books[book_id].hash
+            title = installed_books[book_id].title
+#             self._log("%s: %s" % (title, hash))
+            if hash in hash_map:
+                hash_map[hash].append(book_id)
+            else:
+                hash_map[hash] = [book_id]
+
+#         for hash in hash_map:
+#             self._log("%s: %s" % (hash, hash_map[hash]))
+
+        return hash_map
 
     def _get_calibre_collections(self, cid):
         '''
@@ -1414,13 +1495,14 @@ class BookStatusDialog(SizePersistedDialog):
             genres = []
             genre_rows = genre_cur.fetchall()
             if genre_rows is not None:
-                genres = sorted([genre[b'Subject'] for genre in genre_rows])
+                genres = [genre[b'Subject'] for genre in genre_rows]
             genre_cur.close()
-            return sorted(genres, key=sort_key)
+            genres = sorted(genres, key=sort_key)
+            return genres
 
         def _get_metadata_mismatches(cur, book_id, row, mi, this_book):
             '''
-            Return True/False for metadata match:
+            Return dict of metadata mismatches.
             author, author_sort, pubdate, publisher, series, series_index, title,
             title_sort, description, subjects, collections, cover
             '''
@@ -1621,26 +1703,25 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         # Set the driver busy flag
-        self._wait_for_driver_not_busy()
-        self.parent.connected_device.set_busy_flag(True)
+        self._wait_for_driver_not_busy(set_busy=True)
 
         # Existing hash cache?
         lhc = os.path.join(self.local_cache_folder, self.hash_cache)
         rhc = '/'.join([self.remote_cache_folder, self.hash_cache])
 
-        cache_exists = (self.parent.ios.exists(rhc) and
+        cache_exists = (self.ios.exists(rhc) and
                         not self.opts.prefs.get('hash_caching_disabled'))
         if cache_exists:
             # Copy from existing remote cache to local cache
             self._log("copying remote hash cache")
             with open(lhc, 'wb') as out:
-                self.parent.ios.copy_from_idevice(str(rhc), out)
+                self.ios.copy_from_idevice(str(rhc), out)
         else:
             # Confirm path to remote folder is valid store point
-            folder_exists = self.parent.ios.exists(self.remote_cache_folder)
+            folder_exists = self.ios.exists(self.remote_cache_folder)
             if not folder_exists:
                 self._log("creating remote_cache_folder %s" % repr(self.remote_cache_folder))
-                self.parent.ios.mkdir(self.remote_cache_folder)
+                self.ios.mkdir(self.remote_cache_folder)
             else:
                 self._log("remote_cache_folder exists")
 
@@ -1713,10 +1794,13 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         self._log_location()
-        widths = []
-        for (i, c) in enumerate(self.LIBRARY_HEADER):
-            widths.append(self.tv.columnWidth(i))
-        self.opts.prefs.set('marvin_library_column_widths', widths)
+        try:
+            widths = []
+            for (i, c) in enumerate(self.LIBRARY_HEADER):
+                widths.append(self.tv.columnWidth(i))
+            self.opts.prefs.set('marvin_library_column_widths', widths)
+        except:
+            pass
 
     def _scan_library_books(self, library_scanner):
         '''
@@ -1969,6 +2053,39 @@ class BookStatusDialog(SizePersistedDialog):
         MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
                        show_copy_button=False).exec_()
 
+
+    def _stage_command_file(self, command_name, command_soup, show_command=False):
+        self._log_location(command_name)
+
+        if show_command:
+            if command_name == 'update_metadata':
+                soup = BeautifulStoneSoup(command_soup.renderContents())
+                # <descriptions>
+                descriptions = soup.findAll('description')
+                for description in descriptions:
+                    d_tag = Tag(soup, 'description')
+                    d_tag.insert(0, "(description removed for debug stream)")
+                    description.replaceWith(d_tag)
+                # <covers>
+                covers = soup.findAll('cover')
+                for cover in covers:
+                    cover_tag = Tag(soup, 'cover')
+                    cover_tag.insert(0, "(cover removed for debug stream)")
+                    cover.replaceWith(cover_tag)
+                self._log(soup.prettify())
+            else:
+                self._log("command_name: %s" % command_name)
+                self._log(command_soup.prettify())
+
+        # Set the driver busy flag, copy the file
+        self._wait_for_driver_not_busy(set_busy=True)
+        self.ios.write(command_soup.renderContents(),
+                       b'/'.join([self.staging_folder, b'%s.tmp' % command_name]))
+        self.ios.rename(b'/'.join([self.staging_folder, b'%s.tmp' % command_name]),
+                        b'/'.join([self.staging_folder, b'%s.xml' % command_name]))
+        self.parent.connected_device.set_busy_flag(False)
+
+
     def _synchronize_collections(self, row):
         '''
         For books whose Marvin collections and calibre collection assignments do not match,
@@ -1998,22 +2115,127 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         # Set the driver busy flag
-        self._wait_for_driver_not_busy()
-        self.parent.connected_device.set_busy_flag(True)
+        self._wait_for_driver_not_busy(set_busy=True)
 
         if self.parent.prefs.get('hash_caching_disabled', False):
             self._log("hash_caching_disabled, deleting remote hash cache")
-            self.parent.ios.remove(str(self.remote_hash_cache))
+            self.ios.remove(str(self.remote_hash_cache))
         else:
             # Copy local cache to iDevice
-            self.parent.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
+            self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
 
         # Clear the driver busy flag
         self.parent.connected_device.set_busy_flag(False)
 
-    def _wait_for_driver_not_busy(self):
+    def _wait_for_command_completion(self, command_name, send_signal=True):
         '''
-        Wait for driver to finish any existing I/O
+        Wait for Marvin to issue progress reports via status.xml
+        Marvin creates status.xml upon receiving command, increments <progress>
+        from 0.0 to 1.0 as command progresses.
+        '''
+        self._log_location(command_name)
+        self._log("%s: waiting for '%s'" %
+                                     (datetime.now().strftime('%H:%M:%S.%f'),
+                                     self.status_fs))
+
+        # Set initial watchdog timer for ACK
+        WATCHDOG_TIMEOUT = 10.0
+        watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+        self.operation_timed_out = False
+        watchdog.start()
+
+        while True:
+            if not self.ios.exists(self.status_fs):
+                # status.xml not created yet
+                if self.operation_timed_out:
+                    self.ios.remove(self.status_fs)
+                    raise IOTimeoutException("Marvin operation timed out.",
+                                        details=None, level=UserFeedback.WARN)
+                time.sleep(0.10)
+
+            else:
+                watchdog.cancel()
+
+                self._log("%s: monitoring progress of %s" %
+                                     (datetime.now().strftime('%H:%M:%S.%f'),
+                                      command_name))
+
+                # Start a new watchdog timer per iteration
+                watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                self.operation_timed_out = False
+                watchdog.start()
+
+                code = '-1'
+                current_timestamp = 0.0
+                while code == '-1':
+                    try:
+                        if self.operation_timed_out:
+                            self.ios.remove(self.status_fs)
+                            raise IOTimeoutException("Marvin operation timed out.",
+                                                details=None, level=UserFeedback.WARN)
+
+                        status = etree.fromstring(self.ios.read(self.status_fs))
+                        code = status.get('code')
+                        timestamp = float(status.get('timestamp'))
+                        if timestamp != current_timestamp:
+                            current_timestamp = timestamp
+                            d = datetime.now()
+                            progress = float(status.find('progress').text)
+                            self._log("{0}: {1:>2} {2:>3}%".format(
+                                                 d.strftime('%H:%M:%S.%f'),
+                                                 code,
+                                                 "%3.0f" % (progress * 100)))
+
+                            # Report progress
+#                             if self.report_progress is not None:
+#                                 self.report_progress(0.5 + progress/2, '')
+
+                            # Reset watchdog timer
+                            watchdog.cancel()
+                            watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                            watchdog.start()
+                        time.sleep(0.01)
+
+                    except:
+                        time.sleep(0.01)
+                        self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
+
+                # Command completed
+                watchdog.cancel()
+
+                final_code = status.get('code')
+                if final_code != '0':
+                    if final_code == '-1':
+                        final_status= "in progress"
+                    if final_code == '1':
+                        final_status = "warnings"
+                    if final_code == '2':
+                        final_status = "errors"
+
+                    messages = status.find('messages')
+                    msgs = [msg.text for msg in messages]
+                    details = "code: %s\n" % final_code
+                    details += '\n'.join(msgs)
+                    self._log(details)
+                    raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
+                                        % (final_status),
+                                       details=details, level=UserFeedback.WARN)
+
+                self.ios.remove(self.status_fs)
+
+                self._log("%s: '%s' complete" %
+                                     (datetime.now().strftime('%H:%M:%S.%f'),
+                                      command_name))
+                break
+
+#         if self.report_progress is not None:
+#             self.report_progress(1.0, _('finished'))
+
+
+    def _wait_for_driver_not_busy(self, set_busy=True):
+        '''
+        Wait for driver to finish any existing I/O.
+        When the driver is available, optionally set the busy flag for the caller
         '''
         if self.opts.prefs.get('development_mode', False):
             self._log_location()
@@ -2024,3 +2246,13 @@ class BookStatusDialog(SizePersistedDialog):
                 time.sleep(0.05)
                 if not self.parent.connected_device.get_busy_flag():
                     break
+        if set_busy:
+            self.parent.connected_device.set_busy_flag(True)
+
+    def _watchdog_timed_out(self):
+        '''
+        Set flag if I/O operation times out
+        '''
+        self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
+        self.operation_timed_out = True
+
