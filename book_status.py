@@ -30,6 +30,7 @@ from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.utils.icu import sort_key
+from calibre.utils.magick.draw import thumbnail
 from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
@@ -51,8 +52,9 @@ class MyTableView(QTableView):
 
         if col == self.parent.ARTICLES_COL:
             ac = menu.addAction("Show articles")
-            ac.setIcon(QIcon(I('exec.png')))
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_articles", row))
+
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
             ac = menu.addAction("Show collections")
@@ -60,7 +62,7 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
 
             ac = menu.addAction("Synchronize collections")
-            ac.setIcon(QIcon(I('exec.png')))
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'sync_collections.png')))
             if cfl:
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "synchronize_collections", row))
             else:
@@ -69,6 +71,11 @@ class MyTableView(QTableView):
             ac = menu.addAction("Remove from all collections")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_all.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_all_collections", row))
+
+        if col == self.parent.DEEP_VIEW_COL:
+            ac = menu.addAction("Show Deep View")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view", row))
 
         elif col == self.parent.FLAGS_COL:
             ac = menu.addAction("Clear All")
@@ -98,21 +105,21 @@ class MyTableView(QTableView):
             ac = menu.addAction("Show metadata")
             ac.setIcon(QIcon(I('dialog_information.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_metadata", row))
-            ac = menu.addAction("Sync metadata from calibre to Marvin")
+            ac = menu.addAction("Export metadata from calibre to Marvin")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_to_marvin", row))
-            ac = menu.addAction("Sync metadata from Marvin to calibre")
+            ac = menu.addAction("Import metadata from Marvin to calibre")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_from_marvin", row))
 
         elif col == self.parent.VOCABULARY_COL:
             ac = menu.addAction("Show vocabulary words")
-            ac.setIcon(QIcon(I('exec.png')))
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary_words", row))
 
         elif col == self.parent.WORD_COUNT_COL:
             ac = menu.addAction("Calculate word count")
-            ac.setIcon(QIcon(I('exec.png')))
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'word_count.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "calculate_word_count", row))
 
         menu.exec_(event.globalPos())
@@ -193,7 +200,7 @@ class MarkupTableModel(QAbstractTableModel):
         self.centered_columns = centered_columns
         self.right_aligned_columns = right_aligned_columns
         self.headerdata = parent.LIBRARY_HEADER
-        self.show_confidence_colors = parent.show_confidence_colors
+        self.show_match_colors = parent.show_match_colors
 
     def rowCount(self, parent):
         return len(self.arraydata)
@@ -206,7 +213,7 @@ class MarkupTableModel(QAbstractTableModel):
         if not index.isValid():
             return QVariant()
 
-        elif role == Qt.BackgroundRole and self.show_confidence_colors:
+        elif role == Qt.BackgroundRole and self.show_match_colors:
             match_quality = self.arraydata[row][self.parent.MATCHED_COL]
             saturation = 0.40
             value = 1.0
@@ -261,8 +268,8 @@ class MarkupTableModel(QAbstractTableModel):
 
         return QVariant(self.arraydata[index.row()][index.column()])
 
-    def refresh(self, show_confidence_colors):
-        self.show_confidence_colors = show_confidence_colors
+    def refresh(self, show_match_colors):
+        self.show_match_colors = show_match_colors
         self.dataChanged.emit(self.createIndex(0,0),
                               self.createIndex(self.rowCount(0), self.columnCount(0)))
 
@@ -392,16 +399,16 @@ class BookStatusDialog(SizePersistedDialog):
             self._log("AcceptRole")
             self.accept()
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.ActionRole:
-            if button.objectName() == 'match_quality_button':
-                self.toggle_confidence_colors()
+            if button.objectName() == 'match_colors_button':
+                self.toggle_match_colors()
             elif button.objectName() == 'calculate_word_count_button':
                 self._calculate_word_count()
             elif button.objectName() == 'generate_deep_view_button':
                 self._generate_deep_view()
             elif button.objectName() == 'synchronize_collections_button':
                 self._synchronize_collections()
-            elif button.objectName() == 'synchronize_metadata_button':
-                self._synchronize_metadata()
+            elif button.objectName() == 'update_metadata_button':
+                self._update_metadata()
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
             self._delete_books()
@@ -428,6 +435,8 @@ class BookStatusDialog(SizePersistedDialog):
             self._show_collections(row)
         elif action == 'clear_all_collections':
             self._clear_all_collections(row)
+#         elif action == 'show_deep_view':
+#             self._show_deep_view(row)
         elif action == 'show_metadata':
             self._show_metadata(row)
         elif action == 'show_vocabulary_words':
@@ -486,8 +495,9 @@ class BookStatusDialog(SizePersistedDialog):
         self._clear_selected_rows()
 
     def initialize(self, parent):
+        self.cover_hashes = parent.cover_hashes
         self.hash_cache = 'content_hashes.zip'
-        self.ios = parent.opts.ios
+        self.ios = parent.ios
         self.opts = parent.opts
         self.parent = parent
         self.prefs = parent.opts.prefs
@@ -498,7 +508,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.reconnect_request_pending = False
         self.remote_cache_folder = '/'.join(['/Library','calibre.mm'])
         self.remote_hash_cache = None
-        self.show_confidence_colors = False
+        self.show_match_colors = self.prefs.get('show_match_colors', False)
         self.verbose = parent.verbose
 
         # Subscribe to Marvin driver change events
@@ -534,14 +544,10 @@ class BookStatusDialog(SizePersistedDialog):
         self.dialogButtonBox.setCenterButtons(False)
 
         # Show/Hide Match Quality
-        smq_text = 'Show Matches'
-        if self.show_confidence_colors:
-            smq_text = "Hide Matches"
-        self.show_confidence_button = self.dialogButtonBox.addButton(smq_text, QDialogButtonBox.ActionRole)
-        self.show_confidence_button.setObjectName('match_quality_button')
-        self.show_confidence_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'show_matches.png')))
+        self.show_match_colors_button = self.dialogButtonBox.addButton("undefined", QDialogButtonBox.ActionRole)
+        self.show_match_colors_button.setObjectName('match_colors_button')
+        self.show_match_colors = not self.show_match_colors
+        self.toggle_match_colors()
 
         # Word count
         self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
@@ -551,24 +557,30 @@ class BookStatusDialog(SizePersistedDialog):
                                                    'word_count.png')))
 
         # Generate DV content
-        self.bsm_button = self.dialogButtonBox.addButton('Generate Deep View', QDialogButtonBox.ActionRole)
-        self.bsm_button.setObjectName('generate_deep_view_button')
-        self.bsm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+        self.gdv_button = self.dialogButtonBox.addButton('Generate Deep View', QDialogButtonBox.ActionRole)
+        self.gdv_button.setObjectName('generate_deep_view_button')
+        self.gdv_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'deep_view.png')))
 
         # Synchronize collections
         self.sc_button = self.dialogButtonBox.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
         self.sc_button.setObjectName('synchronize_collections_button')
+        self.sc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                   'icons',
+                                                   'sync_collections.png')))
         cfl = self.prefs.get('collection_field_lookup', '')
         if not cfl:
             self.sc_button.setEnabled(False)
 
         # Update metadata
-        self.bsm_button = self.dialogButtonBox.addButton('Update metadata', QDialogButtonBox.ActionRole)
-        self.bsm_button.setObjectName('synchronize_metadata_button')
-
+        self.um_button = self.dialogButtonBox.addButton('Update metadata', QDialogButtonBox.ActionRole)
+        self.um_button.setObjectName('update_metadata_button')
+        self.um_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                   'icons',
+                                                   'update_metadata.png')))
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
+
         self.l.addWidget(self.dialogButtonBox)
 
         # ~~~~~~~~ Connect signals ~~~~~~~~
@@ -601,17 +613,23 @@ class BookStatusDialog(SizePersistedDialog):
     def size_hint(self):
         return QtCore.QSize(self.perfect_width, self.height())
 
-    def toggle_confidence_colors(self):
-        self.show_confidence_colors = not self.show_confidence_colors
-        self.opts.prefs.set('annotated_books_dialog_show_confidence_as_bg_color', self.show_confidence_colors)
-        if self.show_confidence_colors:
-            self.show_confidence_button.setText("Hide Matches")
+    def toggle_match_colors(self):
+        self.show_match_colors = not self.show_match_colors
+        self.opts.prefs.set('show_match_colors', self.show_match_colors)
+        if self.show_match_colors:
+            self.show_match_colors_button.setText("Hide Matches")
             self.tv.sortByColumn(self.LIBRARY_HEADER.index('Match Quality'), Qt.DescendingOrder)
             self.capture_sort_column(self.LIBRARY_HEADER.index('Match Quality'))
+            self.show_match_colors_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'matches_hide.png')))
         else:
-            self.show_confidence_button.setText("Show Matches")
-        self.tv.setAlternatingRowColors(not self.show_confidence_colors)
-        self.tm.refresh(self.show_confidence_colors)
+            self.show_match_colors_button.setText("Show Matches")
+            self.show_match_colors_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'matches_show.png')))
+        self.tv.setAlternatingRowColors(not self.show_match_colors)
+        self.tm.refresh(self.show_match_colors)
 
     # Helpers
     def _calculate_word_count(self):
@@ -658,11 +676,8 @@ class BookStatusDialog(SizePersistedDialog):
                 rbp = '/'.join(['/Documents', path])
                 lbp = os.path.join(self.local_cache_folder, path)
 
-                # Set the driver busy flag, copy the file
-                self._wait_for_driver_not_busy(set_busy=True)
                 with open(lbp, 'wb') as out:
                     self.ios.copy_from_idevice(str(rbp), out)
-                self.parent.connected_device.set_busy_flag(False)
 
                 # Open the file
                 iterator = EbookIterator(lbp)
@@ -928,7 +943,7 @@ class BookStatusDialog(SizePersistedDialog):
             1: Calibre hash duplicates: Red
             0: Marvin only, single copy
             '''
-            # Match quality
+
             if self.opts.prefs.get('development_mode', False):
                 self._log("%s uuid: %s matches: %s on_device: %s hash: %s" %
                             (book_data.title,
@@ -968,6 +983,7 @@ class BookStatusDialog(SizePersistedDialog):
             '''
 
             '''
+
             percent_read = ''
             if self.opts.prefs.get('show_progress_as_percentage', False):
                 if book_data.progress < 0.01:
@@ -976,14 +992,11 @@ class BookStatusDialog(SizePersistedDialog):
                     # Pad the right side for visual comfort, since this col is
                     # right-aligned
                     percent_read = "{:3.0f}%   ".format(book_data.progress * 100)
-                progress = SortableTableWidgetItem(
-                    percent_read,
-                    book_data.progress)
+                progress = SortableTableWidgetItem(percent_read, book_data.progress)
             else:
-                if book_data.progress < 0.01:
-                    #base_name = "progress000.png"
-                    base_name = "progress_none.png"
-                elif book_data.progress >= 0.01 and book_data.progress < 0.10:
+                #base_name = "progress000.png"
+                base_name = "progress_none.png"
+                if book_data.progress >= 0.01 and book_data.progress < 0.10:
                     base_name = "progress010.png"
                 elif book_data.progress >= 0.10 and book_data.progress < 0.20:
                     base_name = "progress020.png"
@@ -999,9 +1012,7 @@ class BookStatusDialog(SizePersistedDialog):
                     base_name = "progress070.png"
                 elif book_data.progress >= 0.70 and book_data.progress < 0.80:
                     base_name = "progress080.png"
-                elif book_data.progress >= 0.80 and book_data.progress < 0.90:
-                    base_name = "progress080.png"
-                elif book_data.progress >= 0.90 and book_data.progress < 0.95:
+                elif book_data.progress >= 0.80 and book_data.progress < 0.95:
                     base_name = "progress090.png"
                 elif book_data.progress >= 0.95:
                     base_name = "progress100.png"
@@ -1024,13 +1035,10 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.title_sort.upper())
             return title
 
-        self._log_location()
-
         tabledata = []
 
         for book in self.installed_books:
             book_data = self.installed_books[book]
-
             author = _generate_author(book_data)
             collection_match = _generate_collection_match_profile(book_data)
             flags = _generate_flags_profile(book_data)
@@ -1065,6 +1073,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         #self.tv = QTableView(self)
+        self._log_location()
         self.l.addWidget(self.tv)
         self.tm = MarkupTableModel(self, centered_columns=self.CENTERED_COLUMNS,
                                    right_aligned_columns=self.RIGHT_ALIGNED_COLUMNS)
@@ -1081,7 +1090,7 @@ class BookStatusDialog(SizePersistedDialog):
                 FONT.setStyleHint(QFont.TypeWriter)
             self.tv.setFont(FONT)
         self.tvSelectionModel = self.tv.selectionModel()
-        self.tv.setAlternatingRowColors(not self.show_confidence_colors)
+        self.tv.setAlternatingRowColors(not self.show_match_colors)
         self.tv.setShowGrid(False)
         self.tv.setWordWrap(False)
         self.tv.setSelectionBehavior(self.tv.SelectRows)
@@ -1224,11 +1233,8 @@ class BookStatusDialog(SizePersistedDialog):
         rbp = '/'.join(['/Documents', path])
         lbp = os.path.join(self.local_cache_folder, path)
 
-        # Set the driver busy flag, copy the file
-        self._wait_for_driver_not_busy(set_busy=True)
         with open(lbp, 'wb') as out:
             self.ios.copy_from_idevice(str(rbp), out)
-        self.parent.connected_device.set_busy_flag(False)
 
         hash = self._compute_epub_hash(lbp)
         zfw.writestr(path, hash)
@@ -1425,12 +1431,12 @@ class BookStatusDialog(SizePersistedDialog):
             db = self.opts.gui.current_db
             if uuid in self.library_uuid_map:
                 cid = self.library_uuid_map[uuid]['id']
-                mi = db.get_metadata(cid, index_is_id=True)
+                mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
                 if self.opts.prefs.get('development_mode', False):
                     self._log("UUID match")
             elif title in self.library_title_map:
                 _cid = self.library_title_map[title]['id']
-                _mi = db.get_metadata(_cid, index_is_id=True)
+                _mi = db.get_metadata(_cid, index_is_id=True, get_cover=True, cover_as_data=True)
                 authors = author.split(', ')
                 if authors == _mi.authors:
                     cid = _cid
@@ -1566,10 +1572,28 @@ class BookStatusDialog(SizePersistedDialog):
                     mm['uuid'] = {'calibre': mi.uuid,
                                    'Marvin': row[b'UUID']}
 
-                # *** Not testing cover or collections here ***
+                # Get calibre cover hash (same process used by driver when sending books)
+                if this_book.cid in self.cover_hashes:
+                    cover_hash = self.cover_hashes[this_book.cid]
+                else:
+                    desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
+                    cover_hash = 0
+                    try:
+                        sized_thumb = thumbnail(mi.cover_data[1],
+                                                desired_thumbnail_height,
+                                                desired_thumbnail_height)
+                        cover_hash = hashlib.md5(sized_thumb[2]).hexdigest()
+                    except:
+                        self._log("error computing cover_hash")
+                    finally:
+                        self.cover_hashes[this_book.cid] = cover_hash
 
+                if cover_hash != row[b'CalibreCoverHash']:
+                    mm['cover_hash'] = {'calibre':cover_hash,
+                                        'Marvin': row[b'CalibreCoverHash']}
             else:
                 self._log("(no calibre metadata for %s)" % row[b'Title'])
+
             return mm
 
         def _get_on_device_status(cid):
@@ -1639,6 +1663,7 @@ class BookStatusDialog(SizePersistedDialog):
                             Author,
                             AuthorSort,
                             Books.ID as id_,
+                            CalibreCoverHash,
                             CalibreSeries,
                             CalibreSeriesIndex,
                             CalibreTitleSort,
@@ -1659,8 +1684,17 @@ class BookStatusDialog(SizePersistedDialog):
                         ''')
 
             rows = cur.fetchall()
+
+            pb = ProgressBar(parent=self.opts.gui, window_title="Performing metadata magic", on_top=True)
             book_count = len(rows)
+            pb.set_maximum(book_count)
+            pb.set_value(0)
+            pb.set_label('{:^100}'.format("1 of %d" % (book_count)))
+            pb.show()
+
             for i, row in enumerate(rows):
+                pb.set_label('{:^100}'.format("%d of %d" % (i+1, book_count)))
+
                 cid, mi = _get_calibre_id(row[b'UUID'],
                                           row[b'Title'],
                                           row[b'Author'])
@@ -1689,6 +1723,13 @@ class BookStatusDialog(SizePersistedDialog):
                 this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
                 installed_books[book_id] = this_book
 
+                pb.increment()
+
+            pb.hide()
+
+        # Save a copy of cover_hashes for reload optimization
+        self.parent.cover_hashes = self.cover_hashes
+
         if self.opts.prefs.get('development_mode', False):
             self._log("%d cached books from Marvin:" % len(cached_books))
             for book in installed_books:
@@ -1702,9 +1743,6 @@ class BookStatusDialog(SizePersistedDialog):
         If existing cached, purge orphans
         '''
         self._log_location()
-
-        # Set the driver busy flag
-        self._wait_for_driver_not_busy(set_busy=True)
 
         # Existing hash cache?
         lhc = os.path.join(self.local_cache_folder, self.hash_cache)
@@ -1738,9 +1776,6 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.local_hash_cache = lhc
         self.remote_hash_cache = rhc
-
-        # Clear the driver busy flag
-        self.parent.connected_device.set_busy_flag(False)
 
         # Purge cache orphans
         if cache_exists:
@@ -2032,7 +2067,12 @@ class BookStatusDialog(SizePersistedDialog):
             det_msg = ''
         else:
             msg = "<p>'{0}': metadata mismatches detected. Click <b>Show details</b> for summary.</p>".format(title)
-            det_msg = repr(self.installed_books[book_id].metadata_mismatches)
+            mm = self.installed_books[book_id].metadata_mismatches
+            det_msg = ''
+            for key in sorted(mm):
+                det_msg += "%s\n" % key
+                det_msg += " calibre: %s\n" % repr(mm[key]['calibre'])
+                det_msg += " Marvin: %s\n" % repr(mm[key]['Marvin'])
 
         MessageBox(MessageBox.INFO, "Show metadata", msg, det_msg=det_msg,
                        show_copy_button=False).exec_()
@@ -2077,26 +2117,23 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("command_name: %s" % command_name)
                 self._log(command_soup.prettify())
 
-        # Set the driver busy flag, copy the file
-        self._wait_for_driver_not_busy(set_busy=True)
         self.ios.write(command_soup.renderContents(),
                        b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]))
         self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
                         b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
-        self.parent.connected_device.set_busy_flag(False)
 
-    def _synchronize_collections(self, row):
+    def _synchronize_collections(self):
         '''
         For books whose Marvin collections and calibre collection assignments do not match,
         merge the two lists and apply to both Marvin and calibre.
         '''
-        self._log_location(row)
+        self._log_location()
         title = "Synchronize collections"
         msg = ("<p>Not implemented</p>")
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
-    def _synchronize_metadata(self):
+    def _update_metadata(self):
         '''
         '''
         self._log_location()
@@ -2113,18 +2150,12 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
 
-        # Set the driver busy flag
-        self._wait_for_driver_not_busy(set_busy=True)
-
         if self.parent.prefs.get('hash_caching_disabled', False):
             self._log("hash_caching_disabled, deleting remote hash cache")
             self.ios.remove(str(self.remote_hash_cache))
         else:
             # Copy local cache to iDevice
             self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
-
-        # Clear the driver busy flag
-        self.parent.connected_device.set_busy_flag(False)
 
     def _wait_for_command_completion(self, command_name, send_signal=True):
         '''
@@ -2231,23 +2262,6 @@ class BookStatusDialog(SizePersistedDialog):
         if self.report_progress is not None:
             self.report_progress(1.0, _('finished'))
         """
-
-    def _wait_for_driver_not_busy(self, set_busy=True):
-        '''
-        Wait for driver to finish any existing I/O.
-        When the driver is available, optionally set the busy flag for the caller
-        '''
-        if self.opts.prefs.get('development_mode', False):
-            self._log_location()
-        if self.parent.connected_device.get_busy_flag():
-            if self.opts.prefs.get('development_mode', False):
-                self._log("waiting for busy device")
-            while True:
-                time.sleep(0.05)
-                if not self.parent.connected_device.get_busy_flag():
-                    break
-        if set_busy:
-            self.parent.connected_device.set_busy_flag(True)
 
     def _watchdog_timed_out(self):
         '''

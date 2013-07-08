@@ -71,10 +71,15 @@ class ConfigWidget(QWidget):
         self.cfg_runtime_options_qvl.addWidget(self.reading_progress_checkbox)
 
         # ~~~~~~~~ Debug logging checkbox ~~~~~~~~
-        self.debug_plugin_checkbox = QCheckBox('Enable debug logging')
+        self.debug_plugin_checkbox = QCheckBox('Enable debug logging for plugin')
         self.debug_plugin_checkbox.setObjectName('debug_plugin_checkbox')
-        self.debug_plugin_checkbox.setToolTip('Print diagnostic messages to console')
+        self.debug_plugin_checkbox.setToolTip('Print plugin diagnostic messages to console')
         self.cfg_runtime_options_qvl.addWidget(self.debug_plugin_checkbox)
+
+        self.debug_libimobiledevice_checkbox = QCheckBox('Enable debug logging for libiMobileDevice')
+        self.debug_libimobiledevice_checkbox.setObjectName('debug_libimobiledevice_checkbox')
+        self.debug_libimobiledevice_checkbox.setToolTip('Print libiMobileDevice diagnostic messages to console')
+        self.cfg_runtime_options_qvl.addWidget(self.debug_libimobiledevice_checkbox)
 
         spacerItem2 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_runtime_options_qvl.addItem(spacerItem2)
@@ -99,6 +104,7 @@ class ConfigWidget(QWidget):
         # Restore general settings
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
+        self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
 
     def get_eligible_custom_fields(self):
         '''
@@ -128,6 +134,7 @@ class ConfigWidget(QWidget):
         # Save general settings
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
+        self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice_checkbox.isChecked())
 
     def _log(self, msg=None):
         '''

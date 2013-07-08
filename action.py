@@ -21,14 +21,13 @@ from calibre.gui2 import open_url
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
-from calibre.gui2.dialogs.progress import BlockingBusy
 from calibre.devices.usbms.driver import debug_print
 from calibre.utils.config import config_dir
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    IndexLibrary, ProgressBar, Struct,
+    IndexLibrary, MyBlockingBusy, ProgressBar, Struct,
     get_icon, set_plugin_icon_resources)
 import calibre_plugins.marvin_manager.config as cfg
 
@@ -41,6 +40,7 @@ class MarvinManagerAction(InterfaceAction):
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
+    cover_hashes = {}
     icon = PLUGIN_ICONS[0]
     minimum_ios_driver_version = (1, 0, 5)
     name = 'Marvin Mangler'
@@ -88,7 +88,7 @@ class MarvinManagerAction(InterfaceAction):
 
         # General initialization, occurs when calibre launches
         self.book_status_dialog = None
-        self.blocking_busy = BlockingBusy("Updating Marvin Library…")
+        self.blocking_busy = MyBlockingBusy("Updating Marvin Library…", size=50)
         self.connected_device = None
         self.ios = None
         self.marvin_content_updated = False
@@ -175,8 +175,6 @@ class MarvinManagerAction(InterfaceAction):
         opts = Struct(
             gui=self.gui,
             icon=get_icon(PLUGIN_ICONS[0]),
-            ios = self.ios,
-            parent=self,
             prefs=self.prefs,
             resources_path=self.resources_path,
             verbose=DEBUG)
@@ -211,7 +209,8 @@ class MarvinManagerAction(InterfaceAction):
         '''
         if (self.library_last_modified == self.gui.current_db.last_modified() and
                 self.indexed_library is self.gui.current_db and
-                self.library_indexed):
+                self.library_indexed and
+                self.library_scanner is not None):
             self._log_location("library index current")
         else:
             self._log_location("updating library index")
@@ -222,8 +221,9 @@ class MarvinManagerAction(InterfaceAction):
     # subclass override
     def library_changed(self, db):
         self._log_location()
-        self.library_indexed = False
         self.indexed_library = None
+        self.library_indexed = False
+        self.library_scanner = None
         self.library_last_modified = None
 
     def library_index_complete(self):
@@ -269,7 +269,12 @@ class MarvinManagerAction(InterfaceAction):
             self.connected_device = self.gui.device_manager.device
 
             self._log_location(self.connected_device.gui_name)
-            self._log("app_id: %s" % self.connected_device.app_id)
+
+            # Init libiMobileDevice
+            self.ios = libiMobileDevice(log=self._log,
+                                        verbose=self.prefs.get('debug_libimobiledevice', False))
+            self._log("mounting %s" % self.connected_device.app_id)
+            self.ios.mount_ios_app(app_id=self.connected_device.app_id)
 
             # Change our icon
             self.qaction.setIcon(get_icon("images/connected.png"))
@@ -293,8 +298,13 @@ class MarvinManagerAction(InterfaceAction):
             # Change our icon
             self.qaction.setIcon(get_icon("images/disconnected.png"))
 
+            # Close libiMobileDevice connection, reset references to mounted device
+            self.ios.disconnect_idevice()
+            self.ios = None
             self.connected_device.marvin_device_signals.reader_app_status_changed.disconnect()
             self.connected_device = None
+
+            # Invalidate the library hash map, as library contents may change before reconnection
             self.library_scanner.hash_map = None
 
             if hasattr(self, 'book_status_dialog'):
@@ -303,8 +313,8 @@ class MarvinManagerAction(InterfaceAction):
                     self.reconnect_request_pending = True
                     self.book_status_dialog.close()
                     del self.book_status_dialog
-                    self.blocking_busy.show()
                     self.blocking_busy.start()
+                    self.blocking_busy.show()
 
         self.rebuild_menus()
 
@@ -332,8 +342,6 @@ class MarvinManagerAction(InterfaceAction):
 
                     ac = self.create_menu_item(m, 'Reset Marvin Library', image=I("trash.png"))
                     ac.triggered.connect(self.reset_marvin_library)
-
-                    self.ios = self.connected_device.ios
 
                     # If reconnecting, allow time for Device to be added before redisplaying
                     if self.reconnect_request_pending:
@@ -397,10 +405,9 @@ class MarvinManagerAction(InterfaceAction):
                     self.minimum_ios_driver_version[2])
             MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
         else:
-            # Update opts object
-            self.opts = self.init_options()
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
+            self._log_location("BookStatus initialized")
             self.book_status_dialog.exec_()
             self.book_status_dialog = None
 

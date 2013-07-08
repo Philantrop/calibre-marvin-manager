@@ -30,13 +30,14 @@ from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup
 from calibre.gui2 import Application
+from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
 from calibre.utils.logging import Log
 
 from PyQt4.Qt import (Qt, QAction, QApplication,
-    QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox, QDoubleSpinBox, QIcon,
+    QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox, QDoubleSpinBox, QFont, QIcon,
     QKeySequence, QLabel, QLineEdit, QMenu, QPixmap, QProgressBar, QPlainTextEdit,
     QRadioButton, QSize, QSizePolicy, QSlider, QSpinBox, QString, QThread, QUrl,
     QVBoxLayout,
@@ -182,6 +183,40 @@ class HelpView(SizePersistedDialog):
         sizePolicy.setHeightForWidth(self.sizePolicy().hasHeightForWidth())
         self.setSizePolicy(sizePolicy)
         self.resize_dialog()
+
+
+class MyBlockingBusy(QDialog):
+
+    def __init__(self, msg, size=100, parent=None, window_title=_('Working')):
+        QDialog.__init__(self, parent)
+
+        self._layout = QVBoxLayout()
+        self.setLayout(self._layout)
+        self.msg = QLabel(msg)
+        #self.msg.setWordWrap(True)
+        self.font = QFont()
+        self.font.setPointSize(self.font.pointSize() + 4)
+        self.msg.setFont(self.font)
+        self.pi = ProgressIndicator(self)
+        self.pi.setDisplaySize(size)
+        self._layout.addWidget(self.pi, 0, Qt.AlignHCenter)
+        self._layout.addSpacing(15)
+        self._layout.addWidget(self.msg, 0, Qt.AlignHCenter)
+        self.setWindowTitle(window_title)
+        self.resize(self.sizeHint())
+
+    def start(self):
+        self.pi.startAnimation()
+
+    def stop(self):
+        self.pi.stopAnimation()
+
+    def accept(self):
+        self.stop()
+        return QDialog.accept(self)
+
+    def reject(self):
+        pass # Cannot cancel this dialog
 
 
 class ProgressBar(QDialog):
