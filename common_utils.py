@@ -140,10 +140,6 @@ class AbortRequestException(Exception):
     '''
     pass
 
-class IOTimeoutException(Exception):
-    '''
-    '''
-    pass
 
 class DeviceNotMountedException(Exception):
     ''' '''

@@ -23,6 +23,7 @@ from PyQt4.QtWebKit import QWebView
 
 from calibre import prints, strftime
 from calibre.constants import islinux, isosx, iswindows
+from calibre.devices.errors import UserFeedback
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.ebooks.oeb.iterator import EbookIterator
@@ -33,7 +34,7 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, Book, HelpView, IOTimeoutException,
+    AbortRequestException, Book, HelpView,
     ProgressBar, SizePersistedDialog, Struct)
 
 class MyTableView(QTableView):
@@ -2053,7 +2054,6 @@ class BookStatusDialog(SizePersistedDialog):
         MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
                        show_copy_button=False).exec_()
 
-
     def _stage_command_file(self, command_name, command_soup, show_command=False):
         self._log_location(command_name)
 
@@ -2080,11 +2080,10 @@ class BookStatusDialog(SizePersistedDialog):
         # Set the driver busy flag, copy the file
         self._wait_for_driver_not_busy(set_busy=True)
         self.ios.write(command_soup.renderContents(),
-                       b'/'.join([self.staging_folder, b'%s.tmp' % command_name]))
-        self.ios.rename(b'/'.join([self.staging_folder, b'%s.tmp' % command_name]),
-                        b'/'.join([self.staging_folder, b'%s.xml' % command_name]))
+                       b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]))
+        self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
+                        b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
         self.parent.connected_device.set_busy_flag(False)
-
 
     def _synchronize_collections(self, row):
         '''
@@ -2136,7 +2135,7 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location(command_name)
         self._log("%s: waiting for '%s'" %
                                      (datetime.now().strftime('%H:%M:%S.%f'),
-                                     self.status_fs))
+                                     self.parent.connected_device.status_fs))
 
         # Set initial watchdog timer for ACK
         WATCHDOG_TIMEOUT = 10.0
@@ -2145,11 +2144,11 @@ class BookStatusDialog(SizePersistedDialog):
         watchdog.start()
 
         while True:
-            if not self.ios.exists(self.status_fs):
+            if not self.ios.exists(self.parent.connected_device.status_fs):
                 # status.xml not created yet
                 if self.operation_timed_out:
-                    self.ios.remove(self.status_fs)
-                    raise IOTimeoutException("Marvin operation timed out.",
+                    self.ios.remove(self.parent.connected_device.status_fs)
+                    raise UserFeedback("Marvin operation timed out.",
                                         details=None, level=UserFeedback.WARN)
                 time.sleep(0.10)
 
@@ -2170,11 +2169,11 @@ class BookStatusDialog(SizePersistedDialog):
                 while code == '-1':
                     try:
                         if self.operation_timed_out:
-                            self.ios.remove(self.status_fs)
-                            raise IOTimeoutException("Marvin operation timed out.",
+                            self.ios.remove(self.parent.connected_device.status_fs)
+                            raise UserFeedback("Marvin operation timed out.",
                                                 details=None, level=UserFeedback.WARN)
 
-                        status = etree.fromstring(self.ios.read(self.status_fs))
+                        status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                         code = status.get('code')
                         timestamp = float(status.get('timestamp'))
                         if timestamp != current_timestamp:
@@ -2185,10 +2184,11 @@ class BookStatusDialog(SizePersistedDialog):
                                                  d.strftime('%H:%M:%S.%f'),
                                                  code,
                                                  "%3.0f" % (progress * 100)))
-
+                            """
                             # Report progress
-#                             if self.report_progress is not None:
-#                                 self.report_progress(0.5 + progress/2, '')
+                            if self.report_progress is not None:
+                                self.report_progress(0.5 + progress/2, '')
+                            """
 
                             # Reset watchdog timer
                             watchdog.cancel()
@@ -2221,16 +2221,16 @@ class BookStatusDialog(SizePersistedDialog):
                                         % (final_status),
                                        details=details, level=UserFeedback.WARN)
 
-                self.ios.remove(self.status_fs)
+                self.ios.remove(self.parent.connected_device.status_fs)
 
                 self._log("%s: '%s' complete" %
                                      (datetime.now().strftime('%H:%M:%S.%f'),
                                       command_name))
                 break
-
-#         if self.report_progress is not None:
-#             self.report_progress(1.0, _('finished'))
-
+        """
+        if self.report_progress is not None:
+            self.report_progress(1.0, _('finished'))
+        """
 
     def _wait_for_driver_not_busy(self, set_busy=True):
         '''

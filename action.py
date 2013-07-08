@@ -269,6 +269,7 @@ class MarvinManagerAction(InterfaceAction):
             self.connected_device = self.gui.device_manager.device
 
             self._log_location(self.connected_device.gui_name)
+            self._log("app_id: %s" % self.connected_device.app_id)
 
             # Change our icon
             self.qaction.setIcon(get_icon("images/connected.png"))
