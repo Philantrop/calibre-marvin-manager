@@ -27,7 +27,7 @@ from calibre.utils.config import config_dir
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    IndexLibrary, MyBlockingBusy, ProgressBar, Struct,
+    CompileUI, IndexLibrary, MyBlockingBusy, ProgressBar, Struct,
     get_icon, set_plugin_icon_resources)
 import calibre_plugins.marvin_manager.config as cfg
 
@@ -40,7 +40,6 @@ class MarvinManagerAction(InterfaceAction):
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
-    cover_hashes = {}
     icon = PLUGIN_ICONS[0]
     minimum_ios_driver_version = (1, 0, 5)
     name = 'Marvin Mangler'
@@ -58,19 +57,6 @@ class MarvinManagerAction(InterfaceAction):
 
     def about_to_show_menu(self):
         self.rebuild_menus()
-
-#     def animate_menu_icon(self):
-#         '''
-#         Call ourselves to cycle the menu icon until reconnect complete
-#         '''
-#         self._log_location()
-#         if self.reconnect_request_pending:
-#             self.animation_step += 1
-#             if self.animation_step & 1:
-#                 self.qaction.setIcon(get_icon("images/connected.png"))
-#             else:
-#                 self.qaction.setIcon(get_icon("images/disconnected.png"))
-#             QTimer.singleShot(500, self.animate_menu_icon)
 
     def backup_restore(self):
         self._log_location("not implemented")
@@ -118,33 +104,53 @@ class MarvinManagerAction(InterfaceAction):
         # Init the prefs file
         self.init_prefs()
 
+        # Populate dialog resources
+        self.inflate_dialog_resources()
+
         # Populate the help resources
         self.inflate_help_resources()
 
-        # Populate icons
+        # Populate icon resources
         self.inflate_icon_resources()
 
-    def inflate_icon_resources(self):
+        # Compile .ui files as needed
+        cui = CompileUI(self)
+
+    def inflate_dialog_resources(self):
         '''
-        Extract the icon resources from the plugin
+        Copy the dialog files to our resource directory
         '''
-        icons = []
+        self._log_location()
+
+        dialogs = []
         with ZipFile(self.plugin_path, 'r') as zf:
             for candidate in zf.namelist():
-                if candidate.endswith('/'):
-                    continue
-                if candidate.startswith('icons/'):
-                    icons.append(candidate)
-        ir = self.load_resources(icons)
-        for icon in icons:
-            if not icon in ir:
+                # Qt UI files
+                if candidate.startswith('dialogs/') and candidate.endswith('.ui'):
+                    dialogs.append(candidate)
+                # Corresponding class definitions
+                if candidate.startswith('dialogs/') and candidate.endswith('.py'):
+                    dialogs.append(candidate)
+        dr = self.load_resources(dialogs)
+        for dialog in dialogs:
+            if not dialog in dr:
                 continue
-            fs = os.path.join(self.resources_path, icon)
+            fs = os.path.join(self.resources_path, dialog)
             if not os.path.exists(fs):
+                # If the file doesn't exist in the resources dir, add it
                 if not os.path.exists(os.path.dirname(fs)):
                     os.makedirs(os.path.dirname(fs))
                 with open (fs, 'wb') as f:
-                    f.write(ir[icon])
+                    f.write(dr[dialog])
+            else:
+                # Is the .ui file current?
+                update_needed = False
+                with open(fs, 'r') as f:
+                    if f.read() != dr[dialog]:
+                        update_needed = True
+                if update_needed:
+                    with open (fs, 'wb') as f:
+                        f.write(dr[dialog])
 
     def inflate_help_resources(self):
         '''
@@ -167,6 +173,28 @@ class MarvinManagerAction(InterfaceAction):
                 os.makedirs(os.path.dirname(fs))
             with open(fs, 'wb') as f:
                 f.write(rd[resource])
+
+    def inflate_icon_resources(self):
+        '''
+        Extract the icon resources from the plugin
+        '''
+        icons = []
+        with ZipFile(self.plugin_path, 'r') as zf:
+            for candidate in zf.namelist():
+                if candidate.endswith('/'):
+                    continue
+                if candidate.startswith('icons/'):
+                    icons.append(candidate)
+        ir = self.load_resources(icons)
+        for icon in icons:
+            if not icon in ir:
+                continue
+            fs = os.path.join(self.resources_path, icon)
+            if not os.path.exists(fs):
+                if not os.path.exists(os.path.dirname(fs)):
+                    os.makedirs(os.path.dirname(fs))
+                with open (fs, 'wb') as f:
+                    f.write(ir[icon])
 
     def init_options(self, disable_caching=False):
         """

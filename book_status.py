@@ -5,7 +5,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import hashlib, locale, operator, os, re, sqlite3, sys, time
+import hashlib, importlib, locale, operator, os, re, sqlite3, sys, time
 from datetime import datetime
 from functools import partial
 from lxml import etree
@@ -22,13 +22,14 @@ from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QApplication,
 from PyQt4.QtWebKit import QWebView
 
 from calibre import prints, strftime
-from calibre.constants import islinux, isosx, iswindows
+from calibre.constants import cache_dir as _cache_dir, islinux, isosx, iswindows
 from calibre.devices.errors import UserFeedback
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2.progress_indicator import ProgressIndicator
+from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.icu import sort_key
 from calibre.utils.magick.draw import thumbnail
 from calibre.utils.wordcount import get_wordcount_obj
@@ -37,6 +38,9 @@ from calibre.utils.zipfile import ZipFile
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, Book, HelpView,
     ProgressBar, SizePersistedDialog, Struct)
+
+dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_Mangler_resources', 'dialogs')
+
 
 class MyTableView(QTableView):
     def __init__(self, parent):
@@ -486,6 +490,8 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 self._log_location(row, col)
                 self._log("No double-click handler for %s" % clicked['column'])
+        else:
+            self.show_metadata_dialog(index)
 
     def esc(self, *args):
         '''
@@ -495,7 +501,7 @@ class BookStatusDialog(SizePersistedDialog):
         self._clear_selected_rows()
 
     def initialize(self, parent):
-        self.cover_hashes = parent.cover_hashes
+        self.archived_cover_hashes = JSONConfig('plugins/Marvin_Mangler_resources/cover_hashes')
         self.hash_cache = 'content_hashes.zip'
         self.ios = parent.ios
         self.opts = parent.opts
@@ -609,6 +615,21 @@ class BookStatusDialog(SizePersistedDialog):
         Display help file
         '''
         self.parent.show_help()
+
+    def show_metadata_dialog(self, index):
+        '''
+        '''
+        self._log_location()
+        klass = os.path.join(dialog_resources_path, 'metadata_dialog.py')
+        if os.path.exists(klass):
+            #self._log("importing metadata dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('metadata_dialog')
+            dlg = this_dc.MetadataComparisonDialog(self, 'metadata_comparison')
+            dlg.initialize(self, self._selected_book(index.row()))
+            dlg.exec_()
+        else:
+            self._log("ERROR: Can't import from '%s'" % klass)
 
     def size_hint(self):
         return QtCore.QSize(self.perfect_width, self.height())
@@ -1513,7 +1534,32 @@ class BookStatusDialog(SizePersistedDialog):
             author, author_sort, pubdate, publisher, series, series_index, title,
             title_sort, description, subjects, collections, cover
             '''
-            self._log_location(row[b'Title'])
+            def _get_cover_hash(mi, this_book):
+                '''
+                Retrieve cover_hash from archive, or create/store
+                '''
+                ach = self.archived_cover_hashes.get(str(this_book.cid), {})
+                cover_last_modified = self.opts.gui.current_db.cover_last_modified(this_book.cid, index_is_id=True)
+                if ('cover_last_modified' in ach and
+                    ach['cover_last_modified'] == cover_last_modified):
+                    return ach['cover_hash']
+
+                # Generate calibre cover hash (same process used by driver when sending books)
+                cover_hash = 0
+                desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
+                try:
+                    sized_thumb = thumbnail(mi.cover_data[1],
+                                            desired_thumbnail_height,
+                                            desired_thumbnail_height)
+                    cover_hash = hashlib.md5(sized_thumb[2]).hexdigest()
+                    cover_last_modified = self.opts.gui.current_db.cover_last_modified(this_book.cid, index_is_id=True)
+                    self.archived_cover_hashes.set(str(this_book.cid),
+                        {'cover_hash': cover_hash, 'cover_last_modified': cover_last_modified})
+                except:
+                    self._log("error calculating cover_hash for cid %d (%s)" % (this_book.cid, this_book.title))
+                return cover_hash
+
+            #self._log_location(row[b'Title'])
             mm = {}
             if mi is not None:
                 if mi.authors != this_book.authors:
@@ -1572,22 +1618,7 @@ class BookStatusDialog(SizePersistedDialog):
                     mm['uuid'] = {'calibre': mi.uuid,
                                    'Marvin': row[b'UUID']}
 
-                # Get calibre cover hash (same process used by driver when sending books)
-                if this_book.cid in self.cover_hashes:
-                    cover_hash = self.cover_hashes[this_book.cid]
-                else:
-                    desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
-                    cover_hash = 0
-                    try:
-                        sized_thumb = thumbnail(mi.cover_data[1],
-                                                desired_thumbnail_height,
-                                                desired_thumbnail_height)
-                        cover_hash = hashlib.md5(sized_thumb[2]).hexdigest()
-                    except:
-                        self._log("error computing cover_hash")
-                    finally:
-                        self.cover_hashes[this_book.cid] = cover_hash
-
+                cover_hash = _get_cover_hash(mi, this_book)
                 if cover_hash != row[b'CalibreCoverHash']:
                     mm['cover_hash'] = {'calibre':cover_hash,
                                         'Marvin': row[b'CalibreCoverHash']}
@@ -1628,6 +1659,24 @@ class BookStatusDialog(SizePersistedDialog):
                 vocabulary_list = sorted(vocabulary_list, key=sort_key)
             voc_cur.close()
             return vocabulary_list
+
+        def _purge_cover_hash_orphans():
+            '''
+            Purge obsolete cover hashes
+            '''
+            self._log_location()
+            # Get active cids
+            active_cids = sorted([str(installed_books[book_id].cid) for book_id in installed_books])
+            #self._log("active_cids: %s" % active_cids)
+
+            # Get active cover_hash cids
+            cover_hash_cids = sorted(self.archived_cover_hashes.keys())
+            #self._log("cover_hash keys: %s" % cover_hash_cids)
+
+            for ch_cid in cover_hash_cids:
+                if ch_cid not in active_cids:
+                    self._log("removing orphan cid %s from archived_cover_hashes" % ch_cid)
+                    del self.archived_cover_hashes[ch_cid]
 
         self._log_location()
 
@@ -1685,7 +1734,7 @@ class BookStatusDialog(SizePersistedDialog):
 
             rows = cur.fetchall()
 
-            pb = ProgressBar(parent=self.opts.gui, window_title="Performing metadata magic", on_top=True)
+            pb = ProgressBar(parent=self.opts.gui, window_title="Performing Marvin metadata magic", on_top=True)
             book_count = len(rows)
             pb.set_maximum(book_count)
             pb.set_value(0)
@@ -1727,8 +1776,8 @@ class BookStatusDialog(SizePersistedDialog):
 
             pb.hide()
 
-        # Save a copy of cover_hashes for reload optimization
-        self.parent.cover_hashes = self.cover_hashes
+        # Remove orphan cover_hashes
+        _purge_cover_hash_orphans()
 
         if self.opts.prefs.get('development_mode', False):
             self._log("%d cached books from Marvin:" % len(cached_books))
@@ -1921,6 +1970,26 @@ class BookStatusDialog(SizePersistedDialog):
             raise AbortRequestException("user cancelled Marvin scan")
 
         return installed_books
+
+    def _selected_book(self, row):
+        '''
+        Generate a dict of values for the specified row
+        '''
+        author = str(self.tm.arraydata[row][self.AUTHOR_COL].text())
+        cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+        path = self.tm.arraydata[row][self.PATH_COL]
+        title = str(self.tm.arraydata[row][self.TITLE_COL].text())
+        uuid = self.tm.arraydata[row][self.UUID_COL]
+        selected_book_data = {
+                               'author': author,
+                               'book_id': book_id,
+                               'cid': cid,
+                               'path': path,
+                               'title': title,
+                               'uuid': uuid
+                              }
+        return selected_book_data
 
     def _selected_books(self):
         '''
