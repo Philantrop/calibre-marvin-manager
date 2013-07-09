@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>iOS Reader Applications</string>
+   <string>Metadata Manager</string>
   </property>
   <property name="windowIcon">
    <iconset>
@@ -30,12 +30,12 @@
          <layout class="QVBoxLayout" name="calibre_vl">
           <item>
            <layout class="QGridLayout" name="calibre_cta_gbl">
-            <item row="0" column="0" rowspan="2">
+            <item row="0" column="0" rowspan="5">
              <widget class="QLabel" name="calibre_cover">
               <property name="maximumSize">
                <size>
-                <width>150</width>
-                <height>150</height>
+                <width>16777215</width>
+                <height>16777215</height>
                </size>
               </property>
               <property name="text">
@@ -43,28 +43,183 @@
               </property>
              </widget>
             </item>
-            <item row="0" column="1">
-             <widget class="QLabel" name="calibre_title">
-              <property name="text">
-               <string>Title</string>
-              </property>
-             </widget>
-            </item>
             <item row="1" column="1">
-             <widget class="QLabel" name="calibre_author">
-              <property name="text">
-               <string>Author</string>
-              </property>
-             </widget>
+             <layout class="QVBoxLayout" name="calibre_ta_vl">
+              <item>
+               <widget class="QLabel" name="calibre_title">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>18</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>Title</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="calibre_title_sort">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>10</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>title_sort</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignHCenter|Qt::AlignTop</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="calibre_series">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>14</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>series</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="Line" name="line">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="calibre_authors">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>16</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>Author</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="calibre_author_sort">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>10</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>author_sort</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignHCenter|Qt::AlignTop</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
             </item>
            </layout>
           </item>
          </layout>
         </item>
         <item>
-         <widget class="Line" name="line">
+         <widget class="Line" name="line_3">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="calibre_subjects">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>12</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>subjects</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="calibre_published_hl">
+          <item>
+           <widget class="QLabel" name="calibre_publisher">
+            <property name="font">
+             <font>
+              <family>Helvetica</family>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>publisher</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="calibre_pubdate">
+            <property name="font">
+             <font>
+              <family>Helvetica</family>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>pubdate</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QTextBrowser" name="calibre_description">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>16777215</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="export_to_marvin_button">
+          <property name="text">
+           <string>Export from Calibre to Marvin</string>
           </property>
          </widget>
         </item>
@@ -94,30 +249,122 @@
          <layout class="QVBoxLayout" name="marvin_vl">
           <item>
            <layout class="QGridLayout" name="marvin_cta_gbl">
-            <item row="0" column="0" rowspan="2">
+            <item row="1" column="1">
+             <layout class="QVBoxLayout" name="marvin_ta_vl">
+              <item>
+               <widget class="QLabel" name="marvin_title">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>18</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>Title</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="marvin_title_sort">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>10</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>title_sort</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignHCenter|Qt::AlignTop</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="marvin_series">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>14</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>series</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="Line" name="line_2">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="marvin_authors">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>16</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>Author</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+              <item>
+               <widget class="QLabel" name="marvin_author_sort">
+                <property name="font">
+                 <font>
+                  <family>Helvetica</family>
+                  <pointsize>10</pointsize>
+                 </font>
+                </property>
+                <property name="text">
+                 <string>author_sort</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignCenter</set>
+                </property>
+                <property name="wordWrap">
+                 <bool>true</bool>
+                </property>
+               </widget>
+              </item>
+             </layout>
+            </item>
+            <item row="0" column="0" rowspan="5">
              <widget class="QLabel" name="marvin_cover">
               <property name="maximumSize">
                <size>
-                <width>150</width>
-                <height>150</height>
+                <width>16777215</width>
+                <height>16777215</height>
                </size>
               </property>
               <property name="text">
                <string>Cover</string>
               </property>
-             </widget>
-            </item>
-            <item row="0" column="1">
-             <widget class="QLabel" name="marvin_title">
-              <property name="text">
-               <string>Title</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QLabel" name="marvin_author">
-              <property name="text">
-               <string>Author</string>
+              <property name="wordWrap">
+               <bool>true</bool>
               </property>
              </widget>
             </item>
@@ -126,14 +373,80 @@
          </layout>
         </item>
         <item>
-         <widget class="Line" name="line_2">
+         <widget class="Line" name="line_4">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
           </property>
          </widget>
         </item>
         <item>
-         <spacer name="calibre_vs_2">
+         <widget class="QLabel" name="marvin_subjects">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>12</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>subjects</string>
+          </property>
+          <property name="wordWrap">
+           <bool>true</bool>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <layout class="QHBoxLayout" name="marvin_published_hl">
+          <item>
+           <widget class="QLabel" name="marvin_publisher">
+            <property name="font">
+             <font>
+              <family>Helvetica</family>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>publisher</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLabel" name="marvin_pubdate">
+            <property name="font">
+             <font>
+              <family>Helvetica</family>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>pubdate</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
+         <widget class="QTextBrowser" name="marvin_description">
+          <property name="enabled">
+           <bool>true</bool>
+          </property>
+          <property name="maximumSize">
+           <size>
+            <width>16777215</width>
+            <height>16777215</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPushButton" name="import_from_marvin_button">
+          <property name="text">
+           <string>Import from Marvin to Calibre</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <spacer name="marvin_vs">
           <property name="orientation">
            <enum>Qt::Vertical</enum>
           </property>
