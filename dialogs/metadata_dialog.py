@@ -10,13 +10,14 @@ __docformat__ = 'restructuredtext en'
 
 import os, sqlite3, sys
 
+from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
-from calibre.utils.magick.draw import thumbnail
+from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap, QSize)
+from PyQt4.Qt import (Qt, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap, QSize)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -66,7 +67,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
 
     def initialize(self, parent, book_id, cid, installed_book, marvin_db_path):
         '''
-        __init__ is called on SizePersistecDialog()
+        __init__ is called on SizePersistedDialog()
         shared attributes of interest:
             .authors
             .author_sort
@@ -89,14 +90,15 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.opts = parent.opts
         self.parent = parent
         self.verbose = parent.verbose
+        self.BORDER_COLOR = "#FDFF99"
+        self.BORDER_LR = 4
+        self.BORDER_TB = 8
+        self.GREY_FG = '<font style="color:#A0A0A0">{0}</font>'
         self.YELLOW_BG = '<font style="background:#FDFF99">{0}</font>'
 
         self._log_location(installed_book.title)
-        self._log("matches:\n%s" % repr(installed_book.metadata_matches))
-        self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
 
-        self.setWindowTitle(u'Metadata Comparison')
-        self.matches = installed_book.metadata_matches
+        self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
         self.mismatches = installed_book.metadata_mismatches
 
         self._populate_title()
@@ -122,6 +124,14 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.import_from_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_marvin.png')))
+
+        # If no calibre book, or no mismatches, hide the Calibre group and action buttons
+        if  not self.cid or not self.mismatches:
+            self.calibre_gb.setVisible(False)
+            self.import_from_marvin_button.setVisible(False)
+            self.setWindowTitle(u'Metadata Summary')
+        else:
+            self.setWindowTitle(u'Metadata Comparison')
 
         self.bb.clicked.connect(self.dispatch_button_click)
 
@@ -166,7 +176,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             ms_authors = ', '.join(self.mismatches['authors']['Marvin'])
             self.marvin_authors.setText(self.YELLOW_BG.format(ms_authors))
         else:
-            authors = ', '.join(self.matches['authors'])
+            authors = ', '.join(self.installed_book.authors)
             self.calibre_authors.setText(authors)
             self.marvin_authors.setText(authors)
 
@@ -177,38 +187,16 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             ms_author_sort = self.mismatches['author_sort']['Marvin']
             self.marvin_author_sort.setText(self.YELLOW_BG.format(ms_author_sort))
         else:
-            author_sort = self.matches['author_sort']
-            self.calibre_author_sort.setText(author_sort)
-            self.marvin_author_sort.setText(author_sort)
+            author_sort = self.installed_book.author_sort
+            self.calibre_author_sort.setText(self.GREY_FG.format(author_sort))
+            self.marvin_author_sort.setText(self.GREY_FG.format(author_sort))
 
     def _populate_covers(self):
         '''
         Display calibre cover for both unless mismatch
         '''
-        self.calibre_cover.setMaximumSize(QSize(self.COVER_ICON_SIZE, self.COVER_ICON_SIZE))
-        self.calibre_cover.setText('')
-        self.calibre_cover.setScaledContents(False)
-
-        self.marvin_cover.setMaximumSize(QSize(self.COVER_ICON_SIZE, self.COVER_ICON_SIZE))
-        self.marvin_cover.setText('')
-        self.marvin_cover.setScaledContents(False)
-
-        # Calibre cover always set from library cover
-        db = self.opts.gui.current_db
-        mi = db.get_metadata(self.cid, index_is_id=True, get_cover=True, cover_as_data=True)
-        calibre_thumb = thumbnail(mi.cover_data[1],
-                                  self.COVER_ICON_SIZE,
-                                  self.COVER_ICON_SIZE)
-        pixmap = QPixmap()
-        pixmap.loadFromData(calibre_thumb[2])
-        self.calibre_cover.setPixmap(pixmap)
-
-        if 'cover_hash' not in self.mismatches:
-            # Marvin cover matches calibre cover
-            self.marvin_cover.setPixmap(pixmap)
-        else:
+        def _fetch_marvin_cover(with_border=False):
             # Retrieve Books:LargeCoverJpg if no cover_path
-            self._log("cover mismatch")
             if self.installed_book.cover_file:
                 self._log("fetch cover from Marvin sandbox")
             else:
@@ -217,7 +205,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                 with con:
                     con.row_factory = sqlite3.Row
 
-                    # Build a collection map
+                    # Fetch LargeCoverJpg from mainDb
                     cover_cur = con.cursor()
                     cover_cur.execute('''SELECT
                                           LargeCoverJpg
@@ -227,34 +215,130 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                     rows = cover_cur.fetchall()
 
                 if len(rows):
-                    # Save Marvin cover in case we're importing to calibre
-                    self.marvin_cover_jpg = rows[0][b'LargeCoverJpg']
-                    marvin_thumb = thumbnail(self.marvin_cover_jpg,
-                                             self.COVER_ICON_SIZE,
-                                             self.COVER_ICON_SIZE)
-                    pixmap = QPixmap()
-                    pixmap.loadFromData(marvin_thumb[2])
-                    self.marvin_cover.setPixmap(pixmap)
+                    try:
+                        # Save Marvin cover in case we're importing to calibre
+                        self.marvin_cover_jpg = rows[0][b'LargeCoverJpg']
+                        marvin_thumb = thumbnail(self.marvin_cover_jpg,
+                                                 self.COVER_ICON_SIZE,
+                                                 self.COVER_ICON_SIZE)
+                        pixmap = QPixmap()
+                        if with_border:
+                            bordered_thumb = add_borders_to_image(marvin_thumb[2],
+                                                              left=self.BORDER_LR,
+                                                              right=self.BORDER_LR,
+                                                              top=self.BORDER_TB,
+                                                              bottom=self.BORDER_TB,
+                                                              border_color=self.BORDER_COLOR)
+                            pixmap.loadFromData(bordered_thumb)
+                        else:
+                            pixmap.loadFromData(marvin_thumb[2])
+                        self.marvin_cover.setPixmap(pixmap)
+                    except:
+                        # No cover available, use generic
+                        import traceback
+                        self._log(traceback.format_exc())
+
+                        self._log("failed to fetch LargeCoverJpg for %s (%s)" %
+                                  (self.installed_book.title, self.book_id))
+                        pixmap = QPixmap()
+                        pixmap.load(I('book.png'))
+                        pixmap = pixmap.scaled(self.COVER_ICON_SIZE,
+                                               self.COVER_ICON_SIZE,
+                                               aspectRatioMode=Qt.KeepAspectRatio,
+                                               transformMode=Qt.SmoothTransformation)
+                        self.marvin_cover.setPixmap(pixmap)
+                        self.marvin_cover_jpg = None
+
                 else:
                     self._log("no cover data fetched from mainDb")
 
+        self.calibre_cover.setMaximumSize(QSize(self.COVER_ICON_SIZE, self.COVER_ICON_SIZE))
+        self.calibre_cover.setText('')
+        self.calibre_cover.setScaledContents(False)
+
+        self.marvin_cover.setMaximumSize(QSize(self.COVER_ICON_SIZE, self.COVER_ICON_SIZE))
+        self.marvin_cover.setText('')
+        self.marvin_cover.setScaledContents(False)
+
+        if self.cid:
+            if 'cover_hash' not in self.mismatches:
+                db = self.opts.gui.current_db
+                mi = db.get_metadata(self.cid, index_is_id=True, get_cover=True, cover_as_data=True)
+                calibre_thumb = thumbnail(mi.cover_data[1],
+                                          self.COVER_ICON_SIZE,
+                                          self.COVER_ICON_SIZE)
+                pixmap = QPixmap()
+                pixmap.loadFromData(calibre_thumb[2])
+                self.calibre_cover.setPixmap(pixmap)
+
+                # Marvin cover matches calibre cover
+                self.marvin_cover.setPixmap(pixmap)
+            else:
+                # Covers don't match - render with border
+                db = self.opts.gui.current_db
+                mi = db.get_metadata(self.cid, index_is_id=True, get_cover=True, cover_as_data=True)
+                calibre_thumb = thumbnail(mi.cover_data[1],
+                                          self.COVER_ICON_SIZE,
+                                          self.COVER_ICON_SIZE)
+                bordered_thumb = add_borders_to_image(calibre_thumb[2],
+                                                      left=self.BORDER_LR,
+                                                      right=self.BORDER_LR,
+                                                      top=self.BORDER_TB,
+                                                      bottom=self.BORDER_TB,
+                                                      border_color=self.BORDER_COLOR)
+
+                pixmap = QPixmap()
+                pixmap.loadFromData(bordered_thumb)
+                self.calibre_cover.setPixmap(pixmap)
+                _fetch_marvin_cover(with_border=True)
+        else:
+            _fetch_marvin_cover()
+
     def _populate_description(self):
+
+        # Set the bg color of the description text fields to the dialog bg color
+        bgcolor = self.palette().color(QPalette.Background)
+        palette = QPalette()
+        palette.setColor(QPalette.Base, bgcolor)
+        self.calibre_description.setPalette(palette)
+        self.marvin_description.setPalette(palette)
+
         if 'comments' in self.mismatches:
-            self.calibre_description.setText(self.mismatches['comments']['calibre'])
-            self.marvin_description.setText(self.mismatches['comments']['Marvin'])
-        elif 'comments' in self.matches:
-            description = self.matches['comments']
-            self.calibre_description.setText(description)
-            self.marvin_description.setText(description)
+            self.calibre_description_label.setText(self.YELLOW_BG.format("Description"))
+            if not self.mismatches['comments']['calibre']:
+                self.calibre_description.setVisible(False)
+                self.calibre_description_label.setText(self.YELLOW_BG.format("No description available"))
+            else:
+                self.calibre_description.setText(self.mismatches['comments']['calibre'])
+
+            self.marvin_description_label.setText(self.YELLOW_BG.format("Description"))
+            if not self.mismatches['comments']['Marvin']:
+                self.marvin_description.setVisible(False)
+                self.marvin_description_label.setText(self.YELLOW_BG.format("No description available"))
+            else:
+                self.marvin_description.setText(self.mismatches['comments']['Marvin'])
+        else:
+            if self.installed_book.comments:
+                self.calibre_description.setText(self.installed_book.comments)
+                self.marvin_description.setText(self.installed_book.comments)
+            else:
+                self.calibre_description.setVisible(False)
+                self.calibre_description_label.setText("No description available")
+                self.marvin_description.setVisible(False)
+                self.marvin_description_label.setText("No description available")
 
     def _populate_pubdate(self):
         if 'pubdate' in self.mismatches:
-            cs_pubdate = "Published %s-%s-%s" % self.mismatches['pubdate']['calibre']
+            cs_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['calibre'])
             self.calibre_pubdate.setText(self.YELLOW_BG.format(cs_pubdate))
-            ms_pubdate = "Published %s-%s-%s" % self.mismatches['pubdate']['Marvin']
+            ms_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['Marvin'])
             self.marvin_pubdate.setText(self.YELLOW_BG.format(ms_pubdate))
+        elif self.installed_book.pubdate:
+            pubdate = "Published %s" % strftime("%e %B %Y", t=self.installed_book.pubdate)
+            self.calibre_pubdate.setText(pubdate)
+            self.marvin_pubdate.setText(pubdate)
         else:
-            pubdate = "Published %s-%s-%s" % self.matches['pubdate']
+            pubdate = "Publication date not available"
             self.calibre_pubdate.setText(pubdate)
             self.marvin_pubdate.setText(pubdate)
 
@@ -270,7 +354,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                 ms_publisher = "Unknown publisher"
             self.marvin_publisher.setText(self.YELLOW_BG.format(ms_publisher))
         else:
-            publisher = self.matches['publisher']
+            publisher = self.installed_book.publisher
             if not publisher:
                 publisher = "Unknown publisher"
             self.calibre_publisher.setText(publisher)
@@ -281,18 +365,18 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             cs_index = str(self.mismatches['series_index']['calibre'])
             if cs_index.endswith('.0'):
                 cs_index = cs_index[:-2]
-            cs = "%s [%s]" % (self.mismatches['series']['calibre'], cs_index)
+            cs = "%s (%s)" % (self.mismatches['series']['calibre'], cs_index)
             self.calibre_series.setText(self.YELLOW_BG.format(cs))
             ms_index = str(self.mismatches['series_index']['Marvin'])
             if ms_index.endswith('.0'):
                 ms_index = ms_index[:-2]
-            ms = "%s [%s]" % (self.mismatches['series']['Marvin'], ms_index)
+            ms = "%s (%s)" % (self.mismatches['series']['Marvin'], ms_index)
             self.marvin_series.setText(self.YELLOW_BG.format(ms))
-        elif 'series' in self.matches:
-            cs_index = str(self.matches['series_index'])
+        elif self.installed_book.series:
+            cs_index = str(self.installed_book.series_index)
             if cs_index.endswith('.0'):
                 cs_index = cs_index[:-2]
-            cs = "%s [%s]" % (self.matches['series'], cs_index)
+            cs = "%s (%s)" % (self.installed_book.series, cs_index)
             self.calibre_series.setText(cs)
             self.marvin_series.setText(cs)
         else:
@@ -301,30 +385,46 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
 
     def _populate_subjects(self):
         if 'tags' in self.mismatches:
-            cs = "Subjects: %s" % ', '.join(self.mismatches['tags']['calibre'])
-            self.calibre_subjects.setText(cs)
-            ms = "Subjects: %s" % ', '.join(self.mismatches['tags']['Marvin'])
-            self.marvin_subjects.setText(ms)
+            cs = "<b>Subjects:</b> %s" % ', '.join(self.mismatches['tags']['calibre'])
+            self.calibre_subjects.setText(self.YELLOW_BG.format(cs))
+            ms = "<b>Subjects:</b> %s" % ', '.join(self.mismatches['tags']['Marvin'])
+            self.marvin_subjects.setText(self.YELLOW_BG.format(ms))
+
+            calibre_height = self.calibre_subjects.sizeHint().height()
+            marvin_height = self.marvin_subjects.sizeHint().height()
+#             self._log("calibre_height: %s" % calibre_height)
+#             self._log("marvin_height: %s" % marvin_height)
+#             if calibre_height > marvin_height:
+#                 self.marvin_subjects.setMinimumHeight(calibre_height)
+#                 self.marvin_subjects.setMaximumHeight(calibre_height)
+#             elif marvin_height > calibre_height:
+#                 self.calibre_subjects.setMinimumHeight(marvin_height)
+#                 self.calibre_subjects.setMaximumHeight(marvin_height)
+
         else:
-            cs = "Subjects: %s" % ', '.join(self.matches['tags'])
+            cs = "<b>Subjects:</b> %s" % ', '.join(self.installed_book.tags)
             self.calibre_subjects.setText(cs)
             self.marvin_subjects.setText(cs)
 
     def _populate_title(self):
         if 'title' in self.mismatches:
-            self.calibre_title.setText(self.mismatches['title']['calibre'])
-            self.marvin_title.setText(self.mismatches['title']['Marvin'])
+            ct = self.mismatches['title']['calibre']
+            self.calibre_title.setText(self.YELLOW_BG.format(ct))
+            mt = self.mismatches['title']['Marvin']
+            self.marvin_title.setText(self.YELLOW_BG.format(mt))
         else:
-            title = self.matches['title']
+            title = self.installed_book.title
             self.calibre_title.setText(title)
             self.marvin_title.setText(title)
 
     def _populate_title_sort(self):
         if 'title_sort' in self.mismatches:
-            self.calibre_title_sort.setText(self.mismatches['title_sort']['calibre'])
-            self.marvin_title_sort.setText(self.mismatches['title_sort']['Marvin'])
+            cts = self.mismatches['title_sort']['calibre']
+            self.calibre_title_sort.setText(self.YELLOW_BG.format(cts))
+            mts = self.mismatches['title_sort']['Marvin']
+            self.marvin_title_sort.setText(self.YELLOW_BG.format(mts))
         else:
-            title_sort = self.matches['title_sort']
-            self.calibre_title_sort.setText(title_sort)
-            self.marvin_title_sort.setText(title_sort)
+            title_sort = self.installed_book.title_sort
+            self.calibre_title_sort.setText(self.GREY_FG.format(title_sort))
+            self.marvin_title_sort.setText(self.GREY_FG.format(title_sort))
 

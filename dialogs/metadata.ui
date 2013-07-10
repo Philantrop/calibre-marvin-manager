@@ -159,10 +159,16 @@
         </item>
         <item>
          <widget class="QLabel" name="calibre_subjects">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
           <property name="font">
            <font>
             <family>Helvetica</family>
-            <pointsize>12</pointsize>
+            <pointsize>13</pointsize>
            </font>
           </property>
           <property name="text">
@@ -180,7 +186,7 @@
             <property name="font">
              <font>
               <family>Helvetica</family>
-              <pointsize>12</pointsize>
+              <pointsize>13</pointsize>
              </font>
             </property>
             <property name="text">
@@ -193,7 +199,7 @@
             <property name="font">
              <font>
               <family>Helvetica</family>
-              <pointsize>12</pointsize>
+              <pointsize>13</pointsize>
              </font>
             </property>
             <property name="text">
@@ -202,6 +208,21 @@
            </widget>
           </item>
          </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="calibre_description_label">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Description</string>
+          </property>
+         </widget>
         </item>
         <item>
          <widget class="QTextBrowser" name="calibre_description">
@@ -214,12 +235,11 @@
             <height>16777215</height>
            </size>
           </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="export_to_marvin_button">
-          <property name="text">
-           <string>Export from Calibre to Marvin</string>
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+           </font>
           </property>
          </widget>
         </item>
@@ -235,6 +255,13 @@
            </size>
           </property>
          </spacer>
+        </item>
+        <item>
+         <widget class="QPushButton" name="export_to_marvin_button">
+          <property name="text">
+           <string>Export from Calibre to Marvin</string>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -381,10 +408,16 @@
         </item>
         <item>
          <widget class="QLabel" name="marvin_subjects">
+          <property name="sizePolicy">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
+            <horstretch>0</horstretch>
+            <verstretch>0</verstretch>
+           </sizepolicy>
+          </property>
           <property name="font">
            <font>
             <family>Helvetica</family>
-            <pointsize>12</pointsize>
+            <pointsize>13</pointsize>
            </font>
           </property>
           <property name="text">
@@ -402,7 +435,7 @@
             <property name="font">
              <font>
               <family>Helvetica</family>
-              <pointsize>12</pointsize>
+              <pointsize>13</pointsize>
              </font>
             </property>
             <property name="text">
@@ -415,7 +448,7 @@
             <property name="font">
              <font>
               <family>Helvetica</family>
-              <pointsize>12</pointsize>
+              <pointsize>13</pointsize>
              </font>
             </property>
             <property name="text">
@@ -424,6 +457,21 @@
            </widget>
           </item>
          </layout>
+        </item>
+        <item>
+         <widget class="QLabel" name="marvin_description_label">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+            <weight>75</weight>
+            <bold>true</bold>
+           </font>
+          </property>
+          <property name="text">
+           <string>Description</string>
+          </property>
+         </widget>
         </item>
         <item>
          <widget class="QTextBrowser" name="marvin_description">
@@ -436,12 +484,11 @@
             <height>16777215</height>
            </size>
           </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QPushButton" name="import_from_marvin_button">
-          <property name="text">
-           <string>Import from Marvin to Calibre</string>
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+           </font>
           </property>
          </widget>
         </item>
@@ -458,6 +505,13 @@
           </property>
          </spacer>
         </item>
+        <item>
+         <widget class="QPushButton" name="import_from_marvin_button">
+          <property name="text">
+           <string>Import from Marvin to Calibre</string>
+          </property>
+         </widget>
+        </item>
        </layout>
       </widget>
      </item>
@@ -466,7 +520,7 @@
    <item row="1" column="0">
     <widget class="QDialogButtonBox" name="bb">
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+      <set>QDialogButtonBox::Close</set>
      </property>
     </widget>
    </item>

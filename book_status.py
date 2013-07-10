@@ -621,27 +621,22 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
         cid = self._selected_cid(index.row())
-        if cid:
-            klass = os.path.join(dialog_resources_path, 'metadata_dialog.py')
-            if os.path.exists(klass):
-                #self._log("importing metadata dialog from '%s'" % klass)
-                sys.path.insert(0, dialog_resources_path)
-                this_dc = importlib.import_module('metadata_dialog')
-                dlg = this_dc.MetadataComparisonDialog(self, 'metadata_comparison')
-                book_id = self._selected_book_id(index.row())
-                cid = self._selected_cid(index.row())
-                dlg.initialize(self,
-                               book_id,
-                               cid,
-                               self.installed_books[book_id],
-                               self.parent.connected_device.local_db_path)
-                dlg.exec_()
-            else:
-                self._log("ERROR: Can't import from '%s'" % klass)
-
+        klass = os.path.join(dialog_resources_path, 'metadata_dialog.py')
+        if os.path.exists(klass):
+            #self._log("importing metadata dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('metadata_dialog')
+            dlg = this_dc.MetadataComparisonDialog(self, 'metadata_comparison')
+            book_id = self._selected_book_id(index.row())
+            cid = self._selected_cid(index.row())
+            dlg.initialize(self,
+                           book_id,
+                           cid,
+                           self.installed_books[book_id],
+                           self.parent.connected_device.local_db_path)
+            dlg.exec_()
         else:
-            self._log("this book exists in Marvin only")
-
+            self._log("ERROR: Can't import from '%s'" % klass)
 
     def size_hint(self):
         return QtCore.QSize(self.perfect_width, self.height())
@@ -1081,6 +1076,12 @@ class BookStatusDialog(SizePersistedDialog):
             title = _generate_title(book_data)
 
             # List order matches self.LIBRARY_HEADER
+            article_count = 0
+            if 'Wiki' in book_data.articles:
+                article_count += len(book_data.articles['Wiki'])
+            if 'Pinned' in book_data.articles:
+                article_count += len(book_data.articles['Pinned'])
+
             this_book = [
                 book_data.uuid,
                 book_data.cid,
@@ -1091,12 +1092,12 @@ class BookStatusDialog(SizePersistedDialog):
                 progress,
                 last_opened,
                 book_data.word_count if book_data.word_count > '0' else '',
-                self.CHECKMARK if book_data.has_highlights else '',
+                book_data.highlights if book_data.highlights > 0 else '',
                 collection_match,
                 flags,
                 self.CHECKMARK if book_data.deep_view_prepared else '',
-                self.CHECKMARK if book_data.articles else '',
-                self.CHECKMARK if len(book_data.vocabulary) else '',
+                article_count if article_count else '',
+                len(book_data.vocabulary) if len(book_data.vocabulary) else '',
                 match_quality
                 ]
             tabledata.append(this_book)
@@ -1510,7 +1511,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         def _get_highlights(cur, book_id):
             '''
-            Test for existing highlights in book_id
+            Return # of highlights associated with book_id
             '''
             hl_cur = con.cursor()
             hl_cur.execute('''SELECT
@@ -1519,10 +1520,7 @@ class BookStatusDialog(SizePersistedDialog):
                               WHERE BookID = '{0}'
                            '''.format(book_id))
             hl_rows = hl_cur.fetchall()
-            if len(hl_rows):
-                return True
-            else:
-                return False
+            return len(hl_rows)
 
         def _get_marvin_genres(book_id):
             # Return sorted genre(s) for this book
@@ -1572,98 +1570,72 @@ class BookStatusDialog(SizePersistedDialog):
                 return cover_hash
 
             #self._log_location(row[b'Title'])
-            matches = {}
             mismatches = {}
             if mi is not None:
                 if mi.authors != this_book.authors:
                     mismatches['authors'] = {'calibre': mi.authors,
-                                     'Marvin': this_book.authors}
-                else:
-                    matches['authors'] = mi.authors
+                                             'Marvin': this_book.authors}
 
                 if mi.author_sort != row[b'AuthorSort']:
                     mismatches['author_sort'] = {'calibre': mi.author_sort,
                                                  'Marvin': row[b'AuthorSort']}
-                else:
-                    matches['author_sort'] = mi.author_sort
 
                 # Get both pubdates as datetime.datetime objects, compare .year, .month, .day
                 if bool(row[b'DatePublished']) or bool(mi.pubdate):
                     try:
                         mb_pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
                     except:
-                        mb_pubdate = Struct(year=0, month=0, day=0)
+                        mb_pubdate = None
 
-                    if (mi.pubdate.year != mb_pubdate.year or
-                        mi.pubdate.month != mb_pubdate.month or
-                        mi.pubdate.day != mb_pubdate.day):
-                        mismatches['pubdate'] = {'calibre': (mi.pubdate.year, mi.pubdate.month, mi.pubdate.day),
-                                                 'Marvin': (mb_pubdate.year, mb_pubdate.month, mb_pubdate.day) }
-                    else:
-                        matches['pubdate'] = (mi.pubdate.year, mi.pubdate.month, mi.pubdate.day)
+                    naive = mi.pubdate.replace(tzinfo=None)
+                    if naive != mb_pubdate:
+                        mismatches['pubdate'] = {'calibre': mi.pubdate,
+                                                 'Marvin': mb_pubdate}
 
                 if mi.publisher != row[b'Publisher']:
                     mismatches['publisher'] = {'calibre': mi.publisher,
                                                'Marvin': row[b'Publisher']}
-                else:
-                    matches['publisher'] = mi.publisher
 
                 if bool(mi.series) or bool(row[b'CalibreSeries']):
                     if mi.series != row[b'CalibreSeries']:
                         mismatches['series'] = {'calibre': mi.series,
                                                 'Marvin': row[b'CalibreSeries']}
-                    else:
-                        matches['series'] = mi.series
 
                 if bool(mi.series_index) or bool(float(row[b'CalibreSeriesIndex'])):
                     if mi.series_index != float(row[b'CalibreSeriesIndex']):
                         mismatches['series_index'] = {'calibre': mi.series_index,
                                                       'Marvin': row[b'CalibreSeriesIndex']}
-                    else:
-                        matches['series_index'] = mi.series_index
 
                 if mi.title != row[b'Title']:
                     mismatches['title'] = {'calibre': mi.title,
                                            'Marvin': row[b'Title']}
-                else:
-                    matches['title'] = mi.title
 
                 if mi.title_sort != row[b'CalibreTitleSort']:
                     mismatches['title_sort'] = {'calibre': mi.title_sort,
                                                 'Marvin': row[b'CalibreTitleSort']}
-                else:
-                    matches['title_sort'] = mi.title_sort
 
                 if bool(mi.comments) or bool(row[b'Description']):
                     if mi.comments != row[b'Description']:
                         mismatches['comments'] = {'calibre': mi.comments,
                                                   'Marvin': row[b'Description']}
-                    else:
-                        matches['comments'] = mi.comments
 
                 if sorted(mi.tags, key=sort_key) != _get_marvin_genres(book_id):
-                    mismatches['tags'] = {'calibre': mi.tags,
+                    mismatches['tags'] = {'calibre': sorted(mi.tags, key=sort_key),
                                           'Marvin': _get_marvin_genres(book_id)}
-                else:
-                    matches['tags'] = mi.tags
 
                 if mi.uuid != row[b'UUID']:
                     mismatches['uuid'] = {'calibre': mi.uuid,
                                           'Marvin': row[b'UUID']}
-                else:
-                    matches['uuid'] = mi.uuid
 
                 cover_hash = _get_cover_hash(mi, this_book)
                 if cover_hash != row[b'CalibreCoverHash']:
                     mismatches['cover_hash'] = {'calibre':cover_hash,
                                                 'Marvin': row[b'CalibreCoverHash']}
-                else:
-                    matches['cover_hash'] = cover_hash
 
             else:
                 self._log("(no calibre metadata for %s)" % row[b'Title'])
 
-            return matches, mismatches
+            return mismatches
 
         def _get_on_device_status(cid):
             '''
@@ -1678,6 +1650,14 @@ class BookStatusDialog(SizePersistedDialog):
                 mi = db.get_metadata(cid, index_is_id=True)
                 ans = mi.ondevice_col
             return ans
+
+        def _get_pubdate(row):
+            try:
+                pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
+                #pubdate = (pd.year, pd.month, pd.day)
+            except:
+                pubdate = None
+            return pubdate
 
         def _get_vocabulary_list(cur, book_id):
             # Get the vocabulary content
@@ -1794,20 +1774,21 @@ class BookStatusDialog(SizePersistedDialog):
                 this_book.author_sort = row[b'AuthorSort']
                 this_book.cid = cid
                 this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
+                this_book.comments = row[b'Description']
                 this_book.cover_file = row[b'CoverFile']
                 this_book.device_collections = _get_collections(cur, book_id)
                 this_book.date_opened = row[b'DateOpened']
                 this_book.deep_view_prepared = row[b'DeepViewPrepared']
                 this_book.flags = _get_flags(cur, row)
                 this_book.hash = hashes[row[b'FileName']]['hash']
-                this_book.has_highlights = _get_highlights(cur, book_id)
-                matches, mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
-                this_book.metadata_matches = matches
-                this_book.metadata_mismatches = mismatches
+                this_book.highlights = _get_highlights(cur, book_id)
+                this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
                 this_book.mid = book_id
                 this_book.on_device = _get_on_device_status(this_book.cid)
                 this_book.path = row[b'FileName']
                 this_book.progress = row[b'Progress']
+                this_book.pubdate = _get_pubdate(row)
+                this_book.tags = _get_marvin_genres(book_id)
                 this_book.title_sort = row[b'CalibreTitleSort']
                 this_book.uuid = row[b'UUID']
                 this_book.vocabulary = _get_vocabulary_list(cur, book_id)
