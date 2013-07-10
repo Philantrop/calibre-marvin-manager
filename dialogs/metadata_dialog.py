@@ -9,6 +9,7 @@ __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
 import os, sqlite3, sys
+from functools import partial
 
 from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
@@ -17,7 +18,8 @@ from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (Qt, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap, QSize)
+from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
+                      QSize, QSizePolicy)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -89,6 +91,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.marvin_db_path = marvin_db_path
         self.opts = parent.opts
         self.parent = parent
+        self.stored_command = None
         self.verbose = parent.verbose
         self.BORDER_COLOR = "#FDFF99"
         self.BORDER_LR = 4
@@ -113,17 +116,16 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self._populate_description()
 
         # ~~~~~~~~ Export to Marvin button ~~~~~~~~
-        #self.export_to_marvin_button = self.bb.addButton('Export to Marvin', QDialogButtonBox.ActionRole)
-        #self.export_to_marvin_button.setObjectName('export_to_marvin_button')
         self.export_to_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_calibre.png')))
+        self.export_to_marvin_button.clicked.connect(partial(self.store_command, 'export_to_marvin'))
+
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
-        #self.import_from_marvin_button = self.bb.addButton('Import from Marvin', QDialogButtonBox.ActionRole)
-        #self.import_from_marvin_button.setObjectName('import_from_marvin_button')
         self.import_from_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_marvin.png')))
+        self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_from_marvin'))
 
         # If no calibre book, or no mismatches, hide the Calibre group and action buttons
         if  not self.cid or not self.mismatches:
@@ -133,10 +135,24 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         else:
             self.setWindowTitle(u'Metadata Comparison')
 
+        # Set the Marvin QGroupBox to Marvin red
+#         marvin_red = QColor()
+#         marvin_red.setRgb(189, 17, 20, alpha=255)
+#         palette = QPalette()
+#         palette.setColor(QPalette.Background, marvin_red)
+#         self.marvin_gb.setPalette(palette)
+
         self.bb.clicked.connect(self.dispatch_button_click)
 
         # Restore position
         self.resize_dialog()
+
+    def store_command(self, command):
+        '''
+        '''
+        self._log_location(command)
+        self.stored_command = command
+        self.close()
 
     def _log(self, msg=None):
         '''
@@ -329,9 +345,16 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
 
     def _populate_pubdate(self):
         if 'pubdate' in self.mismatches:
-            cs_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['calibre'])
+            if self.mismatches['pubdate']['calibre']:
+                cs_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['calibre'])
+            else:
+                cs_pubdate = "Unknown date of publication"
             self.calibre_pubdate.setText(self.YELLOW_BG.format(cs_pubdate))
-            ms_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['Marvin'])
+
+            if self.mismatches['pubdate']['Marvin']:
+                ms_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['Marvin'])
+            else:
+                ms_pubdate = "Unknown date of publication"
             self.marvin_pubdate.setText(self.YELLOW_BG.format(ms_pubdate))
         elif self.installed_book.pubdate:
             pubdate = "Published %s" % strftime("%e %B %Y", t=self.installed_book.pubdate)
@@ -384,6 +407,16 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             self.marvin_series.setVisible(False)
 
     def _populate_subjects(self):
+        '''
+        '''
+
+        # Setting size policy allows us to set each Subjects fields to the same height
+        sp = QSizePolicy()
+        sp.setVerticalStretch(False)
+        sp.setHeightForWidth(False)
+        self.calibre_subjects.setSizePolicy(sp)
+        self.marvin_subjects.setSizePolicy(sp)
+
         if 'tags' in self.mismatches:
             cs = "<b>Subjects:</b> %s" % ', '.join(self.mismatches['tags']['calibre'])
             self.calibre_subjects.setText(self.YELLOW_BG.format(cs))
@@ -392,14 +425,12 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
 
             calibre_height = self.calibre_subjects.sizeHint().height()
             marvin_height = self.marvin_subjects.sizeHint().height()
-#             self._log("calibre_height: %s" % calibre_height)
-#             self._log("marvin_height: %s" % marvin_height)
-#             if calibre_height > marvin_height:
-#                 self.marvin_subjects.setMinimumHeight(calibre_height)
-#                 self.marvin_subjects.setMaximumHeight(calibre_height)
-#             elif marvin_height > calibre_height:
-#                 self.calibre_subjects.setMinimumHeight(marvin_height)
-#                 self.calibre_subjects.setMaximumHeight(marvin_height)
+            if calibre_height > marvin_height:
+                self.marvin_subjects.setMinimumHeight(calibre_height)
+                self.marvin_subjects.setMaximumHeight(calibre_height)
+            elif marvin_height > calibre_height:
+                self.calibre_subjects.setMinimumHeight(marvin_height)
+                self.calibre_subjects.setMaximumHeight(marvin_height)
 
         else:
             cs = "<b>Subjects:</b> %s" % ', '.join(self.installed_book.tags)

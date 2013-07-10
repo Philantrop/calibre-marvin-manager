@@ -54,6 +54,11 @@ class MyTableView(QTableView):
         row = index.row()
         menu = QMenu(self)
 
+        if col == self.parent.ANNOTATIONS_COL:
+            ac = menu.addAction("Learn about importing annotations")
+            ac.setIcon(QIcon(I('help.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "fetch_annotations", row))
+
         if col == self.parent.ARTICLES_COL:
             ac = menu.addAction("Show articles")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
@@ -431,14 +436,16 @@ class BookStatusDialog(SizePersistedDialog):
         elif action in ['clear_new_flag', 'clear_reading_list_flag',
                         'clear_read_flag', 'clear_all_flags']:
             self._clear_flags(action)
+        elif action == 'clear_all_collections':
+            self._clear_all_collections(row)
+        elif action == 'fetch_annotations':
+            self._fetch_annotations()
         elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._set_flags(action)
         elif action == 'show_articles':
             self._show_articles(row)
         elif action == 'show_collections':
             self._show_collections(row)
-        elif action == 'clear_all_collections':
-            self._clear_all_collections(row)
 #         elif action == 'show_deep_view':
 #             self._show_deep_view(row)
         elif action == 'show_metadata':
@@ -635,6 +642,8 @@ class BookStatusDialog(SizePersistedDialog):
                            self.installed_books[book_id],
                            self.parent.connected_device.local_db_path)
             dlg.exec_()
+            self._log("Results of metadata dialog: %s" % dlg.stored_command)
+
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -1024,23 +1033,23 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 #base_name = "progress000.png"
                 base_name = "progress_none.png"
-                if book_data.progress >= 0.01 and book_data.progress < 0.10:
+                if book_data.progress >= 0.01 and book_data.progress < 0.11:
                     base_name = "progress010.png"
-                elif book_data.progress >= 0.10 and book_data.progress < 0.20:
+                elif book_data.progress >= 0.11 and book_data.progress < 0.22:
                     base_name = "progress020.png"
-                elif book_data.progress >= 0.20 and book_data.progress < 0.30:
+                elif book_data.progress >= 0.22 and book_data.progress < 0.33:
                     base_name = "progress030.png"
-                elif book_data.progress >= 0.30 and book_data.progress < 0.40:
+                elif book_data.progress >= 0.33 and book_data.progress < 0.44:
                     base_name = "progress040.png"
-                elif book_data.progress >= 0.40 and book_data.progress < 0.50:
+                elif book_data.progress >= 0.44 and book_data.progress < 0.55:
                     base_name = "progress050.png"
-                elif book_data.progress >= 0.50 and book_data.progress < 0.60:
+                elif book_data.progress >= 0.55 and book_data.progress < 0.66:
                     base_name = "progress060.png"
-                elif book_data.progress >= 0.60 and book_data.progress < 0.70:
+                elif book_data.progress >= 0.66 and book_data.progress < 0.77:
                     base_name = "progress070.png"
-                elif book_data.progress >= 0.70 and book_data.progress < 0.80:
+                elif book_data.progress >= 0.77 and book_data.progress < 0.88:
                     base_name = "progress080.png"
-                elif book_data.progress >= 0.80 and book_data.progress < 0.95:
+                elif book_data.progress >= 0.88 and book_data.progress < 0.95:
                     base_name = "progress090.png"
                 elif book_data.progress >= 0.95:
                     base_name = "progress100.png"
@@ -1241,6 +1250,18 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("delete cancelled")
         else:
             self._log("no books selected")
+
+    def _fetch_annotations(self):
+        '''
+        '''
+        self._log_location()
+        title = "Learn more about fetching annotations"
+        msg = ('<p>The Annotations plugin imports highlights and annotations from Marvin to calibre.<br/>' +
+               'For more information on the Annotations plugin, visit ' +
+               '<a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
+               "calibre's Plugin forum</a>.</p>")
+        MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
 
     def _fetch_marvin_content_hash(self, path):
         '''
@@ -1572,30 +1593,47 @@ class BookStatusDialog(SizePersistedDialog):
             #self._log_location(row[b'Title'])
             mismatches = {}
             if mi is not None:
+                # ~~~~~~~~ authors ~~~~~~~~
                 if mi.authors != this_book.authors:
                     mismatches['authors'] = {'calibre': mi.authors,
                                              'Marvin': this_book.authors}
 
+                # ~~~~~~~~ author_sort ~~~~~~~~
                 if mi.author_sort != row[b'AuthorSort']:
                     mismatches['author_sort'] = {'calibre': mi.author_sort,
                                                  'Marvin': row[b'AuthorSort']}
 
-                # Get both pubdates as datetime.datetime objects, compare .year, .month, .day
+                # ~~~~~~~~ cover_hash ~~~~~~~~
+                cover_hash = _get_cover_hash(mi, this_book)
+                if cover_hash != row[b'CalibreCoverHash']:
+                    mismatches['cover_hash'] = {'calibre':cover_hash,
+                                                'Marvin': row[b'CalibreCoverHash']}
+
+                # ~~~~~~~~ pubdate ~~~~~~~~
                 if bool(row[b'DatePublished']) or bool(mi.pubdate):
                     try:
-                        mb_pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
+                        mb_pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
+                        mb_pubdate = mb_pubdate.replace(hour=0, minute=0, second=0)
                     except:
                         mb_pubdate = None
+                    naive = mi.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
 
-                    naive = mi.pubdate.replace(tzinfo=None)
-                    if naive != mb_pubdate:
-                        mismatches['pubdate'] = {'calibre': mi.pubdate,
+                    if naive and mb_pubdate:
+                        td = naive - mb_pubdate
+                        if abs(td.days) > 1:
+                            mismatches['pubdate'] = {'calibre': naive,
+                                                     'Marvin': mb_pubdate}
+                    elif naive != mb_pubdate:
+                        # One of them is None
+                        mismatches['pubdate'] = {'calibre': naive,
                                                  'Marvin': mb_pubdate}
 
+                # ~~~~~~~~ publisher ~~~~~~~~
                 if mi.publisher != row[b'Publisher']:
                     mismatches['publisher'] = {'calibre': mi.publisher,
                                                'Marvin': row[b'Publisher']}
 
+                # ~~~~~~~~ series, series_index ~~~~~~~~
                 if bool(mi.series) or bool(row[b'CalibreSeries']):
                     if mi.series != row[b'CalibreSeries']:
                         mismatches['series'] = {'calibre': mi.series,
@@ -1606,31 +1644,32 @@ class BookStatusDialog(SizePersistedDialog):
                         mismatches['series_index'] = {'calibre': mi.series_index,
                                                       'Marvin': row[b'CalibreSeriesIndex']}
 
+                # ~~~~~~~~ title ~~~~~~~~
                 if mi.title != row[b'Title']:
                     mismatches['title'] = {'calibre': mi.title,
                                            'Marvin': row[b'Title']}
 
+                # ~~~~~~~~ title_sort ~~~~~~~~
                 if mi.title_sort != row[b'CalibreTitleSort']:
                     mismatches['title_sort'] = {'calibre': mi.title_sort,
                                                 'Marvin': row[b'CalibreTitleSort']}
 
+                # ~~~~~~~~ comments ~~~~~~~~
                 if bool(mi.comments) or bool(row[b'Description']):
                     if mi.comments != row[b'Description']:
                         mismatches['comments'] = {'calibre': mi.comments,
                                                   'Marvin': row[b'Description']}
 
+                # ~~~~~~~~ tags ~~~~~~~~
                 if sorted(mi.tags, key=sort_key) != _get_marvin_genres(book_id):
                     mismatches['tags'] = {'calibre': sorted(mi.tags, key=sort_key),
                                           'Marvin': _get_marvin_genres(book_id)}
 
+                # ~~~~~~~~ uuid ~~~~~~~~
                 if mi.uuid != row[b'UUID']:
                     mismatches['uuid'] = {'calibre': mi.uuid,
                                           'Marvin': row[b'UUID']}
 
-                cover_hash = _get_cover_hash(mi, this_book)
-                if cover_hash != row[b'CalibreCoverHash']:
-                    mismatches['cover_hash'] = {'calibre':cover_hash,
-                                                'Marvin': row[b'CalibreCoverHash']}
 
             else:
                 self._log("(no calibre metadata for %s)" % row[b'Title'])
@@ -1653,8 +1692,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         def _get_pubdate(row):
             try:
-                pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
-                #pubdate = (pd.year, pd.month, pd.day)
+                pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
             except:
                 pubdate = None
             return pubdate
