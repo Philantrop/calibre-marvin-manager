@@ -22,6 +22,18 @@
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QGroupBox" name="calibre_gb">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>379</width>
+         <height>16777215</height>
+        </size>
+       </property>
        <property name="title">
         <string>Calibre</string>
        </property>
@@ -174,12 +186,44 @@
          </widget>
         </item>
         <item>
+         <widget class="QLabel" name="calibre_publisher">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>publisher</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="calibre_pubdate">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>pubdate</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QLabel" name="calibre_subjects">
           <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Ignored">
+           <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
             <horstretch>0</horstretch>
             <verstretch>0</verstretch>
            </sizepolicy>
+          </property>
+          <property name="minimumSize">
+           <size>
+            <width>325</width>
+            <height>0</height>
+           </size>
           </property>
           <property name="font">
            <font>
@@ -197,36 +241,6 @@
            <bool>true</bool>
           </property>
          </widget>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="calibre_published_hl">
-          <item>
-           <widget class="QLabel" name="calibre_publisher">
-            <property name="font">
-             <font>
-              <family>Helvetica</family>
-              <pointsize>13</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>publisher</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="calibre_pubdate">
-            <property name="font">
-             <font>
-              <family>Helvetica</family>
-              <pointsize>13</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>pubdate</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
         </item>
         <item>
          <widget class="QLabel" name="calibre_description_label">
@@ -287,6 +301,18 @@
      </item>
      <item>
       <widget class="QGroupBox" name="marvin_gb">
+       <property name="sizePolicy">
+        <sizepolicy hsizetype="Ignored" vsizetype="Preferred">
+         <horstretch>0</horstretch>
+         <verstretch>0</verstretch>
+        </sizepolicy>
+       </property>
+       <property name="maximumSize">
+        <size>
+         <width>379</width>
+         <height>16777215</height>
+        </size>
+       </property>
        <property name="title">
         <string>Marvin</string>
        </property>
@@ -442,12 +468,38 @@
          </widget>
         </item>
         <item>
+         <widget class="QLabel" name="marvin_publisher">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>publisher</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="marvin_pubdate">
+          <property name="font">
+           <font>
+            <family>Helvetica</family>
+            <pointsize>13</pointsize>
+           </font>
+          </property>
+          <property name="text">
+           <string>pubdate</string>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QLabel" name="marvin_subjects">
-          <property name="sizePolicy">
-           <sizepolicy hsizetype="Preferred" vsizetype="Ignored">
-            <horstretch>0</horstretch>
-            <verstretch>0</verstretch>
-           </sizepolicy>
+          <property name="minimumSize">
+           <size>
+            <width>325</width>
+            <height>0</height>
+           </size>
           </property>
           <property name="font">
            <font>
@@ -465,36 +517,6 @@
            <bool>true</bool>
           </property>
          </widget>
-        </item>
-        <item>
-         <layout class="QHBoxLayout" name="marvin_published_hl">
-          <item>
-           <widget class="QLabel" name="marvin_publisher">
-            <property name="font">
-             <font>
-              <family>Helvetica</family>
-              <pointsize>13</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>publisher</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QLabel" name="marvin_pubdate">
-            <property name="font">
-             <font>
-              <family>Helvetica</family>
-              <pointsize>13</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>pubdate</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
         </item>
         <item>
          <widget class="QLabel" name="marvin_description_label">

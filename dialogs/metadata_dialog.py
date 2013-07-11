@@ -19,7 +19,8 @@ from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
 from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
-                      QSize, QSizePolicy)
+                      QSize, QSizePolicy,
+                      pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -30,6 +31,8 @@ if True:
 class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
     COVER_ICON_SIZE = 200
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
+    marvin_device_status_changed = pyqtSignal(str)
 
     def accept(self):
         self._log_location()
@@ -87,6 +90,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.setupUi(self)
         self.book_id = book_id
         self.cid = cid
+        self.connected_device = parent.opts.gui.device_manager.device
         self.installed_book = installed_book
         self.marvin_db_path = marvin_db_path
         self.opts = parent.opts
@@ -101,7 +105,11 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
 
         self._log_location(installed_book.title)
 
-        self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
+        # Subscribe to Marvin driver change events
+        self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
+            self.marvin_status_changed)
+
+        #self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
         self.mismatches = installed_book.metadata_mismatches
 
         self._populate_title()
@@ -129,24 +137,39 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_from_marvin'))
 
         # If no calibre book, or no mismatches, hide the Calibre group and action buttons
-        if  not self.cid or not self.mismatches:
+        if not self.cid or not self.mismatches:
+            self._log("self.cid: %s" % repr(self.cid))
+            self._log("self.mismatches: %s" % repr(self.mismatches))
             self.calibre_gb.setVisible(False)
             self.import_from_marvin_button.setVisible(False)
-            self.setWindowTitle(u'Metadata Summary')
+            self.setWindowTitle(u'Marvin metadata')
         else:
-            self.setWindowTitle(u'Metadata Comparison')
+            self.setWindowTitle(u'Metadata Summary')
 
-        # Set the Marvin QGroupBox to Marvin red
-#         marvin_red = QColor()
-#         marvin_red.setRgb(189, 17, 20, alpha=255)
-#         palette = QPalette()
-#         palette.setColor(QPalette.Background, marvin_red)
-#         self.marvin_gb.setPalette(palette)
+        if False:
+            # Set the Marvin QGroupBox to Marvin red
+            marvin_red = QColor()
+            marvin_red.setRgb(189, 17, 20, alpha=255)
+            palette = QPalette()
+            palette.setColor(QPalette.Background, marvin_red)
+            self.marvin_gb.setPalette(palette)
 
         self.bb.clicked.connect(self.dispatch_button_click)
 
         # Restore position
         self.resize_dialog()
+
+    def marvin_status_changed(self, command):
+        '''
+
+        '''
+        self.marvin_device_status_changed.emit(command)
+
+        self._log_location(command)
+
+        if command in ['disconnected', 'yanked']:
+            self._log("closing dialog: %s" % command)
+            self.close()
 
     def store_command(self, command):
         '''
@@ -321,66 +344,60 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.marvin_description.setPalette(palette)
 
         if 'comments' in self.mismatches:
-            self.calibre_description_label.setText(self.YELLOW_BG.format("Description"))
-            if not self.mismatches['comments']['calibre']:
-                self.calibre_description.setVisible(False)
-                self.calibre_description_label.setText(self.YELLOW_BG.format("No description available"))
-            else:
+            self.calibre_description_label.setText(self.YELLOW_BG.format("<b>Description</b>"))
+            if self.mismatches['comments']['calibre']:
                 self.calibre_description.setText(self.mismatches['comments']['calibre'])
 
-            self.marvin_description_label.setText(self.YELLOW_BG.format("Description"))
-            if not self.mismatches['comments']['Marvin']:
-                self.marvin_description.setVisible(False)
-                self.marvin_description_label.setText(self.YELLOW_BG.format("No description available"))
-            else:
+            self.marvin_description_label.setText(self.YELLOW_BG.format("<b>Description</b>"))
+            if self.mismatches['comments']['Marvin']:
                 self.marvin_description.setText(self.mismatches['comments']['Marvin'])
         else:
             if self.installed_book.comments:
                 self.calibre_description.setText(self.installed_book.comments)
                 self.marvin_description.setText(self.installed_book.comments)
-            else:
-                self.calibre_description.setVisible(False)
-                self.calibre_description_label.setText("No description available")
-                self.marvin_description.setVisible(False)
-                self.marvin_description_label.setText("No description available")
 
     def _populate_pubdate(self):
         if 'pubdate' in self.mismatches:
             if self.mismatches['pubdate']['calibre']:
-                cs_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['calibre'])
+                cs_pubdate = "<b>Published:</b> {0}".format(strftime("%e %B %Y", t=self.mismatches['pubdate']['calibre']))
             else:
-                cs_pubdate = "Unknown date of publication"
+                cs_pubdate = "<b>Published:</b> Date unknown"
             self.calibre_pubdate.setText(self.YELLOW_BG.format(cs_pubdate))
 
             if self.mismatches['pubdate']['Marvin']:
-                ms_pubdate = "Published %s" % strftime("%e %B %Y", t=self.mismatches['pubdate']['Marvin'])
+                ms_pubdate = "<b>Published:</b> {0}".format(strftime("%e %B %Y", t=self.mismatches['pubdate']['Marvin']))
             else:
-                ms_pubdate = "Unknown date of publication"
+                ms_pubdate = "<b>Published:</b> Date unknown"
             self.marvin_pubdate.setText(self.YELLOW_BG.format(ms_pubdate))
         elif self.installed_book.pubdate:
-            pubdate = "Published %s" % strftime("%e %B %Y", t=self.installed_book.pubdate)
+            pubdate = "<b>Published:</b> {0}".format(strftime("%e %B %Y", t=self.installed_book.pubdate))
             self.calibre_pubdate.setText(pubdate)
             self.marvin_pubdate.setText(pubdate)
         else:
-            pubdate = "Publication date not available"
+            pubdate = "<b>Published:</b> Date unknown"
             self.calibre_pubdate.setText(pubdate)
             self.marvin_pubdate.setText(pubdate)
 
     def _populate_publisher(self):
         if 'publisher' in self.mismatches:
-            cs_publisher = self.mismatches['publisher']['calibre']
-            if not cs_publisher:
-                cs_publisher = "Unknown publisher"
+            csp = self.mismatches['publisher']['calibre']
+            if not csp:
+                cs_publisher = "<b>Publisher:</b> Unknown"
+            else:
+                cs_publisher = "<b>Publisher:</b> {0}".format(csp)
             self.calibre_publisher.setText(self.YELLOW_BG.format(cs_publisher))
 
-            ms_publisher = self.mismatches['publisher']['Marvin']
-            if not ms_publisher:
-                ms_publisher = "Unknown publisher"
+            msp = self.mismatches['publisher']['Marvin']
+            if not msp:
+                ms_publisher = "<b>Publisher:</b> Unknown"
+            else:
+                ms_publisher = "<b>Publisher:</b> {0}".format(msp)
             self.marvin_publisher.setText(self.YELLOW_BG.format(ms_publisher))
         else:
-            publisher = self.installed_book.publisher
-            if not publisher:
-                publisher = "Unknown publisher"
+            if not self.installed_book.publisher:
+                publisher = "<b>Publisher:</b> Unknown"
+            else:
+                publisher = "<b>Publisher:</b> {0}".format(self.installed_book.publisher)
             self.calibre_publisher.setText(publisher)
             self.marvin_publisher.setText(publisher)
 
@@ -410,18 +427,18 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
     def _populate_subjects(self):
         '''
         '''
-
-        # Setting size policy allows us to set each Subjects fields to the same height
+        # Setting size policy allows us to match Subjects fields height
         sp = QSizePolicy()
+        sp.setHorizontalStretch(True)
         sp.setVerticalStretch(False)
         sp.setHeightForWidth(False)
         self.calibre_subjects.setSizePolicy(sp)
         self.marvin_subjects.setSizePolicy(sp)
 
         if 'tags' in self.mismatches:
-            cs = "<b>Subjects:</b> %s" % ', '.join(self.mismatches['tags']['calibre'])
+            cs = "<p><b>Subjects:</b> {0}</p>".format(', '.join(self.mismatches['tags']['calibre']))
             self.calibre_subjects.setText(self.YELLOW_BG.format(cs))
-            ms = "<b>Subjects:</b> %s" % ', '.join(self.mismatches['tags']['Marvin'])
+            ms = "<p><b>Subjects:</b> {0}</p>".format(', '.join(self.mismatches['tags']['Marvin']))
             self.marvin_subjects.setText(self.YELLOW_BG.format(ms))
 
             calibre_height = self.calibre_subjects.sizeHint().height()
@@ -432,9 +449,10 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             elif marvin_height > calibre_height:
                 self.calibre_subjects.setMinimumHeight(marvin_height)
                 self.calibre_subjects.setMaximumHeight(marvin_height)
-
         else:
-            cs = "<b>Subjects:</b> %s" % ', '.join(self.installed_book.tags)
+            self._log(repr(self.installed_book.tags))
+            cs = "<p><b>Subjects:</b> {0}</p>".format(', '.join(self.installed_book.tags))
+            self._log("cs: %s" % repr(cs))
             self.calibre_subjects.setText(cs)
             self.marvin_subjects.setText(cs)
 

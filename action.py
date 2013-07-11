@@ -80,7 +80,6 @@ class MarvinManagerAction(InterfaceAction):
         self.marvin_content_updated = False
         self.menus_lock = threading.RLock()
         self.sync_lock = threading.RLock()
-        self.connected_device = None
         self.indexed_library = None
         self.library_indexed = False
         self.library_last_modified = None

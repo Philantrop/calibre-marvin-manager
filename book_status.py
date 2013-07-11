@@ -489,6 +489,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.opts = parent.opts
         self.parent = parent
         self.prefs = parent.opts.prefs
+        self.library_scanner = parent.library_scanner
         self.library_title_map = None
         self.library_uuid_map = None
         self.local_cache_folder = self.parent.connected_device.temp_dir
@@ -1314,17 +1315,17 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         # Scan library books for hashes
-        if self.parent.library_scanner.isRunning():
+        if self.library_scanner.isRunning():
             self.library_scanner.wait()
 
         # Save a reference to the title, uuid map
-        self.library_title_map = self.parent.library_scanner.title_map
-        self.library_uuid_map = self.parent.library_scanner.uuid_map
+        self.library_title_map = self.library_scanner.title_map
+        self.library_uuid_map = self.library_scanner.uuid_map
 
         # Get the library hash_map
-        library_hash_map = self.parent.library_scanner.hash_map
+        library_hash_map = self.library_scanner.hash_map
         if library_hash_map is None:
-            library_hash_map = self._scan_library_books(self.parent.library_scanner)
+            library_hash_map = self._scan_library_books(self.library_scanner)
         else:
             self._log("hash_map already generated")
 
@@ -1335,7 +1336,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.marvin_hash_map = self._generate_marvin_hash_map(installed_books)
 
         # Update installed_books with library matches
-        self._find_fuzzy_matches(self.parent.library_scanner, installed_books)
+        self._find_fuzzy_matches(self.library_scanner, installed_books)
 
         return installed_books
 
@@ -1928,7 +1929,7 @@ class BookStatusDialog(SizePersistedDialog):
         Generate hashes for library epubs
         '''
         # Scan library books for hashes
-        if self.parent.library_scanner.isRunning():
+        if self.library_scanner.isRunning():
             self.library_scanner.wait()
 
         uuid_map = library_scanner.uuid_map
