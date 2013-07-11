@@ -449,7 +449,7 @@ class BookStatusDialog(SizePersistedDialog):
 #         elif action == 'show_deep_view':
 #             self._show_deep_view(row)
         elif action == 'show_metadata':
-            self._show_metadata(row)
+            self.show_metadata_dialog(row)
         elif action == 'show_vocabulary_words':
             self._show_vocabulary(row)
         elif action == 'synchronize_collections':
@@ -473,32 +473,7 @@ class BookStatusDialog(SizePersistedDialog):
         Display column data for selected book
         '''
         self._log_location()
-        if False:
-            col = index.column()
-            row = index.row()
-            clicked = {
-                        'book_id': self.tm.arraydata[row][self.BOOK_ID_COL],
-                        'cid': self.tm.arraydata[row][self.CALIBRE_ID_COL],
-                        'col': col,
-                        'column': self.LIBRARY_HEADER[col],
-                        'path': self.tm.arraydata[row][self.PATH_COL],
-                        'row': row,
-                        'title': str(self.tm.arraydata[row][self.TITLE_COL].text())
-                      }
-
-            if col == self.ARTICLES_COL:
-                self._show_articles(clicked)
-            elif col == self.COLLECTIONS_COL:
-                self._show_collections(clicked)
-            elif col == self.VOCABULARY_COL:
-                self._show_vocabulary(clicked)
-            elif col == self.WORD_COUNT_COL:
-                self._calculate_single_word_count(clicked)
-            else:
-                self._log_location(row, col)
-                self._log("No double-click handler for %s" % clicked['column'])
-        else:
-            self.show_metadata_dialog(index)
+        self.show_metadata_dialog(index.row())
 
     def esc(self, *args):
         '''
@@ -623,19 +598,19 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self.parent.show_help()
 
-    def show_metadata_dialog(self, index):
+    def show_metadata_dialog(self, row):
         '''
         '''
-        self._log_location()
-        cid = self._selected_cid(index.row())
+        self._log_location(row)
+        cid = self._selected_cid(row)
         klass = os.path.join(dialog_resources_path, 'metadata_dialog.py')
         if os.path.exists(klass):
             #self._log("importing metadata dialog from '%s'" % klass)
             sys.path.insert(0, dialog_resources_path)
             this_dc = importlib.import_module('metadata_dialog')
             dlg = this_dc.MetadataComparisonDialog(self, 'metadata_comparison')
-            book_id = self._selected_book_id(index.row())
-            cid = self._selected_cid(index.row())
+            book_id = self._selected_book_id(row)
+            cid = self._selected_cid(row)
             dlg.initialize(self,
                            book_id,
                            cid,
@@ -2172,6 +2147,7 @@ class BookStatusDialog(SizePersistedDialog):
         MessageBox(MessageBox.INFO, 'Collections', msg,
                        show_copy_button=False).exec_()
 
+    """
     def _show_metadata(self, row):
         '''
         '''
@@ -2198,7 +2174,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         MessageBox(MessageBox.INFO, "Show metadata", msg, det_msg=det_msg,
                        show_copy_button=False).exec_()
-
+    """
     def _show_vocabulary(self, row):
         '''
         Show vocabulary associated with selected book

@@ -109,6 +109,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self._populate_series()
         self._populate_authors()
         self._populate_author_sort()
+        self._populate_uuid()
         self._populate_covers()
         self._populate_subjects()
         self._populate_publisher()
@@ -459,3 +460,14 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             self.calibre_title_sort.setText(self.GREY_FG.format(title_sort))
             self.marvin_title_sort.setText(self.GREY_FG.format(title_sort))
 
+    def _populate_uuid(self):
+        if 'uuid' in self.mismatches:
+            if self.mismatches['uuid']['calibre']:
+                self.calibre_uuid.setText(self.YELLOW_BG.format('uuid'))
+            if self.mismatches['uuid']['Marvin']:
+                self.marvin_uuid.setText(self.YELLOW_BG.format('uuid'))
+            else:
+                self.marvin_uuid.setText(self.YELLOW_BG.format('no uuid'))
+        else:
+            self.calibre_uuid.setVisible(False)
+            self.marvin_uuid.setVisible(False)
