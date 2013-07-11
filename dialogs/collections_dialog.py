@@ -126,14 +126,11 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
                                                    'from_marvin.png')))
         self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_from_marvin'))
 
-        # Synchronize collections button
-        self.sc_button = self.bb.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
-        self.sc_button.setObjectName('synchronize_collections_button')
-        self.sc_button.setIcon(QIcon(os.path.join(self.opts.resources_path,
-                                                   'icons',
-                                                   'sync_collections.png')))
-
-        self.bb.clicked.connect(self.dispatch_button_click)
+        # ~~~~~~~~ Synchronize collections button ~~~~~~~~
+        self.synchronize_collections_button.setIcon(QIcon(os.path.join(self.opts.resources_path,
+                                                          'icons',
+                                                          'sync_collections.png')))
+        self.synchronize_collections_button.clicked.connect(partial(self.store_command, 'synchronize_collections'))
 
         # Get collections
         self._get_collection_assignments()

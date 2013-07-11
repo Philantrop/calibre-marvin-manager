@@ -471,7 +471,32 @@ class BookStatusDialog(SizePersistedDialog):
         Display column data for selected book
         '''
         self._log_location()
-        self.show_metadata_dialog(index.row())
+        if False:
+            col = index.column()
+            row = index.row()
+            clicked = {
+                        'book_id': self.tm.arraydata[row][self.BOOK_ID_COL],
+                        'cid': self.tm.arraydata[row][self.CALIBRE_ID_COL],
+                        'col': col,
+                        'column': self.LIBRARY_HEADER[col],
+                        'path': self.tm.arraydata[row][self.PATH_COL],
+                        'row': row,
+                        'title': str(self.tm.arraydata[row][self.TITLE_COL].text())
+                      }
+
+            if col == self.ARTICLES_COL:
+                self._show_articles(clicked)
+            elif col == self.COLLECTIONS_COL:
+                self._show_collections(clicked)
+            elif col == self.VOCABULARY_COL:
+                self._show_vocabulary(clicked)
+            elif col == self.WORD_COUNT_COL:
+                self._calculate_single_word_count(clicked)
+            else:
+                self._log_location(row, col)
+                self._log("No double-click handler for %s" % clicked['column'])
+        else:
+            self.show_metadata_dialog(index)
 
     def esc(self, *args):
         '''
