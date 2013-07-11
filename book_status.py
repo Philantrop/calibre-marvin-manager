@@ -442,16 +442,14 @@ class BookStatusDialog(SizePersistedDialog):
             self._fetch_annotations()
         elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._set_flags(action)
-        elif action == 'show_articles':
-            self._show_articles(row)
+        elif action in ['show_articles', 'show_vocabulary_words', 'show_deep_view']:
+            #self._show_articles(row)
+            self.show_html_dialog(action, row)
         elif action == 'show_collections':
-            self._show_collections(row)
-#         elif action == 'show_deep_view':
-#             self._show_deep_view(row)
+            #self._show_collections(row)
+            self.show_collections_dialog(row)
         elif action == 'show_metadata':
             self.show_metadata_dialog(row)
-        elif action == 'show_vocabulary_words':
-            self._show_vocabulary(row)
         elif action == 'synchronize_collections':
             self._synchronize_collections(row)
 
@@ -598,6 +596,83 @@ class BookStatusDialog(SizePersistedDialog):
         Display help file
         '''
         self.parent.show_help()
+
+    def show_collections_dialog(self, row):
+        '''
+        '''
+        self._log_location(row)
+        cid = self._selected_cid(row)
+        klass = os.path.join(dialog_resources_path, 'collections_dialog.py')
+        if os.path.exists(klass):
+            #self._log("importing metadata dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('collections_dialog')
+            dlg = this_dc.CollectionsManagementDialog(self, 'collections_management')
+            book_id = self._selected_book_id(row)
+            cid = self._selected_cid(row)
+            dlg.initialize(self,
+                           book_id,
+                           cid,
+                           self.installed_books[book_id],
+                           self.parent.connected_device.local_db_path)
+            dlg.exec_()
+            self._log("Results of collections dialog: %s" % dlg.stored_command)
+
+        else:
+            self._log("ERROR: Can't import from '%s'" % klass)
+
+    def show_html_dialog(self, action, row):
+        '''
+        '''
+        self._log_location(action)
+
+        book_id = self._selected_book_id(row)
+        content = "<none>"
+
+        if action == 'show_articles':
+            titles = {'title': 'Article Viewer', 'group_box_title': 'Articles'}
+            articles = self.installed_books[book_id].articles
+            if articles:
+                content = ''
+                if 'Pinned' in articles:
+                    content += "<p><b>Pinned:</b><br/>"
+                    content += '<br/>'.join(articles['Pinned'].keys()) + "</p>"
+                if 'Wiki' in articles:
+                    content += "<p><b>Wiki</b><br/>"
+                    content += '<br/>'.join(articles['Wiki'].keys()) + "</p>"
+            else:
+                content = ("<p>No articles.</p>")
+
+        elif action == 'show_deep_view':
+            titles = {'title': 'Deep Viewer', 'group_box_title': 'Deep View content'}
+            content = "Deep View content to be provided by Marvin"
+        elif action == 'show_vocabulary_words':
+            titles = {'title': 'Vocabulary Viewer', 'group_box_title': 'Vocabulary words'}
+            vocabulary = self.installed_books[book_id].vocabulary
+            if vocabulary:
+                content = ', '.join(sorted(vocabulary, key=sort_key))
+            else:
+                content = ("<p>No vocabulary words.</p>")
+
+        else:
+            titles = {'title': action, 'group_box_title': action}
+
+        klass = os.path.join(dialog_resources_path, 'html_viewer.py')
+        if os.path.exists(klass):
+            #self._log("importing metadata dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('html_viewer')
+            dlg = this_dc.HTMLViewerDialog(self, 'html_viewer')
+            dlg.initialize(self,
+                           titles,
+                           content,
+                           book_id,
+                           self.installed_books[book_id],
+                           self.parent.connected_device.local_db_path)
+            dlg.exec_()
+
+        else:
+            self._log("ERROR: Can't import from '%s'" % klass)
 
     def show_metadata_dialog(self, row):
         '''
@@ -2092,27 +2167,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
         self.repaint()
 
-    def _show_articles(self, row):
-        '''
-        Show articles associated with selected book
-        '''
-        self._log_location(row)
-        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
-        articles = self.installed_books[book_id].articles
-        if articles:
-            msg = ''
-            if 'Pinned' in articles:
-                msg += "<p><b>Pinned:</b><br/>"
-                msg += '<br/>'.join(articles['Pinned'].keys()) + "</p>"
-            if 'Wiki' in articles:
-                msg += "<p><b>Wiki</b><br/>"
-                msg += '<br/>'.join(articles['Wiki'].keys()) + "</p>"
-        else:
-            msg = ("<p>No articles.</p>")
-
-        MessageBox(MessageBox.INFO, 'Articles', msg,
-                       show_copy_button=False).exec_()
-
+    """
     def _show_collections(self, row):
         '''
         Show collections for calibre and Marvin
@@ -2147,51 +2202,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         MessageBox(MessageBox.INFO, 'Collections', msg,
                        show_copy_button=False).exec_()
-
     """
-    def _show_metadata(self, row):
-        '''
-        '''
-        self._log_location(row)
-
-        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
-        cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
-        title = self.installed_books[book_id].title
-
-        if not cid:
-            msg = "<p>'{0}': not found in calibre library</p>".format(title)
-            det_msg = ''
-        elif cid and not self.installed_books[book_id].metadata_mismatches:
-            msg = "<p>'{0}': metadata matches</p>".format(title)
-            det_msg = ''
-        else:
-            msg = "<p>'{0}': metadata mismatches detected. Click <b>Show details</b> for summary.</p>".format(title)
-            mm = self.installed_books[book_id].metadata_mismatches
-            det_msg = ''
-            for key in sorted(mm):
-                det_msg += "%s\n" % key
-                det_msg += " calibre: %s\n" % repr(mm[key]['calibre'])
-                det_msg += " Marvin: %s\n" % repr(mm[key]['Marvin'])
-
-        MessageBox(MessageBox.INFO, "Show metadata", msg, det_msg=det_msg,
-                       show_copy_button=False).exec_()
-    """
-    def _show_vocabulary(self, row):
-        '''
-        Show vocabulary associated with selected book
-        '''
-        self._log_location(row)
-        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
-        vocabulary = self.installed_books[book_id].vocabulary
-        title = self.installed_books[book_id].title
-        if vocabulary:
-            msg = "<p>Click <b>Show details</b> for vocabulary list.</p>"
-            det_msg = ', '.join(sorted(vocabulary, key=sort_key))
-        else:
-            msg = ("<p>No vocabulary words.</p>")
-            det_msg = ''
-        MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
-                       show_copy_button=False).exec_()
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
         self._log_location(command_name)
