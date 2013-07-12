@@ -68,7 +68,7 @@ class MyTableView(QTableView):
 
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
-            ac = menu.addAction("Manage collections")
+            ac = menu.addAction("View collection assignments")
             ac.setIcon(QIcon(I("exec.png")))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
 
@@ -98,6 +98,10 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_all_collections", row))
 
         elif col == self.parent.DEEP_VIEW_COL:
+            ac = menu.addAction("Generate Deep View")
+            ac.setIcon(QIcon(I('exec.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "create_deep_view", row))
+
             ac = menu.addAction("Show Deep View")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view", row))
@@ -127,8 +131,8 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_read_flag", row))
 
         elif col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
-            ac = menu.addAction("Show metadata")
-            ac.setIcon(QIcon(I('dialog_information.png')))
+            ac = menu.addAction("View metadata")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'update_metadata.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_metadata", row))
             ac = menu.addAction("Export metadata from calibre to Marvin")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
@@ -214,6 +218,14 @@ class SortableTableWidgetItem(QTableWidgetItem):
 class MarkupTableModel(QAbstractTableModel):
     #http://www.saltycrane.com/blog/2007/12/pyqt-43-qtableview-qabstracttablemodel/
 
+    SATURATION = 0.40
+    HSVALUE = 1.0
+    RED_HUE = 0.0
+    ORANGE_HUE = 0.08325
+    YELLOW_HUE = 0.1665
+    GREEN_HUE = 0.333
+    WHITE_HUE = 1.0
+
     def __init__(self, parent=None, centered_columns=[], right_aligned_columns=[], *args):
         """
         datain: a list of lists
@@ -240,23 +252,16 @@ class MarkupTableModel(QAbstractTableModel):
 
         elif role == Qt.BackgroundRole and self.show_match_colors:
             match_quality = self.arraydata[row][self.parent.MATCHED_COL]
-            saturation = 0.40
-            value = 1.0
-            red_hue = 0.0
-            orange_hue = 0.08325
-            yellow_hue = 0.1665
-            green_hue = 0.333
-            white_hue = 1.0
             if match_quality == 4:
-                return QVariant(QBrush(QColor.fromHsvF(green_hue, saturation, value)))
+                return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == 3:
-                return QVariant(QBrush(QColor.fromHsvF(yellow_hue, saturation, value)))
+                return QVariant(QBrush(QColor.fromHsvF(self.YELLOW_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == 2:
-                return QVariant(QBrush(QColor.fromHsvF(orange_hue, saturation, value)))
+                return QVariant(QBrush(QColor.fromHsvF(self.ORANGE_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == 1:
-                return QVariant(QBrush(QColor.fromHsvF(red_hue, saturation, value)))
+                return QVariant(QBrush(QColor.fromHsvF(self.RED_HUE, self.SATURATION, self.HSVALUE)))
             else:
-                return QVariant(QBrush(QColor.fromHsvF(white_hue, 0.0, value)))
+                return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, self.HSVALUE)))
 
         elif role == Qt.DecorationRole and col == self.parent.FLAGS_COL:
             return self.arraydata[row][self.parent.FLAGS_COL].picture
@@ -284,8 +289,18 @@ class MarkupTableModel(QAbstractTableModel):
         elif role == Qt.TextAlignmentRole and (col in self.right_aligned_columns):
             return Qt.AlignRight
 
-#         elif role == Qt.ToolTipRole:
-#             return "I'm a tooltip!"
+        elif role == Qt.ToolTipRole and col in [self.parent.TITLE_COL,
+                                                self.parent.AUTHOR_COL]:
+            return "<p>Double-click for metadata<br/>Right-click for more options</p>"
+        elif role == Qt.ToolTipRole and col in [self.parent.ANNOTATIONS_COL,
+                                                self.parent.ARTICLES_COL,
+                                                self.parent.COLLECTIONS_COL,
+                                                self.parent.VOCABULARY_COL]:
+            return "<p>Double-click to view<br/>Right-click for more options</p>"
+        elif role == Qt.ToolTipRole and col in [self.parent.FLAGS_COL,
+                                                self.parent.WORD_COUNT_COL]:
+            return "<p>Right-click for options</p>"
+
 
         elif role != Qt.DisplayRole:
             return QVariant()
@@ -348,10 +363,10 @@ class BookStatusDialog(SizePersistedDialog):
     # Column assignments
     if True:
         LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
-                          'Title', 'Author', 'Progress',
-                          'Last Opened', 'Word Count', 'Annotations',
-                          'Collections', 'Flags', 'Deep View', 'Articles',
-                          'Vocabulary', 'Match Quality']
+                          'Title', 'Author', 'Word Count', 'Progress', 'Last Opened',
+                          'Collections', 'Flags',
+                          'Annotations', 'Articles', 'Deep View', 'Vocabulary',
+                          'Match Quality']
         ANNOTATIONS_COL = LIBRARY_HEADER.index('Annotations')
         ARTICLES_COL = LIBRARY_HEADER.index('Articles')
         AUTHOR_COL = LIBRARY_HEADER.index('Author')
@@ -432,8 +447,16 @@ class BookStatusDialog(SizePersistedDialog):
                 self._generate_deep_view()
             elif button.objectName() == 'synchronize_collections_button':
                 self._synchronize_collections()
-            elif button.objectName() == 'update_metadata_button':
-                self._update_metadata()
+            elif button.objectName() == 'view_metadata_button':
+                selected_rows = self._selected_rows()
+                if selected_rows:
+                    self.show_metadata_dialog(selected_rows[0])
+                else:
+                    title = "No selected book"
+                    msg = "<p>Select a book.</p>"
+                    MessageBox(MessageBox.INFO, title, msg,
+                           show_copy_button=False).exec_()
+
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
             self._delete_books()
@@ -493,15 +516,13 @@ class BookStatusDialog(SizePersistedDialog):
         column = index.column()
         row = index.row()
 
-        if column in [self.TITLE_COL, self.AUTHOR_COL,
-                      self.PROGRESS_COL, self.LAST_OPENED_COL]:
+        if column in [self.TITLE_COL, self.AUTHOR_COL]:
             self.show_metadata_dialog(row)
         elif column in [self.ANNOTATIONS_COL, self.DEEP_VIEW_COL,
                         self.ARTICLES_COL, self.VOCABULARY_COL]:
             self.show_assets_dialog(asset_actions[column], row)
         elif column == self.COLLECTIONS_COL:
             self.show_collections_dialog(row)
-
         else:
             self._log("no double-click handler for %s" % self.LIBRARY_HEADER[column])
 
@@ -568,34 +589,38 @@ class BookStatusDialog(SizePersistedDialog):
         self.show_match_colors = not self.show_match_colors
         self.toggle_match_colors()
 
+
         # Word count
-        self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
-        self.wc_button.setObjectName('calculate_word_count_button')
-        self.wc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'word_count.png')))
+        if False:
+            self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
+            self.wc_button.setObjectName('calculate_word_count_button')
+            self.wc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'word_count.png')))
 
         # Generate DV content
-        self.gdv_button = self.dialogButtonBox.addButton('Generate Deep View', QDialogButtonBox.ActionRole)
-        self.gdv_button.setObjectName('generate_deep_view_button')
-        self.gdv_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'deep_view.png')))
+        if False:
+            self.gdv_button = self.dialogButtonBox.addButton('Generate Deep View', QDialogButtonBox.ActionRole)
+            self.gdv_button.setObjectName('generate_deep_view_button')
+            self.gdv_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'deep_view.png')))
 
         # Synchronize collections
-        self.sc_button = self.dialogButtonBox.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
-        self.sc_button.setObjectName('synchronize_collections_button')
-        self.sc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'sync_collections.png')))
-        cfl = self.prefs.get('collection_field_lookup', '')
-        if not cfl:
-            self.sc_button.setEnabled(False)
+        if False:
+            self.sc_button = self.dialogButtonBox.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
+            self.sc_button.setObjectName('synchronize_collections_button')
+            self.sc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'sync_collections.png')))
+            cfl = self.prefs.get('collection_field_lookup', '')
+            if not cfl:
+                self.sc_button.setEnabled(False)
 
-        # Update metadata
-        self.um_button = self.dialogButtonBox.addButton('Update metadata', QDialogButtonBox.ActionRole)
-        self.um_button.setObjectName('update_metadata_button')
-        self.um_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+        # View metadata
+        self.vm_button = self.dialogButtonBox.addButton('View metadata', QDialogButtonBox.ActionRole)
+        self.vm_button.setObjectName('view_metadata_button')
+        self.vm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'update_metadata.png')))
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
@@ -726,36 +751,32 @@ class BookStatusDialog(SizePersistedDialog):
         cid = self._selected_cid(row)
         book_id = self._selected_book_id(row)
 
-        marvin_collections = sorted(self.installed_books[book_id].device_collections, key=sort_key)
+        calibre_collections = self._get_calibre_collections(cid)
+        marvin_collections = self._get_marvin_collections(book_id)
 
-        calibre_collections = []
-        db = self.opts.gui.current_db
-        mi = db.get_metadata(cid, index_is_id=True)
-        cfl = self.prefs.get('collection_field_lookup', '')
-        value = mi.get(cfl)
-        if value:
-            if type(value) is list:
-                calibre_collections = sorted(value, key=sort_key)
-            elif type(value) in [str, unicode]:
-                calibre_collections = sorted(value.split(', '), key=sort_key)
-
-        klass = os.path.join(dialog_resources_path, 'collections_dialog.py')
-        if os.path.exists(klass):
-            #self._log("importing metadata dialog from '%s'" % klass)
-            sys.path.insert(0, dialog_resources_path)
-            this_dc = importlib.import_module('collections_dialog')
-            dlg = this_dc.CollectionsManagementDialog(self, 'collections_management')
-            cid = self._selected_cid(row)
-            dlg.initialize(self,
-                           self.installed_books[book_id].title,
-                           calibre_collections,
-                           marvin_collections,
-                           self.parent.connected_device)
-            dlg.exec_()
-            if dlg.stored_command:
-                self._update_collections(dlg.stored_command)
+        if calibre_collections == [] and marvin_collections == []:
+            title = "No assigned collections"
+            msg = "<p>No collections assigned in calibre or Marvin.</p>"
+            MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
         else:
-            self._log("ERROR: Can't import from '%s'" % klass)
+            klass = os.path.join(dialog_resources_path, 'collections_dialog.py')
+            if os.path.exists(klass):
+                #self._log("importing metadata dialog from '%s'" % klass)
+                sys.path.insert(0, dialog_resources_path)
+                this_dc = importlib.import_module('collections_dialog')
+                dlg = this_dc.CollectionsManagementDialog(self, 'collections_management')
+                cid = self._selected_cid(row)
+                dlg.initialize(self,
+                               self.installed_books[book_id].title,
+                               calibre_collections,
+                               marvin_collections,
+                               self.parent.connected_device)
+                dlg.exec_()
+                if dlg.stored_command:
+                    self._update_collections(dlg.stored_command)
+            else:
+                self._log("ERROR: Can't import from '%s'" % klass)
 
     def show_metadata_dialog(self, row):
         '''
@@ -1213,13 +1234,13 @@ class BookStatusDialog(SizePersistedDialog):
             progress = _generate_reading_progress(book_data)
             title = _generate_title(book_data)
 
-            # List order matches self.LIBRARY_HEADER
             article_count = 0
             if 'Wiki' in book_data.articles:
                 article_count += len(book_data.articles['Wiki'])
             if 'Pinned' in book_data.articles:
                 article_count += len(book_data.articles['Pinned'])
 
+            # List order matches self.LIBRARY_HEADER
             this_book = [
                 book_data.uuid,
                 book_data.cid,
@@ -1227,14 +1248,14 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.path,
                 title,
                 author,
+                "{0} ".format(book_data.word_count) if book_data.word_count > '0' else '',
                 progress,
                 last_opened,
-                book_data.word_count if book_data.word_count > '0' else '',
-                len(book_data.highlights) if len(book_data.highlights) else '',
                 collection_match,
                 flags,
-                self.CHECKMARK if book_data.deep_view_prepared else '',
+                len(book_data.highlights) if len(book_data.highlights) else '',
                 article_count if article_count else '',
+                self.CHECKMARK if book_data.deep_view_prepared else '',
                 len(book_data.vocabulary) if len(book_data.vocabulary) else '',
                 match_quality
                 ]
@@ -1312,7 +1333,8 @@ class BookStatusDialog(SizePersistedDialog):
             msg = ("<p>Click <b>Show details</b> for a list of books that will be deleted " +
                    "from your Marvin library.</p>" +
                    "<p>After clicking <b>Yes</b>, the Marvin Library window will disappear " +
-                   "briefly while Marvin is updating.</p>")
+                   "briefly while Marvin's Library is being updated.</p>" +
+                   '<p><font style="color:#FF0000">{0}</font></p>'.format(title))
             det_msg = '\n'.join(books_to_delete)
             d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
                            show_copy_button=False)
@@ -1379,6 +1401,11 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("delete cancelled")
         else:
             self._log("no books selected")
+            title = "No selected books"
+            msg = "<p>Select one or more books to delete.</p>"
+            MessageBox(MessageBox.INFO, title, msg,
+                   show_copy_button=False).exec_()
+
 
     def _fetch_marvin_content_hash(self, path):
         '''
@@ -1529,6 +1556,9 @@ class BookStatusDialog(SizePersistedDialog):
                     if type(lib_collections) is not list:
                         lib_collections = [lib_collections]
             return sorted(lib_collections, key=sort_key)
+
+    def _get_marvin_collections(self, book_id):
+        return sorted(self.installed_books[book_id].device_collections, key=sort_key)
 
     def _get_installed_books(self):
         '''

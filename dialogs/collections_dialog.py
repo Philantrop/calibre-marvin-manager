@@ -130,13 +130,20 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         # Populate collection models
         self._populate_collection_models()
 
-        # Remind the user of calibre's custom column
+        # Remind the user of calibre's custom column, disable buttons if no calibre field
         calibre_cf = self.prefs.get('collection_field_comboBox', '')
         if calibre_cf:
             self.calibre_gb.setTitle("Calibre collections (%s)" % calibre_cf)
         else:
             self.calibre_gb.setTitle("Calibre (no collections field)")
             self.calibre_gb.setEnabled(False)
+            # Disable import/export/sync
+            self.export_to_marvin_tb.setEnabled(False)
+            self.import_from_marvin_tb.setEnabled(False)
+            self.synchronize_collections_tb.setEnabled(False)
+
+        # If collections already equal, disable import/export/sync
+        if self.calibre_collections == self.marvin_collections:
             self.export_to_marvin_tb.setEnabled(False)
             self.import_from_marvin_tb.setEnabled(False)
             self.synchronize_collections_tb.setEnabled(False)
