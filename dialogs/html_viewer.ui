@@ -19,33 +19,66 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <widget class="QGroupBox" name="html_gb">
-     <property name="title">
-      <string>html_gb</string>
-     </property>
-     <layout class="QVBoxLayout" name="verticalLayout_3">
-      <item>
-       <layout class="QVBoxLayout" name="html_gb_vl">
+    <layout class="QVBoxLayout" name="vl">
+     <item>
+      <widget class="QLabel" name="header">
+       <property name="text">
+        <string>Header</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="openExternalLinks">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QGroupBox" name="html_gb">
+       <property name="title">
+        <string>html_gb</string>
+       </property>
+       <layout class="QVBoxLayout" name="verticalLayout_3">
         <item>
-         <widget class="QTextBrowser" name="html_tb">
-          <property name="font">
-           <font>
-            <family>Helvetica</family>
-           </font>
-          </property>
-         </widget>
-        </item>
-        <item>
-         <widget class="QDialogButtonBox" name="bb">
-          <property name="standardButtons">
-           <set>QDialogButtonBox::Close|QDialogButtonBox::Save</set>
-          </property>
-         </widget>
+         <layout class="QVBoxLayout" name="html_gb_vl">
+          <item>
+           <widget class="QTextBrowser" name="html_tb">
+            <property name="font">
+             <font>
+              <family>Helvetica</family>
+             </font>
+            </property>
+            <property name="frameShape">
+             <enum>QFrame::NoFrame</enum>
+            </property>
+           </widget>
+          </item>
+         </layout>
         </item>
        </layout>
-      </item>
-     </layout>
-    </widget>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="footer">
+       <property name="text">
+        <string>Footer</string>
+       </property>
+       <property name="wordWrap">
+        <bool>true</bool>
+       </property>
+       <property name="openExternalLinks">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QDialogButtonBox" name="bb">
+       <property name="standardButtons">
+        <set>QDialogButtonBox::Close|QDialogButtonBox::Save</set>
+       </property>
+      </widget>
+     </item>
+    </layout>
    </item>
   </layout>
  </widget>

@@ -64,7 +64,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
     def esc(self, *args):
         self.close()
 
-    def initialize(self, parent, titles, content, book_id, installed_book, marvin_db_path):
+    def initialize(self, parent, content, book_id, installed_book, marvin_db_path):
         '''
         __init__ is called on SizePersistedDialog()
         '''
@@ -83,18 +83,30 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
             self.marvin_status_changed)
 
+        # Set or hide the header
+        if content['header']:
+            self.header.setText(content['header'])
+        else:
+            self.header.setVisible(False)
+
         # Set the titles
-        self.setWindowTitle(titles['title'])
-        self.html_gb.setTitle(titles['group_box_title'])
+        self.setWindowTitle(content['title'])
+        self.html_gb.setTitle(content['group_box_title'])
 
         # Initialize the contents of the TextBrowser
-        self.html_tb.setText(content)
+        self.html_tb.setText(content['default_content'])
 
         # Set the bg color of the content to the dialog bg color
         bgcolor = self.palette().color(QPalette.Background)
         palette = QPalette()
         palette.setColor(QPalette.Base, bgcolor)
         self.html_tb.setPalette(palette)
+
+        # Set or hide the footer
+        if content['footer']:
+            self.footer.setText(content['footer'])
+        else:
+            self.footer.setVisible(False)
 
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)

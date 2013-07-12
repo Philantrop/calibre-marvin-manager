@@ -79,6 +79,7 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
 #                 self.import_from_marvin()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
+            self._log("RejectRole")
             self.close()
 
     def esc(self, *args):
@@ -115,22 +116,22 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
 
 
         # ~~~~~~~~ Export to Marvin button ~~~~~~~~
-        self.export_to_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+        self.export_to_marvin_tb.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_calibre.png')))
-        self.export_to_marvin_button.clicked.connect(partial(self.store_command, 'export_to_marvin'))
+        self.export_to_marvin_tb.clicked.connect(partial(self.store_command, 'export_to_marvin'))
 
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
-        self.import_from_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+        self.import_from_marvin_tb.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_marvin.png')))
-        self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_from_marvin'))
+        self.import_from_marvin_tb.clicked.connect(partial(self.store_command, 'import_from_marvin'))
 
         # ~~~~~~~~ Synchronize collections button ~~~~~~~~
-        self.synchronize_collections_button.setIcon(QIcon(os.path.join(self.opts.resources_path,
+        self.synchronize_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                           'icons',
                                                           'sync_collections.png')))
-        self.synchronize_collections_button.clicked.connect(partial(self.store_command, 'synchronize_collections'))
+        self.synchronize_collections_tb.clicked.connect(partial(self.store_command, 'synchronize_collections'))
 
         # Get collections
         self._get_collection_assignments()
@@ -156,6 +157,9 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         palette.setColor(QPalette.Base, bgcolor)
         self.calibre_lw.setPalette(palette)
         self.marvin_lw.setPalette(palette)
+
+        # Hook the button events
+        self.bb.clicked.connect(self.dispatch_button_click)
 
         # Restore position
         self.resize_dialog()

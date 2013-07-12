@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
+from __future__ import (unicode_literals, division, absolute_import,
+                        print_function)
 
 __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
@@ -55,9 +57,9 @@ class MyTableView(QTableView):
         menu = QMenu(self)
 
         if col == self.parent.ANNOTATIONS_COL:
-            ac = menu.addAction("Learn about importing annotations")
-            ac.setIcon(QIcon(I('help.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "fetch_annotations", row))
+            ac = menu.addAction("Show highlights")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
 
         if col == self.parent.ARTICLES_COL:
             ac = menu.addAction("Show articles")
@@ -66,8 +68,8 @@ class MyTableView(QTableView):
 
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
-            ac = menu.addAction("Show collections")
-            ac.setIcon(QIcon(I("dialog_information.png")))
+            ac = menu.addAction("Manage collections")
+            ac.setIcon(QIcon(I("exec.png")))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
 
             ac = menu.addAction("Synchronize collections")
@@ -124,7 +126,7 @@ class MyTableView(QTableView):
         elif col == self.parent.VOCABULARY_COL:
             ac = menu.addAction("Show vocabulary words")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary_words", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary", row))
 
         elif col == self.parent.WORD_COUNT_COL:
             ac = menu.addAction("Calculate word count")
@@ -437,21 +439,18 @@ class BookStatusDialog(SizePersistedDialog):
                         'clear_read_flag', 'clear_all_flags']:
             self._clear_flags(action)
         elif action == 'clear_all_collections':
-            self._clear_all_collections(row)
-        elif action == 'fetch_annotations':
-            self._fetch_annotations()
+            self._clear_all_collections()
         elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._set_flags(action)
-        elif action in ['show_articles', 'show_vocabulary_words', 'show_deep_view']:
-            #self._show_articles(row)
-            self.show_html_dialog(action, row)
+        elif action in ['show_articles', 'show_deep_view', 'show_highlights', 'show_vocabulary']:
+            self.show_assets_dialog(action, row)
         elif action == 'show_collections':
             #self._show_collections(row)
             self.show_collections_dialog(row)
         elif action == 'show_metadata':
             self.show_metadata_dialog(row)
         elif action == 'synchronize_collections':
-            self._synchronize_collections(row)
+            self._synchronize_collections()
 
         else:
             selected_books = self._selected_books()
@@ -471,32 +470,28 @@ class BookStatusDialog(SizePersistedDialog):
         Display column data for selected book
         '''
         self._log_location()
-        if False:
-            col = index.column()
-            row = index.row()
-            clicked = {
-                        'book_id': self.tm.arraydata[row][self.BOOK_ID_COL],
-                        'cid': self.tm.arraydata[row][self.CALIBRE_ID_COL],
-                        'col': col,
-                        'column': self.LIBRARY_HEADER[col],
-                        'path': self.tm.arraydata[row][self.PATH_COL],
-                        'row': row,
-                        'title': str(self.tm.arraydata[row][self.TITLE_COL].text())
-                      }
 
-            if col == self.ARTICLES_COL:
-                self._show_articles(clicked)
-            elif col == self.COLLECTIONS_COL:
-                self._show_collections(clicked)
-            elif col == self.VOCABULARY_COL:
-                self._show_vocabulary(clicked)
-            elif col == self.WORD_COUNT_COL:
-                self._calculate_single_word_count(clicked)
-            else:
-                self._log_location(row, col)
-                self._log("No double-click handler for %s" % clicked['column'])
+        asset_actions = {
+                        self.ANNOTATIONS_COL: 'show_highlights',
+                        self.ARTICLES_COL: 'show_articles',
+                        self.DEEP_VIEW_COL: 'show_deep_view',
+                        self.VOCABULARY_COL: 'show_vocabulary'
+                        }
+
+        column = index.column()
+        row = index.row()
+
+        if column in [self.TITLE_COL, self.AUTHOR_COL,
+                      self.PROGRESS_COL, self.LAST_OPENED_COL]:
+            self.show_metadata_dialog(row)
+        elif column in [self.ANNOTATIONS_COL, self.DEEP_VIEW_COL,
+                        self.ARTICLES_COL, self.VOCABULARY_COL]:
+            self.show_assets_dialog(asset_actions[column], row)
+        elif column == self.COLLECTIONS_COL:
+            self.show_collections_dialog(row)
+
         else:
-            self.show_metadata_dialog(index)
+            self._log("no double-click handler for %s" % self.LIBRARY_HEADER[column])
 
     def esc(self, *args):
         '''
@@ -616,6 +611,95 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("closing dialog: %s" % command)
                 self.close()
 
+    def show_assets_dialog(self, action, row):
+        '''
+        Display assets associated with book
+        Articles, Annotations, Deep View, Vocabulary
+        profile = {'title': <dlg title>,
+                   'group_box_title':<gb title>,
+                   'header': <header text>,
+                   'content': <default content>,
+                   'footer': <footer text>}
+        '''
+        self._log_location(action)
+
+        book_id = self._selected_book_id(row)
+        title = self.installed_books[book_id].title
+
+        if action == 'show_articles':
+            header = None
+            group_box_title = 'Articles'
+            articles = self.installed_books[book_id].articles
+            if articles:
+                default_content = ''
+                if 'Pinned' in articles:
+                    default_content += "<p><b>Pinned:</b><br/>"
+                    default_content += '<br/>'.join(articles['Pinned'].keys()) + "</p>"
+                if 'Wiki' in articles:
+                    default_content += "<p><b>Wiki</b><br/>"
+                    default_content += '<br/>'.join(articles['Wiki'].keys()) + "</p>"
+            else:
+                default_content = ("<p>No articles</p>")
+            footer = None
+
+        elif action == 'show_deep_view':
+            header = None
+            group_box_title = 'Deep View content'
+            default_content = "Deep View content to be provided by Marvin"
+            footer = None
+
+        elif action == 'show_highlights':
+            header = None
+            group_box_title = 'Highlights and Annotations'
+            if self.installed_books[book_id].highlights:
+                default_content = '\n'.join(self.installed_books[book_id].highlights)
+            else:
+                default_content = "<p>No highlights</p>"
+            footer = (
+                        '<p>The <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
+                        'Annotations plugin</a> imports highlights and annotations from Marvin.</p>'
+                     )
+
+        elif action == 'show_vocabulary':
+            header = None
+            group_box_title = 'Vocabulary words'
+            if self.installed_books[book_id].vocabulary:
+                word_list = '<br/>'.join(sorted(self.installed_books[book_id].vocabulary, key=sort_key))
+                default_content = "<p>{0}</p>".format(word_list)
+            else:
+                default_content = ("<p>No vocabulary words</p>")
+            footer = None
+
+        else:
+            header = None
+            group_box_title = action
+            default_content = "Default content"
+            footer = None
+
+        content = {
+                    'default_content': default_content,
+                    'footer': footer,
+                    'header': header,
+                    'group_box_title': group_box_title,
+                    'title': title
+                  }
+
+        klass = os.path.join(dialog_resources_path, 'html_viewer.py')
+        if os.path.exists(klass):
+            #self._log("importing metadata dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('html_viewer')
+            dlg = this_dc.HTMLViewerDialog(self, 'html_viewer')
+            dlg.initialize(self,
+                           content,
+                           book_id,
+                           self.installed_books[book_id],
+                           self.parent.connected_device.local_db_path)
+            dlg.exec_()
+
+        else:
+            self._log("ERROR: Can't import from '%s'" % klass)
+
     def show_help(self):
         '''
         Display help file
@@ -642,59 +726,6 @@ class BookStatusDialog(SizePersistedDialog):
                            self.parent.connected_device.local_db_path)
             dlg.exec_()
             self._log("Results of collections dialog: %s" % dlg.stored_command)
-
-        else:
-            self._log("ERROR: Can't import from '%s'" % klass)
-
-    def show_html_dialog(self, action, row):
-        '''
-        '''
-        self._log_location(action)
-
-        book_id = self._selected_book_id(row)
-        content = "<none>"
-
-        if action == 'show_articles':
-            titles = {'title': 'Article Viewer', 'group_box_title': 'Articles'}
-            articles = self.installed_books[book_id].articles
-            if articles:
-                content = ''
-                if 'Pinned' in articles:
-                    content += "<p><b>Pinned:</b><br/>"
-                    content += '<br/>'.join(articles['Pinned'].keys()) + "</p>"
-                if 'Wiki' in articles:
-                    content += "<p><b>Wiki</b><br/>"
-                    content += '<br/>'.join(articles['Wiki'].keys()) + "</p>"
-            else:
-                content = ("<p>No articles.</p>")
-
-        elif action == 'show_deep_view':
-            titles = {'title': 'Deep Viewer', 'group_box_title': 'Deep View content'}
-            content = "Deep View content to be provided by Marvin"
-        elif action == 'show_vocabulary_words':
-            titles = {'title': 'Vocabulary Viewer', 'group_box_title': 'Vocabulary words'}
-            vocabulary = self.installed_books[book_id].vocabulary
-            if vocabulary:
-                content = ', '.join(sorted(vocabulary, key=sort_key))
-            else:
-                content = ("<p>No vocabulary words.</p>")
-
-        else:
-            titles = {'title': action, 'group_box_title': action}
-
-        klass = os.path.join(dialog_resources_path, 'html_viewer.py')
-        if os.path.exists(klass):
-            #self._log("importing metadata dialog from '%s'" % klass)
-            sys.path.insert(0, dialog_resources_path)
-            this_dc = importlib.import_module('html_viewer')
-            dlg = this_dc.HTMLViewerDialog(self, 'html_viewer')
-            dlg.initialize(self,
-                           titles,
-                           content,
-                           book_id,
-                           self.installed_books[book_id],
-                           self.parent.connected_device.local_db_path)
-            dlg.exec_()
 
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
@@ -853,10 +884,15 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
 
-    def _clear_all_collections(self, row):
+    def _clear_all_collections(self):
         '''
+        Clear all collection assignments in selected rows
         '''
         self._log_location()
+        title = "Clear all collections"
+        msg = ("<p>Not implemented</p>")
+        MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
 
     def _clear_flags(self, action):
         '''
@@ -1177,7 +1213,7 @@ class BookStatusDialog(SizePersistedDialog):
                 progress,
                 last_opened,
                 book_data.word_count if book_data.word_count > '0' else '',
-                book_data.highlights if book_data.highlights > 0 else '',
+                len(book_data.highlights) if len(book_data.highlights) else '',
                 collection_match,
                 flags,
                 self.CHECKMARK if book_data.deep_view_prepared else '',
@@ -1326,18 +1362,6 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("delete cancelled")
         else:
             self._log("no books selected")
-
-    def _fetch_annotations(self):
-        '''
-        '''
-        self._log_location()
-        title = "Learn more about fetching annotations"
-        msg = ('<p>The Annotations plugin imports highlights and annotations from Marvin to calibre.<br/>' +
-               'For more information on the Annotations plugin, visit ' +
-               '<a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
-               "calibre's Plugin forum</a>.</p>")
-        MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
 
     def _fetch_marvin_content_hash(self, path):
         '''
@@ -1608,16 +1632,29 @@ class BookStatusDialog(SizePersistedDialog):
 
         def _get_highlights(cur, book_id):
             '''
-            Return # of highlights associated with book_id
+            Return highlight text/notes associated with book_id
             '''
             hl_cur = con.cursor()
             hl_cur.execute('''SELECT
-                                BookID
+                                Note,
+                                Text
                               FROM Highlights
                               WHERE BookID = '{0}'
                            '''.format(book_id))
             hl_rows = hl_cur.fetchall()
-            return len(hl_rows)
+            highlight_list = []
+            if len(hl_rows):
+                for row in hl_rows:
+                    raw_text = row[b'Text']
+                    text = "<p>{0}".format(raw_text)
+                    if row[b'Note']:
+                        raw_note = row[b'Note']
+                        text += "<br/>&nbsp;<em>{0}</em></p>".format(raw_note)
+                    else:
+                        text += "</p>"
+                    highlight_list.append(text)
+            hl_cur.close()
+            return highlight_list
 
         def _get_marvin_genres(book_id):
             # Return sorted genre(s) for this book
@@ -2261,6 +2298,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         For books whose Marvin collections and calibre collection assignments do not match,
         merge the two lists and apply to both Marvin and calibre.
+        Apply to selected rows
         '''
         self._log_location()
         title = "Synchronize collections"
