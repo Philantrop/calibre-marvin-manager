@@ -58,13 +58,9 @@
         <layout class="QVBoxLayout" name="tool_button_vl">
          <item>
           <widget class="QToolButton" name="export_to_marvin_tb">
-           <property name="text">
-            <string>...</string>
+           <property name="toolTip">
+            <string>Export collections from calibre to Marvin</string>
            </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QToolButton" name="synchronize_collections_tb">
            <property name="text">
             <string>...</string>
            </property>
@@ -72,6 +68,29 @@
          </item>
          <item>
           <widget class="QToolButton" name="import_from_marvin_tb">
+           <property name="toolTip">
+            <string>Import collections from Marvin to calibre</string>
+           </property>
+           <property name="text">
+            <string>...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="synchronize_collections_tb">
+           <property name="toolTip">
+            <string>Synchronize collections between calibre and Marvin</string>
+           </property>
+           <property name="text">
+            <string>...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QToolButton" name="clear_all_collections_tb">
+           <property name="toolTip">
+            <string>Clear all collection assignments</string>
+           </property>
            <property name="text">
             <string>...</string>
            </property>

@@ -71,13 +71,6 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
             self._log("AcceptRole")
             self.accept()
 
-        elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
-            pass
-#             if button.objectName() == 'export_to_marvin_button':
-#                 self.export_to_marvin()
-#             elif button.objectName() == 'import_from_marvin_button':
-#                 self.import_from_marvin()
-
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
             self._log("RejectRole")
             self.close()
@@ -91,41 +84,36 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
     def import_from_marvin(self):
         self._log_location()
 
-    def initialize(self, parent, book_id, cid, installed_book, marvin_db_path):
+    def initialize(self, parent, book_title, calibre_collections, marvin_collections, connected_device):
         '''
         __init__ is called on SizePersistedDialog()
         '''
         self.setupUi(self)
-        self.book_id = book_id
-        self.cid = cid
-        self.connected_device = parent.opts.gui.device_manager.device
-        self.installed_book = installed_book
-        self.marvin_db_path = marvin_db_path
+        self.calibre_collections = calibre_collections
+        self.marvin_collections = marvin_collections
         self.opts = parent.opts
-        self.prefs = parent.prefs
         self.parent = parent
         self.stored_command = None
         self.verbose = parent.verbose
 
-        self._log_location(installed_book.title)
-        self.setWindowTitle(installed_book.title)
+        self._log_location(book_title)
+        self.setWindowTitle(book_title)
 
         # Subscribe to Marvin driver change events
-        self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
+        connected_device.marvin_device_signals.reader_app_status_changed.connect(
             self.marvin_status_changed)
 
-
         # ~~~~~~~~ Export to Marvin button ~~~~~~~~
-        self.export_to_marvin_tb.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+        self.export_to_marvin_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                    'icons',
                                                    'from_calibre.png')))
-        self.export_to_marvin_tb.clicked.connect(partial(self.store_command, 'export_to_marvin'))
+        self.export_to_marvin_tb.clicked.connect(partial(self.store_command, 'export_collections'))
 
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
-        self.import_from_marvin_tb.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+        self.import_from_marvin_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                    'icons',
                                                    'from_marvin.png')))
-        self.import_from_marvin_tb.clicked.connect(partial(self.store_command, 'import_from_marvin'))
+        self.import_from_marvin_tb.clicked.connect(partial(self.store_command, 'import_collections'))
 
         # ~~~~~~~~ Synchronize collections button ~~~~~~~~
         self.synchronize_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
@@ -133,8 +121,14 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
                                                           'sync_collections.png')))
         self.synchronize_collections_tb.clicked.connect(partial(self.store_command, 'synchronize_collections'))
 
-        # Get collections
-        self._get_collection_assignments()
+        # ~~~~~~~~ Clear all collections button ~~~~~~~~
+        self.clear_all_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
+                                                          'icons',
+                                                          'clear_all.png')))
+        self.clear_all_collections_tb.clicked.connect(partial(self.store_command, 'clear_all_collections'))
+
+        # Populate collection models
+        self._populate_collection_models()
 
         # Remind the user of calibre's custom column
         calibre_cf = self.prefs.get('collection_field_comboBox', '')
@@ -143,13 +137,9 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         else:
             self.calibre_gb.setTitle("Calibre (no collections field)")
             self.calibre_gb.setEnabled(False)
-            self.export_to_marvin_button.setVisible(False)
-            self.import_from_marvin_button.setVisible(False)
-            self.sc_button.setVisible(False)
-
-        # Assign collection lists to models, QListWidgets
-        self.marvin_lw.setModel(MyListModel(self.marvin_collections))
-        self.calibre_lw.setModel(MyListModel(self.calibre_collections))
+            self.export_to_marvin_tb.setEnabled(False)
+            self.import_from_marvin_tb.setEnabled(False)
+            self.synchronize_collections_tb.setEnabled(False)
 
         # Set the bg color of the description text fields to the dialog bg color
         bgcolor = self.palette().color(QPalette.Background)
@@ -178,38 +168,19 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
 
     def store_command(self, command):
         '''
+        Save the requested operation
         '''
         self._log_location(command)
         self.stored_command = command
         self.close()
 
-    def _get_collection_assignments(self):
+    def _populate_collection_models(self):
         '''
+        Populate the data model with current collection assignments
         '''
         self._log_location()
-
-        # Marvin collection assignments
-        marvin_collections = self.parent.installed_books[self.book_id].device_collections
-        if marvin_collections:
-            self.marvin_collections = sorted(marvin_collections, key=sort_key)
-        else:
-            self.marvin_collections = []
-
-        # Calibre collection assignments
-        calibre_collections = []
-        if self.cid:
-            cfl = self.prefs.get('collection_field_lookup', '')
-            if cfl:
-                db = self.opts.gui.current_db
-                mi = db.get_metadata(self.cid, index_is_id=True)
-                value = mi.get(cfl)
-                if value:
-                    if type(value) is list:
-                        calibre_collections = value
-                    elif type(value) in [str, unicode]:
-                        calibre_collections = value.split(', ')
-        self.calibre_collections = calibre_collections
-
+        self.marvin_lw.setModel(MyListModel(self.marvin_collections))
+        self.calibre_lw.setModel(MyListModel(self.calibre_collections))
 
     def _log(self, msg=None):
         '''

@@ -61,7 +61,7 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
 
-        if col == self.parent.ARTICLES_COL:
+        elif col == self.parent.ARTICLES_COL:
             ac = menu.addAction("Show articles")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_articles", row))
@@ -71,6 +71,20 @@ class MyTableView(QTableView):
             ac = menu.addAction("Manage collections")
             ac.setIcon(QIcon(I("exec.png")))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
+
+            ac = menu.addAction("Export calibre collections to Marvin")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
+            if cfl:
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "export_collections", row))
+            else:
+                ac.setEnabled(False)
+
+            ac = menu.addAction("Import Marvin collections to calibre")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
+            if cfl:
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "import_collections", row))
+            else:
+                ac.setEnabled(False)
 
             ac = menu.addAction("Synchronize collections")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'sync_collections.png')))
@@ -83,7 +97,7 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_all.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_all_collections", row))
 
-        if col == self.parent.DEEP_VIEW_COL:
+        elif col == self.parent.DEEP_VIEW_COL:
             ac = menu.addAction("Show Deep View")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view", row))
@@ -438,19 +452,17 @@ class BookStatusDialog(SizePersistedDialog):
         elif action in ['clear_new_flag', 'clear_reading_list_flag',
                         'clear_read_flag', 'clear_all_flags']:
             self._clear_flags(action)
-        elif action == 'clear_all_collections':
-            self._clear_all_collections()
         elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._set_flags(action)
         elif action in ['show_articles', 'show_deep_view', 'show_highlights', 'show_vocabulary']:
             self.show_assets_dialog(action, row)
         elif action == 'show_collections':
-            #self._show_collections(row)
             self.show_collections_dialog(row)
+        elif action in ['clear_all_collections', 'export_collections',
+                        'import_collections', 'synchronize_collections']:
+            self._update_collections(action)
         elif action == 'show_metadata':
             self.show_metadata_dialog(row)
-        elif action == 'synchronize_collections':
-            self._synchronize_collections()
 
         else:
             selected_books = self._selected_books()
@@ -708,25 +720,40 @@ class BookStatusDialog(SizePersistedDialog):
 
     def show_collections_dialog(self, row):
         '''
+        Present collection assignments to user, get command
         '''
         self._log_location(row)
         cid = self._selected_cid(row)
+        book_id = self._selected_book_id(row)
+
+        marvin_collections = sorted(self.installed_books[book_id].device_collections, key=sort_key)
+
+        calibre_collections = []
+        db = self.opts.gui.current_db
+        mi = db.get_metadata(cid, index_is_id=True)
+        cfl = self.prefs.get('collection_field_lookup', '')
+        value = mi.get(cfl)
+        if value:
+            if type(value) is list:
+                calibre_collections = sorted(value, key=sort_key)
+            elif type(value) in [str, unicode]:
+                calibre_collections = sorted(value.split(', '), key=sort_key)
+
         klass = os.path.join(dialog_resources_path, 'collections_dialog.py')
         if os.path.exists(klass):
             #self._log("importing metadata dialog from '%s'" % klass)
             sys.path.insert(0, dialog_resources_path)
             this_dc = importlib.import_module('collections_dialog')
             dlg = this_dc.CollectionsManagementDialog(self, 'collections_management')
-            book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             dlg.initialize(self,
-                           book_id,
-                           cid,
-                           self.installed_books[book_id],
-                           self.parent.connected_device.local_db_path)
+                           self.installed_books[book_id].title,
+                           calibre_collections,
+                           marvin_collections,
+                           self.parent.connected_device)
             dlg.exec_()
-            self._log("Results of collections dialog: %s" % dlg.stored_command)
-
+            if dlg.stored_command:
+                self._update_collections(dlg.stored_command)
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -883,16 +910,6 @@ class BookStatusDialog(SizePersistedDialog):
             msg = ("<p>Select one or more books to calculate word count.</p>")
             MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
-
-    def _clear_all_collections(self):
-        '''
-        Clear all collection assignments in selected rows
-        '''
-        self._log_location()
-        title = "Clear all collections"
-        msg = ("<p>Not implemented</p>")
-        MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
 
     def _clear_flags(self, action):
         '''
@@ -2294,15 +2311,15 @@ class BookStatusDialog(SizePersistedDialog):
         self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
                         b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
 
-    def _synchronize_collections(self):
+    def _update_collections(self, action):
         '''
         For books whose Marvin collections and calibre collection assignments do not match,
         merge the two lists and apply to both Marvin and calibre.
         Apply to selected rows
         '''
         self._log_location()
-        title = "Synchronize collections"
-        msg = ("<p>Not implemented</p>")
+        title = "Update collections"
+        msg = ("<p>{0}: not implemented</p>".format(action))
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
