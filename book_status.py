@@ -297,9 +297,10 @@ class MarkupTableModel(QAbstractTableModel):
                                                 self.parent.COLLECTIONS_COL,
                                                 self.parent.VOCABULARY_COL]:
             return "<p>Double-click to view<br/>Right-click for more options</p>"
-        elif role == Qt.ToolTipRole and col in [self.parent.FLAGS_COL,
-                                                self.parent.WORD_COUNT_COL]:
+        elif role == Qt.ToolTipRole and col in [self.parent.FLAGS_COL]:
             return "<p>Right-click for options</p>"
+        elif role == Qt.ToolTipRole and col in [self.parent.WORD_COUNT_COL]:
+            return "<p>Double-click to generate word count</p>"
 
 
         elif role != Qt.DisplayRole:
@@ -523,6 +524,13 @@ class BookStatusDialog(SizePersistedDialog):
             self.show_assets_dialog(asset_actions[column], row)
         elif column == self.COLLECTIONS_COL:
             self.show_collections_dialog(row)
+        elif column in [self.FLAGS_COL]:
+            title = "Flag options"
+            msg = "<p>Right-click in the Flags column for flag management options.</p>"
+            MessageBox(MessageBox.INFO, title, msg,
+                   show_copy_button=False).exec_()
+        elif column == self.WORD_COUNT_COL:
+            self._calculate_word_count()
         else:
             self._log("no double-click handler for %s" % self.LIBRARY_HEADER[column])
 
@@ -897,7 +905,10 @@ class BookStatusDialog(SizePersistedDialog):
 
                 # Update the model
                 wc = locale.format("%d", wordcount.words, grouping=True)
-                self.tm.arraydata[row][self.WORD_COUNT_COL] = wc
+                self.tm.arraydata[row][self.WORD_COUNT_COL] = "{0} ".format(wc)
+
+                # Update the spreadsheet for those watching at home
+                self.repaint()
 
                 # Update self.installed_books
                 book_id = selected_books[row]['book_id']
@@ -906,8 +917,6 @@ class BookStatusDialog(SizePersistedDialog):
                 # Update Marvin db
                 self._log("DON'T FORGET TO TELL MARVIN")
 
-            # Update the spreadsheet
-            self.repaint()
 
             pb.hide()
 
@@ -1334,7 +1343,7 @@ class BookStatusDialog(SizePersistedDialog):
                    "from your Marvin library.</p>" +
                    "<p>After clicking <b>Yes</b>, the Marvin Library window will disappear " +
                    "briefly while Marvin's Library is being updated.</p>" +
-                   '<p><font style="color:#FF0000">{0}</font></p>'.format(title))
+                   '<p><b><font style="color:#FF0000; ">{0}</font></b></p>'.format(title))
             det_msg = '\n'.join(books_to_delete)
             d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
                            show_copy_button=False)
@@ -1405,7 +1414,6 @@ class BookStatusDialog(SizePersistedDialog):
             msg = "<p>Select one or more books to delete.</p>"
             MessageBox(MessageBox.INFO, title, msg,
                    show_copy_button=False).exec_()
-
 
     def _fetch_marvin_content_hash(self, path):
         '''
