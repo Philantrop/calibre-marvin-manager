@@ -71,12 +71,17 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
             self._log("AcceptRole")
             self.accept()
 
+        elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
+            pass
+
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
             self._log("RejectRole")
+            self.stored_command = None
             self.close()
 
     def esc(self, *args):
-        self.close()
+        self._log_location()
+        self._clear_selected_rows()
 
     def export_to_marvin(self):
         self._log_location()
@@ -90,7 +95,9 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         '''
         self.setupUi(self)
         self.calibre_collections = calibre_collections
+        self.calibre_selection = None
         self.marvin_collections = marvin_collections
+        self.marvin_selection = None
         self.opts = parent.opts
         self.parent = parent
         self.stored_command = None
@@ -107,28 +114,37 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         self.export_to_marvin_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                    'icons',
                                                    'from_calibre.png')))
-        self.export_to_marvin_tb.clicked.connect(partial(self.store_command, 'export_collections'))
+        self.export_to_marvin_tb.setToolTip("Export collection assignments to Marvin")
+        self.export_to_marvin_tb.clicked.connect(self._export_to_marvin)
 
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
         self.import_from_marvin_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                    'icons',
                                                    'from_marvin.png')))
-        self.import_from_marvin_tb.clicked.connect(partial(self.store_command, 'import_collections'))
+        self.import_from_marvin_tb.setToolTip("Import collection assignments from Marvin")
+        self.import_from_marvin_tb.clicked.connect(self._import_from_marvin)
 
-        # ~~~~~~~~ Synchronize collections button ~~~~~~~~
-        self.synchronize_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
+        # ~~~~~~~~ Merge collections button ~~~~~~~~
+        self.merge_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                           'icons',
                                                           'sync_collections.png')))
-        self.synchronize_collections_tb.clicked.connect(partial(self.store_command, 'synchronize_collections'))
+        self.merge_collections_tb.setToolTip("Merge collection assignments")
+        self.merge_collections_tb.clicked.connect(self._merge_collections)
+
+        # ~~~~~~~~Remove collection assignment button ~~~~~~~~
+        self.remove_assignment_tb.setIcon(QIcon(I('trash.png')))
+        self.remove_assignment_tb.setToolTip("Remove collection assignment")
+        self.remove_assignment_tb.clicked.connect(self._remove_collection_assignment)
 
         # ~~~~~~~~ Clear all collections button ~~~~~~~~
         self.clear_all_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                           'icons',
                                                           'clear_all.png')))
-        self.clear_all_collections_tb.clicked.connect(partial(self.store_command, 'clear_all_collections'))
+        self.clear_all_collections_tb.setToolTip("Remove all collection assignments")
+        self.clear_all_collections_tb.clicked.connect(self._clear_all_collections)
 
         # Populate collection models
-        self._populate_collection_models()
+        self._initialize_collections()
 
         # Remind the user of calibre's custom column, disable buttons if no calibre field
         calibre_cf = self.prefs.get('collection_field_comboBox', '')
@@ -140,13 +156,13 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
             # Disable import/export/sync
             self.export_to_marvin_tb.setEnabled(False)
             self.import_from_marvin_tb.setEnabled(False)
-            self.synchronize_collections_tb.setEnabled(False)
+            self.merge_collections_tb.setEnabled(False)
 
-        # If collections already equal, disable import/export/sync
+        # If collections already equal, disable import/export/merge
         if self.calibre_collections == self.marvin_collections:
             self.export_to_marvin_tb.setEnabled(False)
             self.import_from_marvin_tb.setEnabled(False)
-            self.synchronize_collections_tb.setEnabled(False)
+            self.merge_collections_tb.setEnabled(False)
 
         # Set the bg color of the description text fields to the dialog bg color
         bgcolor = self.palette().color(QPalette.Background)
@@ -179,15 +195,76 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         '''
         self._log_location(command)
         self.stored_command = command
+        self.calibre_selection = self._selected_calibre_rows()
+        self.marvin_selection = self._selected_marvin_rows()
         self.close()
 
-    def _populate_collection_models(self):
+    # ~~~~~~~~ Helpers ~~~~~~~~
+    def _clear_calibre_selection(self):
         '''
-        Populate the data model with current collection assignments
         '''
         self._log_location()
-        self.marvin_lw.setModel(MyListModel(self.marvin_collections))
+        self.calibre_lw.clearSelection()
+
+    def _clear_marvin_selection(self):
+        '''
+        '''
+        self._log_location()
+        self.marvin_lw.clearSelection()
+
+    def _clear_selected_rows(self):
+        '''
+        Clear any active selections
+        '''
+        self._log_location()
+        self._clear_calibre_selection()
+        self._clear_marvin_selection()
+
+    def _clear_all_collections(self):
+        '''
+        '''
+        self._log_location()
+        self.stored_command = 'clear_all_collections'
+        self._log("selected calibre rows: %s" % self._selected_calibre_rows())
+        self._log("selected Marvin rows: %s" % self._selected_marvin_rows())
+
+#         for row in sorted(rows_to_delete, reverse=True):
+#             self.tm.beginRemoveRows(QModelIndex(), row, row)
+#             del self.tm.arraydata[row]
+#             self.tm.endRemoveRows()
+
+    def _export_to_marvin(self):
+        '''
+        '''
+        self._log_location()
+        scr = self._selected_calibre_rows()
+        smr = self._selected_marvin_rows()
+        self._log("scr: %s smr: %s" % (scr, smr))
+        self.stored_command = 'export_to_marvin'
+
+    def _import_from_marvin(self):
+        '''
+        '''
+        self._log_location()
+        scr = self._selected_calibre_rows()
+        smr = self._selected_marvin_rows()
+        self._log("scr: %s smr: %s" % (scr, smr))
+        self.stored_command = 'import_from_marvin'
+
+    def _initialize_collections(self):
+        '''
+        Populate the data model with current collection assignments
+        Hook click, doubleClick events
+        '''
+        self._log_location()
         self.calibre_lw.setModel(MyListModel(self.calibre_collections))
+        self.marvin_lw.setModel(MyListModel(self.marvin_collections))
+
+        # Capture click events to clear selections in opposite list
+        self.calibre_lw.clicked.connect(self._clear_marvin_selection)
+        self.calibre_lw.doubleClicked.connect(self._clear_marvin_selection)
+        self.marvin_lw.clicked.connect(self._clear_calibre_selection)
+        self.marvin_lw.doubleClicked.connect(self._clear_calibre_selection)
 
     def _log(self, msg=None):
         '''
@@ -219,4 +296,36 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
             cls=self.__class__.__name__,
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
+
+    def _merge_collections(self):
+        '''
+        '''
+        self._log_location()
+        scr = self._selected_calibre_rows()
+        smr = self._selected_marvin_rows()
+        self._log("scr: %s smr: %s" % (scr, smr))
+        self.stored_command = 'merge_collections'
+
+    def _remove_collection_assignment(self):
+        '''
+        '''
+        self._log_location()
+        scr = self._selected_calibre_rows()
+        smr = self._selected_marvin_rows()
+        self._log("scr: %s smr: %s" % (scr, smr))
+
+    def _selected_calibre_rows(self):
+        '''
+        Return a list of selected calibre rows
+        '''
+        srs = self.calibre_lw.selectionModel().selectedRows()
+        return [sr.row() for sr in srs]
+
+    def _selected_marvin_rows(self):
+        '''
+        Return a list of selected Marvin rows
+        '''
+        srs = self.marvin_lw.selectionModel().selectedRows()
+        return [sr.row() for sr in srs]
+
 

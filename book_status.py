@@ -69,7 +69,7 @@ class MyTableView(QTableView):
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
             ac = menu.addAction("View collection assignments")
-            ac.setIcon(QIcon(I("exec.png")))
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'update_metadata.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
 
             ac = menu.addAction("Export calibre collections to Marvin")
@@ -446,14 +446,21 @@ class BookStatusDialog(SizePersistedDialog):
                 self._calculate_word_count()
             elif button.objectName() == 'generate_deep_view_button':
                 self._generate_deep_view()
-            elif button.objectName() == 'synchronize_collections_button':
-                self._synchronize_collections()
+            elif button.objectName() == 'view_collections_button':
+                selected_rows = self._selected_rows()
+                if selected_rows:
+                    self.show_collections_dialog(selected_rows[0])
+                else:
+                    title = "View collections"
+                    msg = "<p>Select a book.</p>"
+                    MessageBox(MessageBox.INFO, title, msg,
+                           show_copy_button=False).exec_()
             elif button.objectName() == 'view_metadata_button':
                 selected_rows = self._selected_rows()
                 if selected_rows:
                     self.show_metadata_dialog(selected_rows[0])
                 else:
-                    title = "No selected book"
+                    title = "View metadata"
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
@@ -614,23 +621,20 @@ class BookStatusDialog(SizePersistedDialog):
                                                        'icons',
                                                        'deep_view.png')))
 
-        # Synchronize collections
-        if False:
-            self.sc_button = self.dialogButtonBox.addButton('Synchronize collections', QDialogButtonBox.ActionRole)
-            self.sc_button.setObjectName('synchronize_collections_button')
-            self.sc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'sync_collections.png')))
-            cfl = self.prefs.get('collection_field_lookup', '')
-            if not cfl:
-                self.sc_button.setEnabled(False)
-
         # View metadata
         self.vm_button = self.dialogButtonBox.addButton('View metadata', QDialogButtonBox.ActionRole)
         self.vm_button.setObjectName('view_metadata_button')
         self.vm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'update_metadata.png')))
+
+        # View collections
+        self.vc_button = self.dialogButtonBox.addButton('View collections', QDialogButtonBox.ActionRole)
+        self.vc_button.setObjectName('view_collections_button')
+        self.vc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                   'icons',
+                                                   'update_metadata.png')))
+
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
 
         self.l.addWidget(self.dialogButtonBox)
