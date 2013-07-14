@@ -25,7 +25,7 @@ from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QP
 # Import Ui_Form from form generated dynamically during initialization
 if True:
     sys.path.insert(0, dialog_resources_path)
-    from metadata_ui import Ui_Dialog
+    from view_metadata_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
 
 class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):

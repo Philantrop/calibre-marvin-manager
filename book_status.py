@@ -18,7 +18,7 @@ from PyQt4 import QtCore, QtGui
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QApplication, QBrush,
                       QCheckBox, QColor, QCursor, QDialog, QDialogButtonBox, QFont, QIcon,
                       QLabel, QMenu, QModelIndex, QPainter, QPixmap, QString,
-                      QTableView, QTableWidgetItem,
+                      QTableView, QTableWidgetItem, QTimer,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
 from PyQt4.QtWebKit import QWebView
@@ -29,6 +29,7 @@ from calibre.devices.errors import UserFeedback
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.ebooks.oeb.iterator import EbookIterator
+from calibre.gui2 import Application
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.utils.config import config_dir, JSONConfig
@@ -38,7 +39,7 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, Book, HelpView,
+    AbortRequestException, Book, HelpView, InventoryCollections,
     ProgressBar, SizePersistedDialog, Struct)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_Mangler_resources', 'dialogs')
@@ -57,12 +58,12 @@ class MyTableView(QTableView):
         menu = QMenu(self)
 
         if col == self.parent.ANNOTATIONS_COL:
-            ac = menu.addAction("Show highlights")
+            ac = menu.addAction("View annotations && highlights")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
 
         elif col == self.parent.ARTICLES_COL:
-            ac = menu.addAction("Show articles")
+            ac = menu.addAction("View articles")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_articles", row))
 
@@ -97,12 +98,18 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_all.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_all_collections", row))
 
+            menu.addSeparator()
+
+            ac = menu.addAction("Manage collections")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'checkmark.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "manage_collections", row))
+
         elif col == self.parent.DEEP_VIEW_COL:
-            ac = menu.addAction("Generate Deep View")
+            ac = menu.addAction("Generate Deep View™ content")
             ac.setIcon(QIcon(I('exec.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "create_deep_view", row))
 
-            ac = menu.addAction("Show Deep View")
+            ac = menu.addAction("View Deep View™ content")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view", row))
 
@@ -142,7 +149,7 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_from_marvin", row))
 
         elif col == self.parent.VOCABULARY_COL:
-            ac = menu.addAction("Show vocabulary words")
+            ac = menu.addAction("View vocabulary words")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary", row))
 
@@ -442,14 +449,16 @@ class BookStatusDialog(SizePersistedDialog):
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.ActionRole:
             if button.objectName() == 'match_colors_button':
                 self.toggle_match_colors()
-            elif button.objectName() == 'calculate_word_count_button':
-                self._calculate_word_count()
-            elif button.objectName() == 'generate_deep_view_button':
-                self._generate_deep_view()
+#             elif button.objectName() == 'calculate_word_count_button':
+#                 self._calculate_word_count()
+#             elif button.objectName() == 'generate_deep_view_button':
+#                 self._generate_deep_view()
+            elif button.objectName() == 'manage_collections_button':
+                self.show_manage_collections_dialog()
             elif button.objectName() == 'view_collections_button':
                 selected_rows = self._selected_rows()
                 if selected_rows:
-                    self.show_collections_dialog(selected_rows[0])
+                    self.show_view_collections_dialog(selected_rows[0])
                 else:
                     title = "View collections"
                     msg = "<p>Select a book.</p>"
@@ -458,7 +467,7 @@ class BookStatusDialog(SizePersistedDialog):
             elif button.objectName() == 'view_metadata_button':
                 selected_rows = self._selected_rows()
                 if selected_rows:
-                    self.show_metadata_dialog(selected_rows[0])
+                    self.show_view_metadata_dialog(selected_rows[0])
                 else:
                     title = "View metadata"
                     msg = "<p>Select a book.</p>"
@@ -487,13 +496,15 @@ class BookStatusDialog(SizePersistedDialog):
             self._set_flags(action)
         elif action in ['show_articles', 'show_deep_view', 'show_highlights', 'show_vocabulary']:
             self.show_assets_dialog(action, row)
+        elif action == 'manage_collections':
+            self.show_manage_collections_dialog()
         elif action == 'show_collections':
-            self.show_collections_dialog(row)
+            self.show_view_collections_dialog(row)
         elif action in ['clear_all_collections', 'export_collections',
                         'import_collections', 'synchronize_collections']:
             self._update_collections(action)
         elif action == 'show_metadata':
-            self.show_metadata_dialog(row)
+            self.show_view_metadata_dialog(row)
 
         else:
             selected_books = self._selected_books()
@@ -525,12 +536,12 @@ class BookStatusDialog(SizePersistedDialog):
         row = index.row()
 
         if column in [self.TITLE_COL, self.AUTHOR_COL]:
-            self.show_metadata_dialog(row)
+            self.show_view_metadata_dialog(row)
         elif column in [self.ANNOTATIONS_COL, self.DEEP_VIEW_COL,
                         self.ARTICLES_COL, self.VOCABULARY_COL]:
             self.show_assets_dialog(asset_actions[column], row)
         elif column == self.COLLECTIONS_COL:
-            self.show_collections_dialog(row)
+            self.show_view_collections_dialog(row)
         elif column in [self.FLAGS_COL]:
             title = "Flag options"
             msg = "<p>Right-click in the Flags column for flag management options.</p>"
@@ -635,6 +646,14 @@ class BookStatusDialog(SizePersistedDialog):
                                                    'icons',
                                                    'update_metadata.png')))
 
+        # Manage collections
+        if True:
+            self.mc_button = self.dialogButtonBox.addButton('Manage collections', QDialogButtonBox.ActionRole)
+            self.mc_button.setObjectName('manage_collections_button')
+            self.mc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'checkmark.png')))
+
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
 
         self.l.addWidget(self.dialogButtonBox)
@@ -644,6 +663,23 @@ class BookStatusDialog(SizePersistedDialog):
         self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
 
         self.resize_dialog()
+
+    def launch_collections_scanner(self):
+        '''
+        Invoke InventoryCollections to identify cids with collection assignments
+        After indexing, self.library_inventory.collection_ids is list of cids
+        '''
+        self._log_location()
+        self.library_inventory = InventoryCollections(self)
+        self.connect(self.library_inventory, self.library_inventory.signal, self.library_inventory_complete)
+        QTimer.singleShot(0, self.start_library_inventory)
+
+        # Wait for scan to start
+        while not self.library_inventory.isRunning():
+            Application.processEvents()
+
+    def library_inventory_complete(self):
+        self._log_location(repr(self.library_inventory.collection_ids))
 
     def marvin_status_changed(self, command):
         '''
@@ -738,6 +774,7 @@ class BookStatusDialog(SizePersistedDialog):
             #self._log("importing metadata dialog from '%s'" % klass)
             sys.path.insert(0, dialog_resources_path)
             this_dc = importlib.import_module('html_viewer')
+            sys.path.remove(dialog_resources_path)
             dlg = this_dc.HTMLViewerDialog(self, 'html_viewer')
             dlg.initialize(self,
                            content,
@@ -755,7 +792,97 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self.parent.show_help()
 
-    def show_collections_dialog(self, row):
+    def show_manage_collections_dialog(self):
+        '''
+        Present all active collection names, allow edit/deletion
+        Marvin changes applied immediately to mainDb.
+        Returns a dict of original, changed so we can update custom column assignments,
+        connected device
+        '''
+        self._log_location()
+
+        # Build an inventory of cids with collection assignments
+        self.launch_collections_scanner()
+
+        current_collections = {}
+
+        # Get all Marvin collection names
+        con = sqlite3.connect(self.parent.connected_device.local_db_path)
+        with con:
+            con.row_factory = sqlite3.Row
+
+            collections_cur = con.cursor()
+            collections_cur.execute('''SELECT
+                                        Name
+                                       FROM Collections
+                                    ''')
+            rows = collections_cur.fetchall()
+            collections_cur.close()
+        marvin_collection_list = []
+        if len(rows):
+            marvin_collection_list = [row[b'Name'] for row in rows]
+            marvin_collection_list = sorted(marvin_collection_list, key=sort_key)
+            current_collections['Marvin'] = marvin_collection_list
+
+        # Get all calibre collection names
+        calibre_collection_list = []
+        cfl = self.parent.prefs.get('collection_field_lookup', '')
+        if cfl:
+            db = self.opts.gui.current_db
+            calibre_collection_list = db.all_custom(db.field_metadata.key_to_label(cfl))
+            current_collections['calibre'] = sorted(calibre_collection_list, key=sort_key)
+
+        if current_collections:
+            if True:
+                klass = os.path.join(dialog_resources_path, 'manage_collections.py')
+                if os.path.exists(klass):
+                    if self.library_inventory.isRunning():
+                        self.library_inventory.wait()
+
+                    sys.path.insert(0, dialog_resources_path)
+                    this_dc = importlib.import_module('manage_collections')
+                    sys.path.remove(dialog_resources_path)
+
+#                     dlg.initialize(self,
+#                                    current_collections,
+#                                    self.library_inventory.collection_ids,
+#                                    self.parent.connected_device)
+
+                    dlg = this_dc.MyDeviceCategoryEditor(self.opts.gui, tag_to_match=None,
+                                                         data=current_collections, key=sort_key)
+                    dlg.exec_()
+                    if dlg.result() == dlg.Accepted:
+                        self._log("to_rename: %s" % dlg.to_rename)  # dict of new text to old ids
+                        self._log("to_delete %s" % dlg.to_delete)  # list of ids
+
+                else:
+                    self._log("ERROR: Can't import from '%s'" % klass)
+
+            else:
+                klass = os.path.join(dialog_resources_path, 'manage_collections.py')
+                if os.path.exists(klass):
+                    sys.path.insert(0, dialog_resources_path)
+                    this_dc = importlib.import_module('manage_collections')
+                    sys.path.remove(dialog_resources_path)
+                    dlg = this_dc.CollectionsManagementDialog(self, 'collections_manager')
+
+                    if self.library_inventory.isRunning():
+                        self.library_inventory.wait()
+
+                    dlg.initialize(self,
+                                   current_collections,
+                                   self.library_inventory.collection_ids,
+                                   self.parent.connected_device)
+                    dlg.exec_()
+                else:
+                    self._log("ERROR: Can't import from '%s'" % klass)
+        else:
+            title = "Collection management"
+            msg = "<p>No collections to manage.</p>"
+            MessageBox(MessageBox.INFO, title, msg,
+                   show_copy_button=False).exec_()
+
+    def show_view_collections_dialog(self, row):
         '''
         Present collection assignments to user, get command
         '''
@@ -767,17 +894,18 @@ class BookStatusDialog(SizePersistedDialog):
         marvin_collections = self._get_marvin_collections(book_id)
 
         if calibre_collections == [] and marvin_collections == []:
-            title = "No assigned collections"
-            msg = "<p>No collections assigned in calibre or Marvin.</p>"
+            title = self.installed_books[book_id].title
+            msg = "<p>This book is not assigned to any collections.</p>"
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
         else:
-            klass = os.path.join(dialog_resources_path, 'collections_dialog.py')
+            klass = os.path.join(dialog_resources_path, 'view_collections.py')
             if os.path.exists(klass):
                 #self._log("importing metadata dialog from '%s'" % klass)
                 sys.path.insert(0, dialog_resources_path)
-                this_dc = importlib.import_module('collections_dialog')
-                dlg = this_dc.CollectionsManagementDialog(self, 'collections_management')
+                this_dc = importlib.import_module('view_collections')
+                sys.path.remove(dialog_resources_path)
+                dlg = this_dc.CollectionsViewerDialog(self, 'collections_viewer')
                 cid = self._selected_cid(row)
                 dlg.initialize(self,
                                self.installed_books[book_id].title,
@@ -790,16 +918,17 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 self._log("ERROR: Can't import from '%s'" % klass)
 
-    def show_metadata_dialog(self, row):
+    def show_view_metadata_dialog(self, row):
         '''
         '''
         self._log_location(row)
         cid = self._selected_cid(row)
-        klass = os.path.join(dialog_resources_path, 'metadata_dialog.py')
+        klass = os.path.join(dialog_resources_path, 'view_metadata.py')
         if os.path.exists(klass):
             #self._log("importing metadata dialog from '%s'" % klass)
             sys.path.insert(0, dialog_resources_path)
-            this_dc = importlib.import_module('metadata_dialog')
+            this_dc = importlib.import_module('view_metadata')
+            sys.path.remove(dialog_resources_path)
             dlg = this_dc.MetadataComparisonDialog(self, 'metadata_comparison')
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
@@ -816,6 +945,9 @@ class BookStatusDialog(SizePersistedDialog):
 
     def size_hint(self):
         return QtCore.QSize(self.perfect_width, self.height())
+
+    def start_library_inventory(self):
+        self.library_inventory.start()
 
     def toggle_match_colors(self):
         self.show_match_colors = not self.show_match_colors

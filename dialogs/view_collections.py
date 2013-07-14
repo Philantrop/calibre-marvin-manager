@@ -27,10 +27,11 @@ from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractListModel, QColor,
 # Import Ui_Form from form generated dynamically during initialization
 if True:
     sys.path.insert(0, dialog_resources_path)
-    from collections_ui import Ui_Dialog
+    from view_collections_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
 
 class MyListModel(QAbstractListModel):
+    # http://www.saltycrane.com/blog/2008/01/pyqt-43-simple-qabstractlistmodel/
 
     def __init__(self, datain, parent=None, *args):
         '''
@@ -48,18 +49,18 @@ class MyListModel(QAbstractListModel):
         else:
             return QVariant()
 
-class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
+class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     marvin_device_status_changed = pyqtSignal(str)
 
     def accept(self):
         self._log_location()
-        super(CollectionsManagementDialog, self).accept()
+        super(CollectionsViewerDialog, self).accept()
 
     def close(self):
         self._log_location()
-        super(CollectionsManagementDialog, self).close()
+        super(CollectionsViewerDialog, self).close()
 
     def dispatch_button_click(self, button):
         '''
@@ -69,6 +70,14 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         self._log_location()
         if self.bb.buttonRole(button) == QDialogButtonBox.AcceptRole:
             self._log("AcceptRole")
+            self._log("initial calibre collections: %s" % self.initial_calibre_collections)
+            self._log("initial marvin collections: %s" % self.initial_marvin_collections)
+
+            self.updated_calibre_collections = self._get_calibre_collections()
+            self.updated_marvin_collections = self._get_marvin_collections()
+            self._log("updated calibre collections: %s" % self.updated_calibre_collections)
+            self._log("updated marvin collections: %s" % self.updated_marvin_collections)
+
             self.accept()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
@@ -143,8 +152,10 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         self.clear_all_collections_tb.setToolTip("Remove all collection assignments")
         self.clear_all_collections_tb.clicked.connect(self._clear_all_collections)
 
-        # Populate collection models
+        # Populate collection models, save a copy of initial state
         self._initialize_collections()
+        self.initial_calibre_collections = list(self._get_calibre_collections())
+        self.initial_marvin_collections = list(self._get_marvin_collections())
 
         # Remind the user of calibre's custom column, disable buttons if no calibre field
         calibre_cf = self.prefs.get('collection_field_comboBox', '')
@@ -195,8 +206,13 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         '''
         self._log_location(command)
         self.stored_command = command
-        self.calibre_selection = self._selected_calibre_rows()
-        self.marvin_selection = self._selected_marvin_rows()
+        self._log("initial calibre collections: %s" % self.initial_calibre_collections)
+        self._log("initial marvin collections: %s" % self.initial_marvin_collections)
+
+        self.updated_calibre_collections = self._get_calibre_collections()
+        self.updated_marvin_collections = self._get_calibre_collections()
+        self._log("updated calibre collections: %s" % self.updated_calibre_collections)
+        self._log("updated marvin collections: %s" % self.updated_marvin_collections)
         self.close()
 
     # ~~~~~~~~ Helpers ~~~~~~~~
@@ -225,13 +241,20 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         '''
         self._log_location()
         self.stored_command = 'clear_all_collections'
-        self._log("selected calibre rows: %s" % self._selected_calibre_rows())
-        self._log("selected Marvin rows: %s" % self._selected_marvin_rows())
 
-#         for row in sorted(rows_to_delete, reverse=True):
-#             self.tm.beginRemoveRows(QModelIndex(), row, row)
-#             del self.tm.arraydata[row]
-#             self.tm.endRemoveRows()
+        # Delete calibre collection assignments
+        rows_to_delete = len(self.calibre_lw.model().listdata)
+        for row in range(rows_to_delete - 1, -1, -1):
+            self.calibre_lw.model().beginRemoveRows(QModelIndex(), row, row)
+            del self.calibre_lw.model().listdata[row]
+            self.calibre_lw.model().endRemoveRows()
+
+        # Delete Marvin collection assignments
+        rows_to_delete = len(self.marvin_lw.model().listdata)
+        for row in range(rows_to_delete - 1, -1, -1):
+            self.marvin_lw.model().beginRemoveRows(QModelIndex(), row, row)
+            del self.marvin_lw.model().listdata[row]
+            self.marvin_lw.model().endRemoveRows()
 
     def _export_to_marvin(self):
         '''
@@ -250,6 +273,20 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         smr = self._selected_marvin_rows()
         self._log("scr: %s smr: %s" % (scr, smr))
         self.stored_command = 'import_from_marvin'
+
+    def _get_calibre_collections(self):
+        '''
+
+        '''
+        self._log_location()
+        return self.calibre_lw.model().listdata
+
+    def _get_marvin_collections(self):
+        '''
+
+        '''
+        self._log_location()
+        return self.marvin_lw.model().listdata
 
     def _initialize_collections(self):
         '''
@@ -308,11 +345,19 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
 
     def _remove_collection_assignment(self):
         '''
+        Only one selection can be active
         '''
         self._log_location()
-        scr = self._selected_calibre_rows()
-        smr = self._selected_marvin_rows()
-        self._log("scr: %s smr: %s" % (scr, smr))
+        if self._selected_calibre_rows():
+            row = self._selected_calibre_rows()[0]
+            self.calibre_lw.model().beginRemoveRows(QModelIndex(), row, row)
+            del self.calibre_lw.model().listdata[row]
+            self.calibre_lw.model().endRemoveRows()
+        elif self._selected_marvin_rows():
+            row = self._selected_marvin_rows()[0]
+            self.marvin_lw.model().beginRemoveRows(QModelIndex(), row, row)
+            del self.marvin_lw.model().listdata[row]
+            self.marvin_lw.model().endRemoveRows()
 
     def _selected_calibre_rows(self):
         '''
@@ -327,5 +372,4 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
         '''
         srs = self.marvin_lw.selectionModel().selectedRows()
         return [sr.row() for sr in srs]
-
 

@@ -218,7 +218,6 @@ class MyBlockingBusy(QDialog):
     def reject(self):
         pass # Cannot cancel this dialog
 
-
 class ProgressBar(QDialog):
     def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
                  label='Label goes here', on_top=False):
@@ -270,9 +269,10 @@ class ProgressBar(QDialog):
 
 class IndexLibrary(QThread):
     '''
-    Build two indexes of library
-    {uuid: {'title':..., 'author':...}}
-    {id:   {'uuid':..., 'author':...}}
+    Build indexes of library:
+    {title: {'authors':…, 'id':…, 'uuid:'…}, …}
+    {uuid:  {'author's:…, 'id':…, 'title':…, 'path':…}, …}
+    {id:    {'uuid':…, 'author':…}, …}
     '''
 
     def __init__(self, parent):
@@ -334,6 +334,33 @@ class IndexLibrary(QThread):
                     'path': profile['fmt_epub']
                     }
         return by_uuid
+
+
+class InventoryCollections(QThread):
+    '''
+    Build a list of books with collection assignments
+    '''
+
+    def __init__(self, parent):
+        QThread.__init__(self, parent)
+        self.signal = SIGNAL("collection_inventory_complete")
+        self.cdb = parent.opts.gui.current_db
+        self.cfl = parent.prefs.get('collection_field_lookup', None)
+        self.collection_ids = None
+
+    def run(self):
+        self.collection_ids = self.inventory_collections()
+        self.emit(self.signal)
+
+    def inventory_collections(self):
+        id = self.cdb.FIELD_MAP['id']
+        active_collections = []
+        if self.cfl is not None:
+            for record in self.cdb.data.iterall():
+                mi = self.cdb.get_metadata(record[id], index_is_id=True)
+                if mi.get_user_metadata(self.cfl, False)['#value#']:
+                    active_collections.append(record[id])
+        return active_collections
 
 
 '''     Helper Classes  '''
