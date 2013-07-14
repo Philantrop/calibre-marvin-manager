@@ -218,6 +218,7 @@ class MyBlockingBusy(QDialog):
     def reject(self):
         pass # Cannot cancel this dialog
 
+
 class ProgressBar(QDialog):
     def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
                  label='Label goes here', on_top=False):

@@ -8,138 +8,91 @@ __license__ = 'GPL v3'
 __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import os, sqlite3, sys
-from functools import partial
+import sys
 
-from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
-
+from calibre.gui2 import question_dialog, error_dialog
 from calibre.gui2.dialogs.device_category_editor import DeviceCategoryEditor, ListWidgetItem
 from calibre.gui2.dialogs.device_category_editor_ui import Ui_DeviceCategoryEditor
-
 from calibre.utils.icu import sort_key
-from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 
-from calibre_plugins.marvin_manager.book_status import dialog_resources_path
-from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
-
-from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractListModel, QColor,
-                      QDialog, QDialogButtonBox, QIcon,
-                      QModelIndex, QPalette, QPixmap, QSize, QSizePolicy, QVariant,
+from PyQt4.Qt import (Qt, QDialog,
                       pyqtSignal)
 
-# Import Ui_Form from form generated dynamically during initialization
-if True:
-    sys.path.insert(0, dialog_resources_path)
-    from manage_collections_ui import Ui_Dialog
-    sys.path.remove(dialog_resources_path)
-
-class MyListModel(QAbstractListModel):
-    # http://www.saltycrane.com/blog/2008/01/pyqt-43-simple-qabstractlistmodel/
-
-    def __init__(self, datain, parent=None, *args):
-        '''
-        datain: a list where each item is a row
-        '''
-        QAbstractItemModel.__init__(self, parent, *args)
-        self.listdata = datain
-
-    def rowCount(self, parent=QModelIndex()):
-        return len(self.listdata)
-
-    def data(self, index, role):
-        if index.isValid() and role == Qt.DisplayRole:
-            return QVariant(self.listdata[index.row()])
-        else:
-            return QVariant()
-
-class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
+class MyDeviceCategoryEditor(DeviceCategoryEditor):
+    '''
+    subclass of gui2.dialogs.device_category_editor
+    '''
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     marvin_device_status_changed = pyqtSignal(str)
 
-    def accept(self):
-        self._log_location()
-        super(CollectionsManagementDialog, self).accept()
-
-    def close(self):
-        self._log_location()
-        super(CollectionsManagementDialog, self).close()
-
-    def dispatch_button_click(self, button):
-        '''
-        BUTTON_ROLES = ['AcceptRole', 'RejectRole', 'DestructiveRole', 'ActionRole',
-                        'HelpRole', 'YesRole', 'NoRole', 'ApplyRole', 'ResetRole']
-        '''
-        self._log_location()
-        if self.bb.buttonRole(button) == QDialogButtonBox.AcceptRole:
-            self._log("AcceptRole")
-            self.accept()
-
-        elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
-            if button.objectName() == 'rename_button':
-                self._rename_collection()
-
-        elif self.bb.buttonRole(button) == QDialogButtonBox.DestructiveRole:
-            if button.objectName() == 'remove_button':
-                self._remove_collection()
-
-        elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
-            self._log("RejectRole")
-            self.close()
-
-    def esc(self, *args):
-        self._log_location()
-        self._clear_selected_rows()
-
-    def initialize(self, parent, original_collections, collection_ids, connected_device):
-        '''
-        __init__ is called on SizePersistedDialog()
-        '''
+    def __init__(self, parent, tag_to_match, data, key, connected_device):
+        QDialog.__init__(self, parent.opts.gui)
+        Ui_DeviceCategoryEditor.__init__(self)
         self.setupUi(self)
-        self.collection_ids = collection_ids
-        self.opts = parent.opts
-        self.original_collections = original_collections
-        self.parent = parent
-        self.stored_command = None
-        self.verbose = parent.verbose
-
-        self._log_location()
-
-        self.setWindowTitle("Collection Management")
+        self.connected_device = connected_device
+        self.verbose = parent.opts.verbose
 
         # Subscribe to Marvin driver change events
         connected_device.marvin_device_signals.reader_app_status_changed.connect(
             self.marvin_status_changed)
 
-        # ~~~~~~~~ Rename button ~~~~~~~~
-        self.rename_button = self.bb.addButton('Rename', QDialogButtonBox.ActionRole)
-        self.rename_button.setObjectName('rename_button')
-        self.rename_button.setIcon(QIcon(I('edit_input.png')))
+        # Remove help icon on title bar
+        icon = self.windowIcon()
+        self.setWindowFlags(self.windowFlags()&(~Qt.WindowContextHelpButtonHint))
+        self.setWindowIcon(icon)
+        self.setWindowTitle("Edit collections")
+        self.label.setText("Active collections")
 
-        # ~~~~~~~~ Delete button ~~~~~~~~
-        self.remove_button = self.bb.addButton('Remove', QDialogButtonBox.DestructiveRole)
-        self.remove_button.setObjectName('remove_button')
-        self.remove_button.setIcon(QIcon(I('trash.png')))
+        self.to_rename = {}
+        self.to_delete = set([])
 
-        # Populate collection model, save a copy of initial state
-        self._initialize_collections()
+        cc = set(data['calibre'])
+        mc = set(data['Marvin'])
+        merged = list(cc.union(mc))
+        for tag in sorted(merged, key=key):
+            item = ListWidgetItem(tag)
+            item.setData(Qt.UserRole, tag)
+            item.setFlags (item.flags() | Qt.ItemIsEditable)
+            self.available_tags.addItem(item)
 
-        # Set the bg color of the description text fields to the dialog bg color
-        bgcolor = self.palette().color(QPalette.Background)
-        palette = QPalette()
-        palette.setColor(QPalette.Base, bgcolor)
-        self.collections_lw.setPalette(palette)
+        self.delete_button.clicked.connect(self.delete_tags)
+        self.rename_button.clicked.connect(self.rename_tag)
+        self.available_tags.itemDoubleClicked.connect(self._rename_tag)
+        self.available_tags.itemChanged.connect(self.finish_editing)
 
-        # Hook the button events
-        self.bb.clicked.connect(self.dispatch_button_click)
+    def delete_tags(self):
+        deletes = self.available_tags.selectedItems()
+        if not deletes:
+            error_dialog(self, 'No items selected',
+                               'You must select at least one item from the list.').exec_()
+            return
+        ct = ', '.join([unicode(item.text()) for item in deletes])
+        if not question_dialog(self, 'Are you sure?',
+            '<p>'+'Are you sure you want to delete the following items?'+'<br>'+ct):
+            return
+        row = self.available_tags.row(deletes[0])
+        for item in deletes:
+            self.to_delete.add(unicode(item.text()))
+            self.available_tags.takeItem(self.available_tags.row(item))
 
-        # Restore position
-        self.resize_dialog()
+        if row >= self.available_tags.count():
+            row = self.available_tags.count() - 1
+        if row >= 0:
+            self.available_tags.scrollToItem(self.available_tags.item(row))
+
+    def finish_editing(self, item):
+        if not item.text():
+                error_dialog(self, _('Item is blank'),
+                             _('An item cannot be set to nothing. Delete it instead.')).exec_()
+                item.setText(item.previous_text())
+                return
+        if item.text() != item.initial_text():
+            self.to_rename[unicode(item.initial_text())] = unicode(item.text())
 
     def marvin_status_changed(self, command):
         '''
-
         '''
         self.marvin_device_status_changed.emit(command)
 
@@ -149,66 +102,16 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
             self._log("closing dialog: %s" % command)
             self.close()
 
-    def store_command(self, command):
-        '''
-        Save the requested operation
-        '''
-        self._log_location(command)
-        self.stored_command = command
-        self.close()
+    def rename_tag(self):
+        item = self.available_tags.currentItem()
+        self._rename_tag(item)
 
-    # ~~~~~~~~ Helpers ~~~~~~~~
-    def _clear_selection(self):
-        '''
-        '''
-        self._log_location()
-        self.collections_lw.clearSelection()
-
-    def _clear_selected_rows(self):
-        '''
-        Clear any active selections
-        '''
-        self._log_location()
-        self._clear_selection()
-
-    def _clear_all_collections(self):
-        '''
-        '''
-        self._log_location()
-        self.stored_command = 'clear_all_collections'
-
-        # Delete calibre collection assignments
-        rows_to_delete = len(self.calibre_lw.model().listdata)
-        for row in range(rows_to_delete - 1, -1, -1):
-            self.calibre_lw.model().beginRemoveRows(QModelIndex(), row, row)
-            del self.calibre_lw.model().listdata[row]
-            self.calibre_lw.model().endRemoveRows()
-
-        # Delete Marvin collection assignments
-        rows_to_delete = len(self.collections_lw.model().listdata)
-        for row in range(rows_to_delete - 1, -1, -1):
-            self.collections_lw.model().beginRemoveRows(QModelIndex(), row, row)
-            del self.collections_lw.model().listdata[row]
-            self.collections_lw.model().endRemoveRows()
-
-    def _get_collections(self):
-        '''
-
-        '''
-        self._log_location()
-        return self.collections_lw.model().listdata
-
-    def _initialize_collections(self):
-        '''
-        Populate the data model with merged collection assignments
-        '''
-        self._log_location()
-        self._log("original_collections: %s" % self.original_collections)
-        cc = set(self.original_collections['calibre'])
-        mc = set(self.original_collections['Marvin'])
-        merged = sorted(list(cc.union(mc)), key=sort_key)
-
-        self.collections_lw.setModel(MyListModel(merged))
+    def _rename_tag(self, item):
+        if item is None:
+            error_dialog(self, _('No item selected'),
+                         _('You must select one item from the list of Available items.')).exec_()
+            return
+        self.available_tags.editItem(item)
 
     def _log(self, msg=None):
         '''
@@ -240,81 +143,4 @@ class CollectionsManagementDialog(SizePersistedDialog, Ui_Dialog):
             cls=self.__class__.__name__,
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
-
-    def _rename_collection(self):
-        '''
-        '''
-        self._log_location()
-        if self._selected_rows():
-            row = self._selected_rows()[0]
-            current_name = self.collections_lw.model().listdata[row]
-            self._log("current_name: %s" % current_name)
-
-    def _remove_collection(self):
-        '''
-        '''
-        self._log_location()
-        if self._selected_rows():
-            row = self._selected_rows()[0]
-            self.collections_lw.model().beginRemoveRows(QModelIndex(), row, row)
-            del self.collections_lw.model().listdata[row]
-            self.collections_lw.model().endRemoveRows()
-
-    def _selected_rows(self):
-        '''
-        Return a list of selected rows
-        '''
-        srs = self.collections_lw.selectionModel().selectedRows()
-        return [sr.row() for sr in srs]
-
-class MyDeviceCategoryEditor(DeviceCategoryEditor):
-    '''
-    subclass of gui2.dialogs.device_category_editor
-    '''
-    def __init__(self, window, tag_to_match, data, key):
-        QDialog.__init__(self, window)
-        Ui_DeviceCategoryEditor.__init__(self)
-        self.setupUi(self)
-        # Remove help icon on title bar
-        icon = self.windowIcon()
-        self.setWindowFlags(self.windowFlags()&(~Qt.WindowContextHelpButtonHint))
-        self.setWindowIcon(icon)
-        self.setWindowTitle("Manage collections")
-        self.label.setText("Active collections")
-
-        self.to_rename = {}
-        self.to_delete = set([])
-        self.original_names = {}
-        self.all_tags = {}
-
-        """
-        for k,v in data:
-            self.all_tags[v] = k
-            self.original_names[k] = v
-        for tag in sorted(self.all_tags.keys(), key=key):
-            item = ListWidgetItem(tag)
-            item.setData(Qt.UserRole, self.all_tags[tag])
-            item.setFlags (item.flags() | Qt.ItemIsEditable)
-            self.available_tags.addItem(item)
-
-        if tag_to_match is not None:
-            items = self.available_tags.findItems(tag_to_match, Qt.MatchExactly)
-            if len(items) == 1:
-                self.available_tags.setCurrentItem(items[0])
-        """
-
-        cc = set(data['calibre'])
-        mc = set(data['Marvin'])
-        merged = list(cc.union(mc))
-        for tag in sorted(merged, key=key):
-            item = ListWidgetItem(tag)
-            item.setData(Qt.UserRole, tag)
-            item.setFlags (item.flags() | Qt.ItemIsEditable)
-            self.available_tags.addItem(item)
-
-        self.delete_button.clicked.connect(self.delete_tags)
-        self.rename_button.clicked.connect(self.rename_tag)
-        self.available_tags.itemDoubleClicked.connect(self._rename_tag)
-        self.available_tags.itemChanged.connect(self.finish_editing)
-
 

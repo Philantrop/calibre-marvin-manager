@@ -47,6 +47,9 @@
               <property name="frameShape">
                <enum>QFrame::NoFrame</enum>
               </property>
+              <property name="alternatingRowColors">
+               <bool>true</bool>
+              </property>
              </widget>
             </item>
            </layout>
@@ -152,6 +155,9 @@
              <widget class="QListView" name="marvin_lw">
               <property name="frameShape">
                <enum>QFrame::NoFrame</enum>
+              </property>
+              <property name="alternatingRowColors">
+               <bool>true</bool>
               </property>
              </widget>
             </item>

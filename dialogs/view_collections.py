@@ -175,12 +175,6 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.import_from_marvin_tb.setEnabled(False)
             self.merge_collections_tb.setEnabled(False)
 
-        # Set the bg color of the description text fields to the dialog bg color
-        bgcolor = self.palette().color(QPalette.Background)
-        palette = QPalette()
-        palette.setColor(QPalette.Base, bgcolor)
-        self.calibre_lw.setPalette(palette)
-        self.marvin_lw.setPalette(palette)
 
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)
@@ -294,8 +288,19 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         Hook click, doubleClick events
         '''
         self._log_location()
+
+        # Set the bg color of the description text fields to the dialog bg color
+        if False:
+            bgcolor = self.palette().color(QPalette.Background)
+            palette = QPalette()
+            palette.setColor(QPalette.Base, bgcolor)
+            self.calibre_lw.setPalette(palette)
+            self.marvin_lw.setPalette(palette)
+
         self.calibre_lw.setModel(MyListModel(self.calibre_collections))
+        self.calibre_lw.setAlternatingRowColors(True)
         self.marvin_lw.setModel(MyListModel(self.marvin_collections))
+        self.marvin_lw.setAlternatingRowColors(True)
 
         # Capture click events to clear selections in opposite list
         self.calibre_lw.clicked.connect(self._clear_marvin_selection)

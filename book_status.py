@@ -100,8 +100,8 @@ class MyTableView(QTableView):
 
             menu.addSeparator()
 
-            ac = menu.addAction("Manage collections")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'checkmark.png')))
+            ac = menu.addAction("Edit collections")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'edit_collections.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "manage_collections", row))
 
         elif col == self.parent.DEEP_VIEW_COL:
@@ -648,11 +648,11 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Manage collections
         if True:
-            self.mc_button = self.dialogButtonBox.addButton('Manage collections', QDialogButtonBox.ActionRole)
+            self.mc_button = self.dialogButtonBox.addButton('Edit collections', QDialogButtonBox.ActionRole)
             self.mc_button.setObjectName('manage_collections_button')
             self.mc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                        'icons',
-                                                       'checkmark.png')))
+                                                       'edit_collections.png')))
 
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
 
@@ -675,8 +675,8 @@ class BookStatusDialog(SizePersistedDialog):
         QTimer.singleShot(0, self.start_library_inventory)
 
         # Wait for scan to start
-        while not self.library_inventory.isRunning():
-            Application.processEvents()
+        #while not self.library_inventory.isRunning():
+        #    Application.processEvents()
 
     def library_inventory_complete(self):
         self._log_location(repr(self.library_inventory.collection_ids))
@@ -836,9 +836,6 @@ class BookStatusDialog(SizePersistedDialog):
             if True:
                 klass = os.path.join(dialog_resources_path, 'manage_collections.py')
                 if os.path.exists(klass):
-                    if self.library_inventory.isRunning():
-                        self.library_inventory.wait()
-
                     sys.path.insert(0, dialog_resources_path)
                     this_dc = importlib.import_module('manage_collections')
                     sys.path.remove(dialog_resources_path)
@@ -848,13 +845,17 @@ class BookStatusDialog(SizePersistedDialog):
 #                                    self.library_inventory.collection_ids,
 #                                    self.parent.connected_device)
 
-                    dlg = this_dc.MyDeviceCategoryEditor(self.opts.gui, tag_to_match=None,
-                                                         data=current_collections, key=sort_key)
+                    dlg = this_dc.MyDeviceCategoryEditor(self, tag_to_match=None,
+                                                         data=current_collections, key=sort_key,
+                                                         connected_device=self.parent.connected_device)
                     dlg.exec_()
                     if dlg.result() == dlg.Accepted:
-                        self._log("to_rename: %s" % dlg.to_rename)  # dict of new text to old ids
-                        self._log("to_delete %s" % dlg.to_delete)  # list of ids
-
+                        if self.library_inventory.isRunning():
+                            self.library_inventory.wait()
+                        self._log("original: %s" % current_collections)
+                        self._log("to_rename: %s" % dlg.to_rename)
+                        self._log("to_delete %s" % dlg.to_delete)
+                        self._log("collection_ids: %s" % self.library_inventory.collection_ids)
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
 
