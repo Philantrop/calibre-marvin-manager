@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import sys
+import os, sys
 
 from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import question_dialog, error_dialog
@@ -16,7 +16,7 @@ from calibre.gui2.dialogs.device_category_editor import DeviceCategoryEditor, Li
 from calibre.gui2.dialogs.device_category_editor_ui import Ui_DeviceCategoryEditor
 from calibre.utils.icu import sort_key
 
-from PyQt4.Qt import (Qt, QDialog,
+from PyQt4.Qt import (Qt, QDialog, QIcon,
                       pyqtSignal)
 
 class MyDeviceCategoryEditor(DeviceCategoryEditor):
@@ -41,9 +41,11 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
         # Remove help icon on title bar
         icon = self.windowIcon()
         self.setWindowFlags(self.windowFlags()&(~Qt.WindowContextHelpButtonHint))
-        self.setWindowIcon(icon)
+        self.setWindowIcon(QIcon(os.path.join(parent.opts.resources_path,
+                                 'icons',
+                                 'edit_collections.png')))
         self.setWindowTitle("Edit collections")
-        self.label.setText("Active collections")
+        self.label.setText("All collections")
 
         self.to_rename = {}
         self.to_delete = set([])
@@ -66,11 +68,13 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
         deletes = self.available_tags.selectedItems()
         if not deletes:
             error_dialog(self, 'No items selected',
-                               'You must select at least one item from the list.').exec_()
+                               'Select at least one collection to delete.',
+                               show_copy_button=False).exec_()
             return
         ct = ', '.join([unicode(item.text()) for item in deletes])
         if not question_dialog(self, 'Are you sure?',
-            '<p>'+'Are you sure you want to delete the following items?'+'<br>'+ct):
+            '<p>'+'Are you sure you want to delete the following collections?'+'<br>'+ct,
+            show_copy_button=False):
             return
         row = self.available_tags.row(deletes[0])
         for item in deletes:
@@ -84,8 +88,9 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
 
     def finish_editing(self, item):
         if not item.text():
-                error_dialog(self, _('Item is blank'),
-                             _('An item cannot be set to nothing. Delete it instead.')).exec_()
+                error_dialog(self, 'Item is blank',
+                             'An item cannot be set to nothing. Delete it instead.',
+                             show_copy_button=False).exec_()
                 item.setText(item.previous_text())
                 return
         if item.text() != item.initial_text():
@@ -108,8 +113,8 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
 
     def _rename_tag(self, item):
         if item is None:
-            error_dialog(self, _('No item selected'),
-                         _('You must select one item from the list of Available items.')).exec_()
+            error_dialog(self, 'No item selected',
+                         'Select a collection to rename.').exec_()
             return
         self.available_tags.editItem(item)
 

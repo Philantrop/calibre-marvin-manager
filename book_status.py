@@ -55,23 +55,30 @@ class MyTableView(QTableView):
         index = self.indexAt(event.pos())
         col = index.column()
         row = index.row()
+        selected_books = self.parent._selected_books()
         menu = QMenu(self)
 
         if col == self.parent.ANNOTATIONS_COL:
             ac = menu.addAction("View annotations && highlights")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
+            if len(selected_books) > 1:
+                ac.setEnabled(False)
 
         elif col == self.parent.ARTICLES_COL:
             ac = menu.addAction("View articles")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_articles", row))
+            if len(selected_books) > 1:
+                ac.setEnabled(False)
 
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
             ac = menu.addAction("View collection assignments")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'update_metadata.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
+            if len(selected_books) > 1:
+                ac.setEnabled(False)
 
             ac = menu.addAction("Export calibre collections to Marvin")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
@@ -112,6 +119,8 @@ class MyTableView(QTableView):
             ac = menu.addAction("View Deep View™ content")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view", row))
+            if len(selected_books) > 1:
+                ac.setEnabled(False)
 
         elif col == self.parent.FLAGS_COL:
             ac = menu.addAction("Clear All")
@@ -137,13 +146,44 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_read.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_read_flag", row))
 
+        elif col == self.parent.LAST_OPENED_COL:
+            date_read_field = self.parent.prefs.get('date_read_field_comboBox', None)
+
+            # Test for calibre cids
+            calibre_cids = False
+            for row in selected_books:
+                if selected_books[row]['cid'] is not None:
+                    calibre_cids = True
+                    break
+
+            # Test for active Last Opened dates
+            last_opened = False
+            for row in selected_books:
+                if selected_books[row]['last_opened'] > '':
+                    last_opened = True
+                    break
+
+            title = "No 'Date read' custom field selected"
+            if date_read_field:
+                title = "Apply date to '%s' column" % date_read_field
+            ac = menu.addAction(title)
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "apply_date_read", row))
+
+            if (not date_read_field) or (not calibre_cids) or (not last_opened):
+                ac.setEnabled(False)
+
         elif col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
             ac = menu.addAction("View metadata")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'update_metadata.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_metadata", row))
+            if len(selected_books) > 1:
+                ac.setEnabled(False)
+
             ac = menu.addAction("Export metadata from calibre to Marvin")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_to_marvin", row))
+
             ac = menu.addAction("Import metadata from Marvin to calibre")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_from_marvin", row))
@@ -152,6 +192,8 @@ class MyTableView(QTableView):
             ac = menu.addAction("View vocabulary words")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary", row))
+            if len(selected_books) > 1:
+                ac.setEnabled(False)
 
         elif col == self.parent.WORD_COUNT_COL:
             ac = menu.addAction("Calculate word count")
@@ -487,7 +529,9 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location("%s row: %s" % (repr(action), row))
 
-        if action == 'calculate_word_count':
+        if action == 'apply_date_read':
+            self._apply_date_read()
+        elif action == 'calculate_word_count':
             self._calculate_word_count()
         elif action in ['clear_new_flag', 'clear_reading_list_flag',
                         'clear_read_flag', 'clear_all_flags']:
@@ -615,7 +659,6 @@ class BookStatusDialog(SizePersistedDialog):
         self.show_match_colors = not self.show_match_colors
         self.toggle_match_colors()
 
-
         # Word count
         if False:
             self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
@@ -674,9 +717,10 @@ class BookStatusDialog(SizePersistedDialog):
         self.connect(self.library_inventory, self.library_inventory.signal, self.library_inventory_complete)
         QTimer.singleShot(0, self.start_library_inventory)
 
-        # Wait for scan to start
-        #while not self.library_inventory.isRunning():
-        #    Application.processEvents()
+        if False:
+            # Wait for scan to start
+            while not self.library_inventory.isRunning():
+                Application.processEvents()
 
     def library_inventory_complete(self):
         self._log_location(repr(self.library_inventory.collection_ids))
@@ -969,6 +1013,37 @@ class BookStatusDialog(SizePersistedDialog):
         self.tm.refresh(self.show_match_colors)
 
     # Helpers
+    def _apply_date_read(self):
+        '''
+        Fetch the LAST_OPENED date, convert to datetime, apply to custom field
+        '''
+        self._log_location()
+        lookup = self.parent.prefs.get('date_read_field_lookup', None)
+        if lookup:
+            selected_books = self._selected_books()
+            for row in selected_books:
+                cid = selected_books[row]['cid']
+                if cid is not None:
+                    # Get the current value from the lookup field
+                    db = self.opts.gui.current_db
+                    mi = db.get_metadata(cid, index_is_id=True)
+                    old_date = mi.get_user_metadata(lookup, False)['#value#']
+                    #self._log("Updating old date_read value: %s" % repr(old_date))
+
+                    # Build a new datetime object from Last Opened
+                    new_date = selected_books[row]['last_opened']
+                    if new_date:
+                        um = mi.metadata_for_field(lookup)
+                        ndo = datetime.strptime(new_date, "%Y-%m-%d")
+                        um['#value#'] = ndo.replace(hour=12)
+                        mi.set_user_metadata(lookup, um)
+                        db.set_metadata(cid, mi, set_title=False, set_authors=False)
+                        db.commit()
+                    else:
+                        self._log("'%s' has no Last Opened date" % selected_books[row]['title'])
+        else:
+            self._log("No date_read_field_lookup specified")
+
     def _calculate_word_count(self):
         '''
         Calculate word count for each selected book
@@ -1420,6 +1495,11 @@ class BookStatusDialog(SizePersistedDialog):
         self.tv.setModel(self.tm)
         self.tv.setShowGrid(False)
         if self.parent.prefs.get('use_monospace_font', False):
+            # Set row height
+            nrows = len(self.tabledata)
+            for row in xrange(nrows):
+                self.tv.setRowHeight(row, 16)
+
             if isosx:
                 FONT = QFont('Monaco', 11)
             elif iswindows:
@@ -1428,6 +1508,12 @@ class BookStatusDialog(SizePersistedDialog):
                 FONT = QFont('Monospace', 9)
                 FONT.setStyleHint(QFont.TypeWriter)
             self.tv.setFont(FONT)
+        else:
+            # Set row height
+            nrows = len(self.tabledata)
+            for row in xrange(nrows):
+                self.tv.setRowHeight(row, 18)
+
         self.tvSelectionModel = self.tv.selectionModel()
         self.tv.setAlternatingRowColors(not self.show_match_colors)
         self.tv.setShowGrid(False)
@@ -1452,11 +1538,6 @@ class BookStatusDialog(SizePersistedDialog):
         if saved_column_widths:
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
-
-        # Set row height
-        nrows = len(self.tabledata)
-        for row in xrange(nrows):
-            self.tv.setRowHeight(row, 16)
 
         self.tv.setSortingEnabled(True)
 
@@ -1686,20 +1767,19 @@ class BookStatusDialog(SizePersistedDialog):
     def _get_calibre_collections(self, cid):
         '''
         Return a sorted list of current calibre collection assignments or
-        None if no collection_field_lookup assigned
+        None if no collection_field_lookup assigned or book does not exist in library
         '''
         cfl = self.prefs.get('collection_field_lookup', '')
-        if cfl == '':
+        if cfl == '' or cid is None:
             return None
         else:
             lib_collections = []
-            if cfl and cid:
-                db = self.opts.gui.current_db
-                mi = db.get_metadata(cid, index_is_id=True)
-                lib_collections = mi.get(cfl)
-                if lib_collections:
-                    if type(lib_collections) is not list:
-                        lib_collections = [lib_collections]
+            db = self.opts.gui.current_db
+            mi = db.get_metadata(cid, index_is_id=True)
+            lib_collections = mi.get(cfl)
+            if lib_collections:
+                if type(lib_collections) is not list:
+                    lib_collections = [lib_collections]
             return sorted(lib_collections, key=sort_key)
 
     def _get_marvin_collections(self, book_id):
@@ -2351,8 +2431,9 @@ class BookStatusDialog(SizePersistedDialog):
 
         for row in self._selected_rows():
             author = str(self.tm.arraydata[row][self.AUTHOR_COL].text())
-            cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
             book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
+            cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+            last_opened = str(self.tm.arraydata[row][self.LAST_OPENED_COL].text())
             path = self.tm.arraydata[row][self.PATH_COL]
             title = str(self.tm.arraydata[row][self.TITLE_COL].text())
             uuid = self.tm.arraydata[row][self.UUID_COL]
@@ -2360,6 +2441,7 @@ class BookStatusDialog(SizePersistedDialog):
                                    'author': author,
                                    'book_id': book_id,
                                    'cid': cid,
+                                   'last_opened': last_opened,
                                    'path': path,
                                    'title': title,
                                    'uuid': uuid
@@ -2420,43 +2502,6 @@ class BookStatusDialog(SizePersistedDialog):
                 # Update Marvin db
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
         self.repaint()
-
-    """
-    def _show_collections(self, row):
-        '''
-        Show collections for calibre and Marvin
-        '''
-        book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
-        cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
-        device_collections = self.installed_books[book_id].device_collections
-        if device_collections:
-            msg = "Marvin: " + ', '.join(sorted(device_collections, key=sort_key))
-        else:
-            msg = "Marvin: No collections assigned"
-
-        # Get calibre collection assignments
-        library_collections = []
-        if cid:
-            cfl = self.prefs.get('collection_field_lookup', '')
-            if cfl:
-                db = self.opts.gui.current_db
-                mi = db.get_metadata(cid, index_is_id=True)
-                value = mi.get(cfl)
-                if value:
-                    if type(value) is list:
-                        self._log("value is list: %s" % repr(value))
-                        msg += '\n' + "Calibre: " + ', '.join(value)
-                    elif type(value) in [str, unicode]:
-                        self._log("value is string/uni: %s" % repr(value))
-                        msg += '\n' + "Calibre: " + value
-                    else:
-                        self._log("value is unexpected type: '%s'" % type(value))
-                else:
-                    msg += '\n' + "Calibre: No collections assigned"
-
-        MessageBox(MessageBox.INFO, 'Collections', msg,
-                       show_copy_button=False).exec_()
-    """
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
         self._log_location(command_name)

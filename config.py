@@ -36,27 +36,38 @@ class ConfigWidget(QWidget):
         self.l = QVBoxLayout()
         self.setLayout(self.l)
 
-        # ~~~~~~~~ Create the Collections options group box ~~~~~~~~
-        self.cfg_collection_options_gb = QGroupBox(self)
-        self.cfg_collection_options_gb.setTitle('Collections')
-        self.l.addWidget(self.cfg_collection_options_gb)
+        # ~~~~~~~~ Create the Custom field options group box ~~~~~~~~
+        self.cfg_custom_fields_gb = QGroupBox(self)
+        self.cfg_custom_fields_gb.setTitle('Custom fields')
+        self.l.addWidget(self.cfg_custom_fields_gb)
 
-        self.cfg_collection_options_qgl = QGridLayout(self.cfg_collection_options_gb)
+        self.cfg_custom_fields_qgl = QGridLayout(self.cfg_custom_fields_gb)
         current_row = 0
 
-        # Add the label/combobox for collections destination
+        # Collections
         self.cfg_collections_label = QLabel('Collections')
         self.cfg_collections_label.setAlignment(Qt.AlignLeft)
-        self.cfg_collection_options_qgl.addWidget(self.cfg_collections_label, current_row, 0)
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_label, current_row, 0)
 
-        self.collection_field_comboBox = QComboBox(self.cfg_collection_options_gb)
+        self.collection_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.collection_field_comboBox.setObjectName('collection_field_comboBox')
         self.collection_field_comboBox.setToolTip('custom field for Marvin collections')
-        self.cfg_collection_options_qgl.addWidget(self.collection_field_comboBox, current_row, 1)
+        self.cfg_custom_fields_qgl.addWidget(self.collection_field_comboBox, current_row, 1)
+        current_row += 1
+
+        # Date read
+        self.cfg_date_read_label = QLabel("Date read")
+        self.cfg_date_read_label.setAlignment(Qt.AlignLeft)
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_date_read_label, current_row, 0)
+
+        self.date_read_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
+        self.date_read_field_comboBox.setObjectName('date_read_field_comboBox')
+        self.date_read_field_comboBox.setToolTip('custom field for Date read')
+        self.cfg_custom_fields_qgl.addWidget(self.date_read_field_comboBox, current_row, 1)
         current_row += 1
 
         spacerItem1 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.cfg_collection_options_qgl.addItem(spacerItem1)
+        self.cfg_custom_fields_qgl.addItem(spacerItem1)
 
         # ~~~~~~~~ Create the General options group box ~~~~~~~~
         self.cfg_runtime_options_gb = QGroupBox(self)
@@ -89,24 +100,33 @@ class ConfigWidget(QWidget):
 
         # ~~~~~~~~ End of construction zone ~~~~~~~~
         self.resize(self.sizeHint())
-        self.eligible_custom_fields = self.get_eligible_custom_fields()
-        self.collection_field_comboBox.addItems([''])
-        ecf = sorted(self.eligible_custom_fields.keys(), key=lambda s: s.lower())
-        self.collection_field_comboBox.addItems(ecf)
 
-        # ~~~~~~~~ Restore settings ~~~~~~~~
-        # Restore the collection field
+        # Populate/restore the Collections comboBox
+        self.eligible_collection_fields = self.get_eligible_collection_fields()
+        self.collection_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_collection_fields.keys(), key=lambda s: s.lower())
+        self.collection_field_comboBox.addItems(ecf)
         cf = self.prefs.get('collection_field_comboBox', '')
         idx = self.collection_field_comboBox.findText(cf)
         if idx > -1:
             self.collection_field_comboBox.setCurrentIndex(idx)
+
+        # Populate/restore the Date read comboBox
+        self.eligible_date_read_fields = self.get_eligible_date_read_fields()
+        self.date_read_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_date_read_fields.keys(), key=lambda s: s.lower())
+        self.date_read_field_comboBox.addItems(ecf)
+        cf = self.prefs.get('date_read_field_comboBox', '')
+        idx = self.date_read_field_comboBox.findText(cf)
+        if idx > -1:
+            self.date_read_field_comboBox.setCurrentIndex(idx)
 
         # Restore general settings
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
 
-    def get_eligible_custom_fields(self):
+    def get_eligible_collection_fields(self):
         '''
         Discover qualifying custom fields for collection assignments
         '''
@@ -120,6 +140,21 @@ class ConfigWidget(QWidget):
                 eligible_custom_fields[cfn] = cf
         return eligible_custom_fields
 
+    def get_eligible_date_read_fields(self):
+        '''
+        Discover qualifying custom fields for Date read assignments
+        '''
+        self._log_location()
+
+        eligible_custom_fields = {}
+        for cf in self.gui.current_db.custom_field_keys():
+            cft = self.gui.current_db.metadata_for_field(cf)['datatype']
+            cfn = self.gui.current_db.metadata_for_field(cf)['name']
+            #self._log("cft: %s  cfn: %s" % (cft, cfn))
+            if cft in ['datetime']:
+                eligible_custom_fields[cfn] = cf
+        return eligible_custom_fields
+
     def save_settings(self):
         self._log_location()
 
@@ -127,9 +162,17 @@ class ConfigWidget(QWidget):
         cf = str(self.collection_field_comboBox.currentText())
         self.prefs.set('collection_field_comboBox', cf)
         if cf:
-            self.prefs.set('collection_field_lookup', self.eligible_custom_fields[cf])
+            self.prefs.set('collection_field_lookup', self.eligible_collection_fields[cf])
         else:
             self.prefs.set('collection_field_lookup', '')
+
+        # Save Date read field
+        cf = str(self.date_read_field_comboBox.currentText())
+        self.prefs.set('date_read_field_comboBox', cf)
+        if cf:
+            self.prefs.set('date_read_field_lookup', self.eligible_date_read_fields[cf])
+        else:
+            self.prefs.set('date_read_field_lookup', '')
 
         # Save general settings
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())

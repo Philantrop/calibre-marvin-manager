@@ -101,6 +101,7 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     def initialize(self, parent, book_title, calibre_collections, marvin_collections, connected_device):
         '''
         __init__ is called on SizePersistedDialog()
+        if calibre_collections is None, the book does not exist in calibre library
         '''
         self.setupUi(self)
         self.calibre_collections = calibre_collections
@@ -152,29 +153,38 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.clear_all_collections_tb.setToolTip("Remove all collection assignments")
         self.clear_all_collections_tb.clicked.connect(self._clear_all_collections)
 
-        # Populate collection models, save a copy of initial state
+        # Populate collection models
         self._initialize_collections()
-        self.initial_calibre_collections = list(self._get_calibre_collections())
-        self.initial_marvin_collections = list(self._get_marvin_collections())
 
-        # Remind the user of calibre's custom column, disable buttons if no calibre field
-        calibre_cf = self.prefs.get('collection_field_comboBox', '')
-        if calibre_cf:
-            self.calibre_gb.setTitle("Calibre collections (%s)" % calibre_cf)
+        if self.calibre_collections:
+            # Save initial state
+            self.initial_calibre_collections = list(self._get_calibre_collections())
+            self.initial_marvin_collections = list(self._get_marvin_collections())
+            # Remind the user of calibre's custom column, disable buttons if no calibre field
+            calibre_cf = self.prefs.get('collection_field_comboBox', '')
+            if calibre_cf:
+                self.calibre_gb.setTitle("Calibre collections (%s)" % calibre_cf)
+            else:
+                self.calibre_gb.setTitle("Calibre (no collections field)")
+                self.calibre_gb.setEnabled(False)
+                # Disable import/export/sync
+                self.export_to_marvin_tb.setEnabled(False)
+                self.import_from_marvin_tb.setEnabled(False)
+                self.merge_collections_tb.setEnabled(False)
+
+            # If collections already equal, disable import/export/merge
+            if self.calibre_collections == self.marvin_collections:
+                self.export_to_marvin_tb.setEnabled(False)
+                self.import_from_marvin_tb.setEnabled(False)
+                self.merge_collections_tb.setEnabled(False)
         else:
-            self.calibre_gb.setTitle("Calibre (no collections field)")
-            self.calibre_gb.setEnabled(False)
-            # Disable import/export/sync
+            # Save initial state
+            self.initial_marvin_collections = list(self._get_marvin_collections())
+            # Hide the calibre panel, disable tool buttons
+            self.calibre_gb.setVisible(False)
             self.export_to_marvin_tb.setEnabled(False)
             self.import_from_marvin_tb.setEnabled(False)
             self.merge_collections_tb.setEnabled(False)
-
-        # If collections already equal, disable import/export/merge
-        if self.calibre_collections == self.marvin_collections:
-            self.export_to_marvin_tb.setEnabled(False)
-            self.import_from_marvin_tb.setEnabled(False)
-            self.merge_collections_tb.setEnabled(False)
-
 
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)
