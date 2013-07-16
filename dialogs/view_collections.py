@@ -56,6 +56,16 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
 
     def accept(self):
         self._log_location()
+        self.updated_calibre_collections = self._get_calibre_collections()
+        self.updated_marvin_collections = self._get_calibre_collections()
+        self.results = {
+                        'command': self.stored_command,
+                        'initial_calibre_collections': self.initial_calibre_collections,
+                        'initial_marvin_collections': self.initial_marvin_collections,
+                        'updated_calibre_collections': self.updated_calibre_collections,
+                        'updated_marvin_collections': self.updated_marvin_collections
+                       }
+
         super(CollectionsViewerDialog, self).accept()
 
     def close(self):
@@ -210,13 +220,6 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         self._log_location(command)
         self.stored_command = command
-        self._log("initial calibre collections: %s" % self.initial_calibre_collections)
-        self._log("initial marvin collections: %s" % self.initial_marvin_collections)
-
-        self.updated_calibre_collections = self._get_calibre_collections()
-        self.updated_marvin_collections = self._get_calibre_collections()
-        self._log("updated calibre collections: %s" % self.updated_calibre_collections)
-        self._log("updated marvin collections: %s" % self.updated_marvin_collections)
         self.close()
 
     # ~~~~~~~~ Helpers ~~~~~~~~

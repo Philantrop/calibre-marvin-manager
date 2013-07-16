@@ -83,7 +83,7 @@ class MarvinManagerAction(InterfaceAction):
         self.indexed_library = None
         self.library_indexed = False
         self.library_last_modified = None
-        self.reconnect_request_pending = False
+        #self.reconnect_request_pending = False
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
 
         # Build a current opts object
@@ -310,6 +310,7 @@ class MarvinManagerAction(InterfaceAction):
             self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
                 self.marvin_status_changed)
 
+            """
             # If reconnecting, no need to rescan calibre library
             if (hasattr(self.connected_device, 'ios_reader_app') and
                 self.connected_device.ios_reader_app == 'Marvin'):
@@ -319,6 +320,10 @@ class MarvinManagerAction(InterfaceAction):
                     self._log("reconnect request pending…")
                     self.blocking_busy.stop()
                     self.blocking_busy.accept()
+            """
+            if (hasattr(self.connected_device, 'ios_reader_app') and
+                self.connected_device.ios_reader_app == 'Marvin'):
+                self.launch_library_scanner()
         else:
             self._log_location("device disconnected")
 
@@ -334,6 +339,7 @@ class MarvinManagerAction(InterfaceAction):
             # Invalidate the library hash map, as library contents may change before reconnection
             self.library_scanner.hash_map = None
 
+            """
             if hasattr(self, 'book_status_dialog'):
                 if (hasattr(self.book_status_dialog, 'reconnect_request_pending') and
                     self.book_status_dialog.reconnect_request_pending):
@@ -342,6 +348,7 @@ class MarvinManagerAction(InterfaceAction):
                     del self.book_status_dialog
                     self.blocking_busy.start()
                     self.blocking_busy.show()
+            """
 
         self.rebuild_menus()
 
@@ -370,11 +377,13 @@ class MarvinManagerAction(InterfaceAction):
                     ac = self.create_menu_item(m, 'Reset Marvin Library', image=I("trash.png"))
                     ac.triggered.connect(self.reset_marvin_library)
 
+                    """
                     # If reconnecting, allow time for Device to be added before redisplaying
                     if self.reconnect_request_pending:
                         self.reconnect_request_pending = False
                         QTimer.singleShot(100, self.show_installed_books)
                         QApplication.restoreOverrideCursor()
+                    """
 
                 else:
                     self._log("Marvin not connected")

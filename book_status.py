@@ -617,7 +617,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.library_uuid_map = None
         self.local_cache_folder = self.parent.connected_device.temp_dir
         self.local_hash_cache = None
-        self.reconnect_request_pending = False
+        #self.reconnect_request_pending = False
         self.remote_cache_folder = '/'.join(['/Library','calibre.mm'])
         self.remote_hash_cache = None
         self.show_match_colors = self.prefs.get('show_match_colors', False)
@@ -735,12 +735,17 @@ class BookStatusDialog(SizePersistedDialog):
 
         self._log_location(command)
 
+        """
         if self.reconnect_request_pending:
             self._log("reconnect_request_pending")
         else:
             if command in ['disconnected', 'yanked']:
                 self._log("closing dialog: %s" % command)
                 self.close()
+        """
+        if command in ['disconnected', 'yanked']:
+            self._log("closing dialog: %s" % command)
+            self.close()
 
     def show_assets_dialog(self, action, row):
         '''
@@ -960,8 +965,20 @@ class BookStatusDialog(SizePersistedDialog):
                                marvin_collections,
                                self.parent.connected_device)
                 dlg.exec_()
-                if dlg.stored_command:
-                    self._update_collections(dlg.stored_command)
+                if dlg.result() == dlg.Accepted:
+                    results = dlg.results
+
+                    # Process changes here to cached_books and device_collections before
+                    # calling _update_collections. Condition should be the same as if
+                    # context menu event dispatched, and needs to handle one or multiple
+                    # books.
+
+                    self._log(results)
+
+
+                    self._update_collections('apply_marvin_values')
+                else:
+                    self._log("No changes applied in Collections dialog")
             else:
                 self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -1558,60 +1575,68 @@ class BookStatusDialog(SizePersistedDialog):
         books_to_delete = sorted([btd[b]['title'] for b in btd], key=sort_key)
 
         if books_to_delete:
-
             if True:
                 ''' Under the skirts approach '''
-                model = self.parent.gui.memory_view.model()
-                paths_to_delete = [btd[b]['path'] for b in btd]
-                self._log("paths_to_delete: %s" % paths_to_delete)
-                sorted_map = model.sorted_map
-                delete_map = {}
-                for row, item in enumerate(sorted_map):
-                    book = model.db[item]
-                    if book.path in paths_to_delete:
-                        foo = MyAbstractItemModel()
-                        #delete_map[book.path] = foo.createIndex(row, 0)
-                        delete_map[book.path] = item
-                        continue
+                title = "Delete %s" % ("%d books?" % len(books_to_delete)
+                                        if len(books_to_delete) > 1 else "1 book?")
+                msg = ("<p>Click <b>Show details</b> for a list of books that will be deleted " +
+                       "from your Marvin library.</p>" +
+                       '<p><b><font style="color:#FF0000; ">{0}</font></b></p>'.format(title))
+                det_msg = '\n'.join(books_to_delete)
+                d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
+                               show_copy_button=False)
+                if d.exec_():
+                    model = self.parent.gui.memory_view.model()
+                    paths_to_delete = [btd[b]['path'] for b in btd]
+                    self._log("paths_to_delete: %s" % paths_to_delete)
+                    sorted_map = model.sorted_map
+                    delete_map = {}
+                    for item in sorted_map:
+                        book = model.db[item]
+                        if book.path in paths_to_delete:
+                            delete_map[book.path] = item
+                            continue
 
-                # Delete the rows in MM spreadsheet
-                rows_to_delete = self._selected_rows()
-                for row in sorted(rows_to_delete, reverse=True):
-                    self.tm.beginRemoveRows(QModelIndex(), row, row)
-                    del self.tm.arraydata[row]
-                    self.tm.endRemoveRows()
+                    # Delete the rows in MM spreadsheet
+                    rows_to_delete = self._selected_rows()
+                    for row in sorted(rows_to_delete, reverse=True):
+                        self.tm.beginRemoveRows(QModelIndex(), row, row)
+                        del self.tm.arraydata[row]
+                        self.tm.endRemoveRows()
 
-                # Delete the books on Device
-                job = self.parent.gui.remove_paths(delete_map.keys())
+                    # Delete the books on Device
+                    job = self.parent.gui.remove_paths(delete_map.keys())
 
-                # Delete books in the Device model
-                model.mark_for_deletion(job, delete_map.values(), rows_are_ids=True)
-                model.deletion_done(job, succeeded=True)
-                for rtd in delete_map.values():
-                    del model.db[rtd]
+                    # Delete books in the Device model
+                    model.mark_for_deletion(job, delete_map.values(), rows_are_ids=True)
+                    model.deletion_done(job, succeeded=True)
+                    for rtd in delete_map.values():
+                        del model.db[rtd]
 
-                # Put on a show while waiting for the delete job to finish
-                QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-                blocking_busy = MyBlockingBusy(self.opts.gui, "Updating Marvin Library…", size=60)
-                blocking_busy.start()
-                blocking_busy.show()
-                while not job.is_finished:
-                    Application.processEvents()
-                blocking_busy.stop()
-                blocking_busy.accept()
-                QApplication.restoreOverrideCursor()
+                    # Put on a show while waiting for the delete job to finish
+                    QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+                    blocking_busy = MyBlockingBusy(self.opts.gui, "Updating Marvin Library…", size=60)
+                    blocking_busy.start()
+                    blocking_busy.show()
+                    while not job.is_finished:
+                        Application.processEvents()
+                    blocking_busy.stop()
+                    blocking_busy.accept()
+                    QApplication.restoreOverrideCursor()
 
-                # Remove from driver cached_paths
-                if True:
-                    for ptd in paths_to_delete:
-                        self.parent.connected_device.cached_books.pop(ptd)
+                    # Remove from cached_paths in driver
+                    if True:
+                        for ptd in paths_to_delete:
+                            self.parent.connected_device.cached_books.pop(ptd)
+                    else:
+                        # The book is not in booklists, how/when removed?
+                        self.parent.connected_device.remove_books_from_metadata(paths_to_delete,
+                            self.parent.gui.booklists())
+
+                    # Update the visible Device model
+                    model.paths_deleted(paths_to_delete)
                 else:
-                    # The book is not in booklists, how/when removed?
-                    self.parent.connected_device.remove_books_from_metadata(paths_to_delete,
-                        self.parent.gui.booklists())
-
-                # Update the Device model
-                model.paths_deleted(paths_to_delete)
+                    self._log("delete cancelled")
 
             if False:
                 ''' Reconnect approach '''
@@ -2597,10 +2622,14 @@ class BookStatusDialog(SizePersistedDialog):
         merge the two lists and apply to both Marvin and calibre.
         Apply to selected rows
         '''
-        self._log_location()
+        self._log_location(action)
+
+        selected_books = self._selected_books()
+        for row in selected_books:
+            self._log("processing %s" % selected_books[row]['title'])
 
         # Test code from action, needs to be tweaked
-        # Remember that device.cached_books needs to be updated as well
+        # Remember that device.cached_books needs to be updated as well as device_collections
         if False:
             self._log("self.gui.memory_view.model(): %s" % dir(self.gui.memory_view.model()))
             self._log("map: %s" % self.gui.memory_view.model().map)
