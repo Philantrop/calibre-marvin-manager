@@ -15,7 +15,8 @@ from threading import Timer
 
 
 from PyQt4 import QtCore, QtGui
-from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractTableModel, QApplication, QBrush,
+from PyQt4.Qt import (Qt, QAbstractTableModel,
+                      QApplication, QBrush,
                       QCheckBox, QColor, QCursor, QDialog, QDialogButtonBox, QFont, QIcon,
                       QLabel, QMenu, QModelIndex, QPainter, QPixmap, QString,
                       QTableView, QTableWidgetItem, QTimer,
@@ -39,8 +40,8 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, Book, HelpView, InventoryCollections,
-    ProgressBar, SizePersistedDialog, Struct)
+    AbortRequestException, Book, HelpView, InventoryCollections, MyAbstractItemModel,
+    MyBlockingBusy, ProgressBar, SizePersistedDialog, Struct)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_Mangler_resources', 'dialogs')
 
@@ -94,7 +95,7 @@ class MyTableView(QTableView):
             else:
                 ac.setEnabled(False)
 
-            ac = menu.addAction("Synchronize collections")
+            ac = menu.addAction("Merge collections")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'sync_collections.png')))
             if cfl:
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "synchronize_collections", row))
@@ -592,7 +593,8 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                    show_copy_button=False).exec_()
         elif column == self.WORD_COUNT_COL:
-            self._calculate_word_count()
+            #self._calculate_word_count()
+            pass
         else:
             self._log("no double-click handler for %s" % self.LIBRARY_HEADER[column])
 
@@ -1554,78 +1556,136 @@ class BookStatusDialog(SizePersistedDialog):
 
         btd = self._selected_books()
         books_to_delete = sorted([btd[b]['title'] for b in btd], key=sort_key)
+
         if books_to_delete:
-            title = "Delete %s" % ("%d books?" % len(books_to_delete)
-                                                  if len(books_to_delete) > 1 else "1 book?")
-            msg = ("<p>Click <b>Show details</b> for a list of books that will be deleted " +
-                   "from your Marvin library.</p>" +
-                   "<p>After clicking <b>Yes</b>, the Marvin Library window will disappear " +
-                   "briefly while Marvin's Library is being updated.</p>" +
-                   '<p><b><font style="color:#FF0000; ">{0}</font></b></p>'.format(title))
-            det_msg = '\n'.join(books_to_delete)
-            d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
-                           show_copy_button=False)
-            if d.exec_():
-                QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
-                # Build the command file
-                command_name = 'delete_books'
-                command_element = 'deletebooks'
-                command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-                                                  command_element,
-                                                  time.mktime(time.localtime())))
-                books_to_delete = self._selected_books()
-                for i, book_id in enumerate(books_to_delete):
-                    book_tag = Tag(command_soup, 'book')
-                    book_tag['author'] = books_to_delete[book_id]['author']
-                    book_tag['title'] = books_to_delete[book_id]['title']
-                    book_tag['uuid'] = books_to_delete[book_id]['uuid']
-                    book_tag['filename'] = books_to_delete[book_id]['path']
-                    command_soup.manifest.insert(i, book_tag)
+            if True:
+                ''' Under the skirts approach '''
+                model = self.parent.gui.memory_view.model()
+                paths_to_delete = [btd[b]['path'] for b in btd]
+                self._log("paths_to_delete: %s" % paths_to_delete)
+                sorted_map = model.sorted_map
+                delete_map = {}
+                for row, item in enumerate(sorted_map):
+                    book = model.db[item]
+                    if book.path in paths_to_delete:
+                        foo = MyAbstractItemModel()
+                        #delete_map[book.path] = foo.createIndex(row, 0)
+                        delete_map[book.path] = item
+                        continue
 
-                if self.prefs.get('execute_marvin_commands', True):
-                    # Call the Marvin driver to copy the command file to the staging folder
-                    self._log("staging command file")
-                    self._stage_command_file(command_name, command_soup,
-                        show_command=self.prefs.get('development_mode', False))
-
-                    # Wait for completion
-                    self._log("waiting for completion")
-                    self._wait_for_command_completion(command_name)
-
-                else:
-                    self._log("{:*^80}".format(" command execution disabled in JSON file "))
-                    if command_name == 'update_metadata':
-                        soup = BeautifulStoneSoup(command_soup.renderContents())
-                        # <descriptions>
-                        descriptions = soup.findAll('description')
-                        for description in descriptions:
-                            d_tag = Tag(soup, 'description')
-                            d_tag.insert(0, "(description removed for debug stream)")
-                            description.replaceWith(d_tag)
-                        # <covers>
-                        covers = soup.findAll('cover')
-                        for cover in covers:
-                            cover_tag = Tag(soup, 'cover')
-                            cover_tag.insert(0, "(cover removed for debug stream)")
-                            cover.replaceWith(cover_tag)
-                        self._log(soup.prettify())
-                    else:
-                        self._log("command_name: %s" % command_name)
-                        self._log(command_soup.prettify())
-
-                # Set the reconnect_request flag in the driver
-                self.reconnect_request_pending = True
-                self.parent.connected_device.set_reconnect_request(True)
-
-                # Delete the rows in the visible model to reassure the user
+                # Delete the rows in MM spreadsheet
                 rows_to_delete = self._selected_rows()
                 for row in sorted(rows_to_delete, reverse=True):
                     self.tm.beginRemoveRows(QModelIndex(), row, row)
                     del self.tm.arraydata[row]
                     self.tm.endRemoveRows()
-            else:
-                self._log("delete cancelled")
+
+                # Delete the books on Device
+                job = self.parent.gui.remove_paths(delete_map.keys())
+
+                # Delete books in the Device model
+                model.mark_for_deletion(job, delete_map.values(), rows_are_ids=True)
+                model.deletion_done(job, succeeded=True)
+                for rtd in delete_map.values():
+                    del model.db[rtd]
+
+                # Put on a show while waiting for the delete job to finish
+                QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+                blocking_busy = MyBlockingBusy(self.opts.gui, "Updating Marvin Library…", size=60)
+                blocking_busy.start()
+                blocking_busy.show()
+                while not job.is_finished:
+                    Application.processEvents()
+                blocking_busy.stop()
+                blocking_busy.accept()
+                QApplication.restoreOverrideCursor()
+
+                # Remove from driver cached_paths
+                if True:
+                    for ptd in paths_to_delete:
+                        self.parent.connected_device.cached_books.pop(ptd)
+                else:
+                    # The book is not in booklists, how/when removed?
+                    self.parent.connected_device.remove_books_from_metadata(paths_to_delete,
+                        self.parent.gui.booklists())
+
+                # Update the Device model
+                model.paths_deleted(paths_to_delete)
+
+            if False:
+                ''' Reconnect approach '''
+                title = "Delete %s" % ("%d books?" % len(books_to_delete)
+                                                      if len(books_to_delete) > 1 else "1 book?")
+                msg = ("<p>Click <b>Show details</b> for a list of books that will be deleted " +
+                       "from your Marvin library.</p>" +
+                       "<p>After clicking <b>Yes</b>, the Marvin Library window will disappear " +
+                       "briefly while Marvin's Library is being updated.</p>" +
+                       '<p><b><font style="color:#FF0000; ">{0}</font></b></p>'.format(title))
+                det_msg = '\n'.join(books_to_delete)
+                d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
+                               show_copy_button=False)
+                if d.exec_():
+                    QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+                    # Build the command file
+                    command_name = 'delete_books'
+                    command_element = 'deletebooks'
+                    command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                                                      command_element,
+                                                      time.mktime(time.localtime())))
+                    books_to_delete = self._selected_books()
+                    for i, book_id in enumerate(books_to_delete):
+                        book_tag = Tag(command_soup, 'book')
+                        book_tag['author'] = books_to_delete[book_id]['author']
+                        book_tag['title'] = books_to_delete[book_id]['title']
+                        book_tag['uuid'] = books_to_delete[book_id]['uuid']
+                        book_tag['filename'] = books_to_delete[book_id]['path']
+                        command_soup.manifest.insert(i, book_tag)
+
+                    if self.prefs.get('execute_marvin_commands', True):
+                        # Call the Marvin driver to copy the command file to the staging folder
+                        self._log("staging command file")
+                        self._stage_command_file(command_name, command_soup,
+                            show_command=self.prefs.get('development_mode', False))
+
+                        # Wait for completion
+                        self._log("waiting for completion")
+                        self._wait_for_command_completion(command_name)
+
+                    else:
+                        self._log("{:*^80}".format(" command execution disabled in JSON file "))
+                        if command_name == 'update_metadata':
+                            soup = BeautifulStoneSoup(command_soup.renderContents())
+                            # <descriptions>
+                            descriptions = soup.findAll('description')
+                            for description in descriptions:
+                                d_tag = Tag(soup, 'description')
+                                d_tag.insert(0, "(description removed for debug stream)")
+                                description.replaceWith(d_tag)
+                            # <covers>
+                            covers = soup.findAll('cover')
+                            for cover in covers:
+                                cover_tag = Tag(soup, 'cover')
+                                cover_tag.insert(0, "(cover removed for debug stream)")
+                                cover.replaceWith(cover_tag)
+                            self._log(soup.prettify())
+                        else:
+                            self._log("command_name: %s" % command_name)
+                            self._log(command_soup.prettify())
+
+                    # Set the reconnect_request flag in the driver
+                    self.reconnect_request_pending = True
+                    self.parent.connected_device.set_reconnect_request(True)
+
+                    # Delete the rows in the visible model to reassure the user
+                    rows_to_delete = self._selected_rows()
+                    for row in sorted(rows_to_delete, reverse=True):
+                        self.tm.beginRemoveRows(QModelIndex(), row, row)
+                        del self.tm.arraydata[row]
+                        self.tm.endRemoveRows()
+                else:
+                    self._log("delete cancelled")
         else:
             self._log("no books selected")
             title = "No selected books"
@@ -2538,6 +2598,25 @@ class BookStatusDialog(SizePersistedDialog):
         Apply to selected rows
         '''
         self._log_location()
+
+        # Test code from action, needs to be tweaked
+        # Remember that device.cached_books needs to be updated as well
+        if False:
+            self._log("self.gui.memory_view.model(): %s" % dir(self.gui.memory_view.model()))
+            self._log("map: %s" % self.gui.memory_view.model().map)
+            self._log("sorted_map: %s" % self.gui.memory_view.model().sorted_map)
+            self._log("memory_view.model().db")
+            #self._log(dir(self.gui.memory_view.model().db[0]))
+            self._log("all_field_keys: %s" % self.gui.memory_view.model().db[0].all_field_keys())
+            for row in self.gui.memory_view.model().map:
+                book = self.gui.memory_view.model().db[row]
+                self._log(".title: %s" % book.title)
+                self._log(".device_collections: %s" % book.device_collections)
+                self._log(".in_library: %s" % book.in_library)
+                self._log(".path: %s" % book.path)
+                self._log(".application_id: %s\n" % book.application_id)
+                #book.device_collections = ['I CHANGED THIS']
+
         title = "Update collections"
         msg = ("<p>{0}: not implemented</p>".format(action))
         MessageBox(MessageBox.INFO, title, msg,

@@ -74,7 +74,7 @@ class MarvinManagerAction(InterfaceAction):
 
         # General initialization, occurs when calibre launches
         self.book_status_dialog = None
-        self.blocking_busy = MyBlockingBusy("Updating Marvin Library…", size=50)
+        self.blocking_busy = MyBlockingBusy(self.gui, "Updating Marvin Library…", size=50)
         self.connected_device = None
         self.ios = None
         self.marvin_content_updated = False

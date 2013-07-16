@@ -36,7 +36,7 @@ from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
 from calibre.utils.logging import Log
 
-from PyQt4.Qt import (Qt, QAction, QApplication,
+from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
     QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox, QDoubleSpinBox, QFont, QIcon,
     QKeySequence, QLabel, QLineEdit, QMenu, QPixmap, QProgressBar, QPlainTextEdit,
     QRadioButton, QSize, QSizePolicy, QSlider, QSpinBox, QString, QThread, QUrl,
@@ -86,6 +86,10 @@ class Book(Metadata):
     def title_sorter(self):
         return title_sort(self.title)
 
+
+class MyAbstractItemModel(QAbstractItemModel):
+    def __init__(self, *args):
+        QAbstractItemModel.__init__(self, *args)
 
 class Struct(dict):
     """
@@ -187,8 +191,8 @@ class HelpView(SizePersistedDialog):
 
 class MyBlockingBusy(QDialog):
 
-    def __init__(self, msg, size=100, parent=None, window_title=_('Working')):
-        QDialog.__init__(self, parent)
+    def __init__(self, gui, msg, size=100, window_title='Working'):
+        QDialog.__init__(self, gui, Qt.WindowStaysOnTopHint)
 
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)

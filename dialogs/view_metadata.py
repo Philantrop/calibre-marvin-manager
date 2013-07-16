@@ -136,13 +136,17 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                                                    'from_marvin.png')))
         self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_from_marvin'))
 
-        # If no calibre book, or no mismatches, hide the Calibre group and action buttons
-        if not self.cid or not self.mismatches:
-            self._log("self.cid: %s" % repr(self.cid))
-            self._log("self.mismatches: %s" % repr(self.mismatches))
+        # If no calibre book, or no mismatches, adjust the display accordingly
+        if not self.cid:
+            #self._log("self.cid: %s" % repr(self.cid))
+            #self._log("self.mismatches: %s" % repr(self.mismatches))
             self.calibre_gb.setVisible(False)
             self.import_from_marvin_button.setVisible(False)
             self.setWindowTitle(u'Marvin metadata')
+        elif not self.mismatches:
+            # Show both panels, but hide the transfer buttons
+            self.export_to_marvin_button.setVisible(False)
+            self.import_from_marvin_button.setVisible(False)
         else:
             self.setWindowTitle(u'Metadata Summary')
 
