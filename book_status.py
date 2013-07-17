@@ -108,7 +108,7 @@ class MyTableView(QTableView):
 
             menu.addSeparator()
 
-            ac = menu.addAction("Edit collections")
+            ac = menu.addAction("Manage collections")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'edit_collections.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "manage_collections", row))
 
@@ -693,7 +693,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Manage collections
         if True:
-            self.mc_button = self.dialogButtonBox.addButton('Edit collections', QDialogButtonBox.ActionRole)
+            self.mc_button = self.dialogButtonBox.addButton('Manage collections', QDialogButtonBox.ActionRole)
             self.mc_button.setObjectName('manage_collections_button')
             self.mc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                        'icons',
@@ -936,7 +936,10 @@ class BookStatusDialog(SizePersistedDialog):
 
     def show_view_collections_dialog(self, row):
         '''
-        Present collection assignments to user, get command
+        Present collection assignments to user, get updates
+        Updated calibre assignments need to be sent to custom column.
+        Device model and cached_books updated with updated collections + current flags.
+        Updated Marvin assignments need to be sent to Marvin
         '''
         self._log_location(row)
         cid = self._selected_cid(row)
@@ -974,14 +977,52 @@ class BookStatusDialog(SizePersistedDialog):
                         self._log("no collection changes detected")
                     else:
                         if updated_calibre_collections != original_calibre_collections:
-                            # Update calibre collection assignments
                             self._log("original_calibre_collections: %s" % original_calibre_collections)
                             self._log("updated_calibre_collections: %s" % updated_calibre_collections)
 
+                            # Update collections custom column
+                            lookup = self.parent.prefs.get('collection_field_lookup', None)
+                            if lookup is not None and cid is not None:
+                                # Get the current value from the lookup field
+                                db = self.opts.gui.current_db
+                                mi = db.get_metadata(cid, index_is_id=True)
+                                #old_collections = mi.get_user_metadata(lookup, False)['#value#']
+                                #self._log("Updating old collections value: %s" % repr(old_collections))
+
+                                um = mi.metadata_for_field(lookup)
+                                um['#value#'] = updated_calibre_collections
+                                mi.set_user_metadata(lookup, um)
+                                db.set_metadata(cid, mi, set_title=False, set_authors=False)
+                                db.commit()
+
                         if updated_marvin_collections != original_marvin_collections:
-                            # Update Marvin collection assignments
                             self._log("original_marvin_collections: %s" % original_marvin_collections)
                             self._log("updated_marvin_collections: %s" % updated_marvin_collections)
+
+                            # Merge active flags with updated marvin collections
+                            cached_books = self.parent.connected_device.cached_books
+                            path = self.installed_books[book_id].path
+                            active_flags = []
+                            for flag in self.flags.values():
+                                if flag in cached_books[path]['device_collections']:
+                                    active_flags.append(flag)
+
+                            updated_collections = sorted(active_flags +
+                                                         updated_marvin_collections,
+                                                         key=sort_key)
+
+                            # Update cached_books (with Flags)
+                            cached_books[path]['device_collections'] = updated_collections
+
+                            # Update Device model (with Flags)
+                            for row in self.opts.gui.memory_view.model().map:
+                                book = self.opts.gui.memory_view.model().db[row]
+                                if book.path == self.installed_books[book_id].path:
+                                    book.device_collections = updated_collections
+                                    break
+
+                            # Update Marvin
+                            self._log("DON'T FORGET TO TELL MARVIN ABOUT UPDATED COLLECTIONS")
 
                 else:
                     self._log("User cancelled Collections dialog")

@@ -44,7 +44,7 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
         self.setWindowIcon(QIcon(os.path.join(parent.opts.resources_path,
                                  'icons',
                                  'edit_collections.png')))
-        self.setWindowTitle("Edit collections")
+        self.setWindowTitle("Manage collections")
         self.label.setText("All collections")
 
         self.to_rename = {}

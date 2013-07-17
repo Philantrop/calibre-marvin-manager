@@ -41,7 +41,10 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
 
     def accept(self):
         self._log_location()
-        self.updated_calibre_collections = self._get_calibre_collections()
+        if self.calibre_collections is None:
+            self.updated_calibre_collections = None
+        else:
+            self.updated_calibre_collections = self._get_calibre_collections()
         self.updated_marvin_collections = self._get_marvin_collections()
         self.results = {
                         'updated_calibre_collections': self.updated_calibre_collections,
@@ -269,14 +272,13 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.calibre_lw.setPalette(palette)
             self.marvin_lw.setPalette(palette)
 
-        #self.calibre_lw.setModel(MyListModel(self.calibre_collections))
-        for ca in self.calibre_collections:
-            item = ListWidgetItem(ca)
-            item.setData(Qt.UserRole, ca)
-            item.setFlags(item.flags() | Qt.ItemIsEditable)
-            self.calibre_lw.addItem(item)
+        if self.calibre_collections is not None:
+            for ca in self.calibre_collections:
+                item = ListWidgetItem(ca)
+                item.setData(Qt.UserRole, ca)
+                item.setFlags(item.flags() | Qt.ItemIsEditable)
+                self.calibre_lw.addItem(item)
 
-        #self.marvin_lw.setModel(MyListModel(self.marvin_collections))
         for ma in self.marvin_collections:
             item = ListWidgetItem(ma)
             item.setData(Qt.UserRole, ma)
