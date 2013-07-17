@@ -685,7 +685,7 @@ class BookStatusDialog(SizePersistedDialog):
                                                    'update_metadata.png')))
 
         # View collections
-        self.vc_button = self.dialogButtonBox.addButton('View collections', QDialogButtonBox.ActionRole)
+        self.vc_button = self.dialogButtonBox.addButton('View collection assignments', QDialogButtonBox.ActionRole)
         self.vc_button.setObjectName('view_collections_button')
         self.vc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',

@@ -124,8 +124,13 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
 
         # ~~~~~~~~Remove collection assignment button ~~~~~~~~
         self.remove_assignment_tb.setIcon(QIcon(I('trash.png')))
-        self.remove_assignment_tb.setToolTip("Remove collection assignment")
+        self.remove_assignment_tb.setToolTip("Remove a collection assignment")
         self.remove_assignment_tb.clicked.connect(self._remove_collection_assignment)
+
+        # ~~~~~~~~ Rename collection button ~~~~~~~~
+        self.rename_collection_tb.setIcon(QIcon(I('edit_input.png')))
+        self.rename_collection_tb.setToolTip("Rename collection")
+        self.rename_collection_tb.clicked.connect(self._rename_collection)
 
         # ~~~~~~~~ Clear all collections button ~~~~~~~~
         self.remove_all_assignments_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
@@ -380,6 +385,21 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         elif self.marvin_lw.selectedItems():
             deletes = self.marvin_lw.selectedItems()
             _remove_assignments(deletes, self.marvin_lw)
+
+    def _rename_collection(self):
+        '''
+        Only one panel can have active selection
+        '''
+        self._log_location()
+        if self.calibre_lw.selectedItems():
+            self.rename_calibre_tag()
+        elif self.marvin_lw.selectedItems():
+            self.rename_marvin_tag()
+        else:
+            title = "No collection selected"
+            msg = ("<p>Select a collection to rename.</p>")
+            MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
 
     def rename_calibre_tag(self):
         item = self.calibre_lw.currentItem()
