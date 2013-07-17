@@ -14,6 +14,7 @@ from functools import partial
 from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import Application
+from calibre.gui2.dialogs.device_category_editor import ListWidgetItem
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.utils.icu import sort_key
 from calibre.utils.magick.draw import add_borders_to_image, thumbnail
@@ -23,7 +24,7 @@ from calibre_plugins.marvin_manager.common_utils import (MyAbstractItemModel,
     SizePersistedDialog)
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractListModel, QColor,
-                      QDialog, QDialogButtonBox, QIcon,
+                      QDialog, QDialogButtonBox, QIcon, QMimeData,
                       QModelIndex, QPalette, QPixmap, QSize, QSizePolicy, QVariant,
                       pyqtSignal, SIGNAL)
 
@@ -32,26 +33,6 @@ if True:
     sys.path.insert(0, dialog_resources_path)
     from view_collections_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
-
-class MyListModel(QAbstractListModel):
-    # http://www.saltycrane.com/blog/2008/01/pyqt-43-simple-qabstractlistmodel/
-
-    def __init__(self, datain, parent=None, *args):
-        '''
-        datain: a list where each item is a row
-        '''
-        QAbstractItemModel.__init__(self, parent, *args)
-        self.listdata = datain
-
-    def data(self, index, role):
-        if index.isValid() and role == Qt.DisplayRole:
-            return QVariant(self.listdata[index.row()])
-        else:
-            return QVariant()
-
-    def rowCount(self, parent=QModelIndex()):
-        return len(self.listdata)
-
 
 class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -230,25 +211,43 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         Copy calibre assignments to Marvin
         '''
         self._log_location()
-        self.marvin_lw.setModel(MyListModel(self._get_calibre_collections()))
+        self.marvin_lw.clear()
+        for i in range(self.calibre_lw.count()):
+            citem = self.calibre_lw.item(i).text()
+            item = ListWidgetItem(citem)
+            item.setData(Qt.UserRole, citem)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.marvin_lw.addItem(item)
 
     def _import_from_marvin(self):
         '''
         '''
         self._log_location()
-        self.calibre_lw.setModel(MyListModel(self._get_marvin_collections()))
+        self.calibre_lw.clear()
+        for i in range(self.marvin_lw.count()):
+            mitem = self.marvin_lw.item(i).text()
+            item = ListWidgetItem(mitem)
+            item.setData(Qt.UserRole, mitem)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.calibre_lw.addItem(item)
 
     def _get_calibre_collections(self):
         '''
-
+        Return widget items as list
         '''
-        return list(self.calibre_lw.model().listdata)
+        cc = []
+        for i in range(self.calibre_lw.count()):
+            cc.append(unicode(self.calibre_lw.item(i).text()))
+        return cc
 
     def _get_marvin_collections(self):
         '''
-
+        Return widget items as list
         '''
-        return list(self.marvin_lw.model().listdata)
+        mc = []
+        for i in range(self.marvin_lw.count()):
+            mc.append(unicode(self.marvin_lw.item(i).text()))
+        return mc
 
     def _initialize_collections(self):
         '''
@@ -265,16 +264,26 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.calibre_lw.setPalette(palette)
             self.marvin_lw.setPalette(palette)
 
-        self.calibre_lw.setModel(MyListModel(self.calibre_collections))
-        self.calibre_lw.setAlternatingRowColors(True)
-        self.marvin_lw.setModel(MyListModel(self.marvin_collections))
-        self.marvin_lw.setAlternatingRowColors(True)
+        #self.calibre_lw.setModel(MyListModel(self.calibre_collections))
+        for ca in self.calibre_collections:
+            item = ListWidgetItem(ca)
+            item.setData(Qt.UserRole, ca)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.calibre_lw.addItem(item)
+
+        #self.marvin_lw.setModel(MyListModel(self.marvin_collections))
+        for ma in self.marvin_collections:
+            item = ListWidgetItem(ma)
+            item.setData(Qt.UserRole, ma)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.marvin_lw.addItem(item)
 
         # Capture click events to clear selections in opposite list
         self.calibre_lw.clicked.connect(self._clear_marvin_selection)
-        self.calibre_lw.doubleClicked.connect(self._clear_marvin_selection)
+        self.calibre_lw.doubleClicked.connect(self.rename_calibre_tag)
+
         self.marvin_lw.clicked.connect(self._clear_calibre_selection)
-        self.marvin_lw.doubleClicked.connect(self._clear_calibre_selection)
+        self.marvin_lw.doubleClicked.connect(self.rename_marvin_tag)
 
     def _log(self, msg=None):
         '''
@@ -318,9 +327,21 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         deltas = ml - cl
         merged_collections = sorted(self._get_calibre_collections() + list(deltas), key=sort_key)
 
+        # Clear both
+        self.calibre_lw.clear()
+        self.marvin_lw.clear()
+
         # Assign to both
-        self.calibre_lw.setModel(MyListModel(merged_collections))
-        self.marvin_lw.setModel(MyListModel(merged_collections))
+        for ca in merged_collections:
+            item = ListWidgetItem(ca)
+            item.setData(Qt.UserRole, ca)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.calibre_lw.addItem(item)
+
+            item = ListWidgetItem(ca)
+            item.setData(Qt.UserRole, ca)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            self.marvin_lw.addItem(item)
 
     def _remove_all_assignments(self):
         '''
@@ -334,24 +355,53 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         d = MessageBox(MessageBox.QUESTION, title, msg,
                        show_copy_button=False)
         if d.exec_():
-            self.calibre_lw.setModel(MyListModel([]))
-            self.marvin_lw.setModel(MyListModel([]))
+            self.calibre_lw.clear()
+            self.marvin_lw.clear()
 
     def _remove_collection_assignment(self):
         '''
-        Only one selection can be active
+        Only one panel can have active selection
         '''
         self._log_location()
-        if self._selected_calibre_rows():
-            row = self._selected_calibre_rows()[0]
-            self.calibre_lw.model().beginRemoveRows(QModelIndex(), row, row)
-            del self.calibre_lw.model().listdata[row]
-            self.calibre_lw.model().endRemoveRows()
-        elif self._selected_marvin_rows():
-            row = self._selected_marvin_rows()[0]
-            self.marvin_lw.model().beginRemoveRows(QModelIndex(), row, row)
-            del self.marvin_lw.model().listdata[row]
-            self.marvin_lw.model().endRemoveRows()
+        def _remove_assignments(deletes, list_widget):
+            row = list_widget.row(deletes[0])
+
+            for item in deletes:
+                list_widget.takeItem(list_widget.row(item))
+            if row >= list_widget.count():
+                row = list_widget.count() - 1
+            if row >= 0:
+                list_widget.scrollToItem(list_widget.item(row))
+
+        if self.calibre_lw.selectedItems():
+            deletes = self.calibre_lw.selectedItems()
+            _remove_assignments(deletes, self.calibre_lw)
+
+        elif self.marvin_lw.selectedItems():
+            deletes = self.marvin_lw.selectedItems()
+            _remove_assignments(deletes, self.marvin_lw)
+
+    def rename_calibre_tag(self):
+        item = self.calibre_lw.currentItem()
+        self._rename_calibre_tag(item)
+
+    def _rename_calibre_tag(self, item):
+        if item is None:
+            error_dialog(self, 'No item selected',
+                         'Select a collection to rename.').exec_()
+            return
+        self.calibre_lw.editItem(item)
+
+    def rename_marvin_tag(self):
+        item = self.marvin_lw.currentItem()
+        self._rename_marvin_tag(item)
+
+    def _rename_marvin_tag(self, item):
+        if item is None:
+            error_dialog(self, 'No item selected',
+                         'Select a collection to rename.').exec_()
+            return
+        self.marvin_lw.editItem(item)
 
     def _selected_calibre_rows(self):
         '''

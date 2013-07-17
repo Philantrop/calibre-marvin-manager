@@ -43,12 +43,12 @@
           <item>
            <layout class="QVBoxLayout" name="calibre_vl">
             <item>
-             <widget class="QListView" name="calibre_lw">
-              <property name="frameShape">
-               <enum>QFrame::NoFrame</enum>
-              </property>
+             <widget class="QListWidget" name="calibre_lw">
               <property name="alternatingRowColors">
                <bool>true</bool>
+              </property>
+              <property name="selectionMode">
+               <enum>QAbstractItemView::ExtendedSelection</enum>
               </property>
              </widget>
             </item>
@@ -152,12 +152,12 @@
           <item>
            <layout class="QVBoxLayout" name="marvin_vl">
             <item>
-             <widget class="QListView" name="marvin_lw">
-              <property name="frameShape">
-               <enum>QFrame::NoFrame</enum>
-              </property>
+             <widget class="QListWidget" name="marvin_lw">
               <property name="alternatingRowColors">
                <bool>true</bool>
+              </property>
+              <property name="selectionMode">
+               <enum>QAbstractItemView::ExtendedSelection</enum>
               </property>
              </widget>
             </item>
