@@ -113,7 +113,7 @@
           </widget>
          </item>
          <item>
-          <widget class="QToolButton" name="clear_all_collections_tb">
+          <widget class="QToolButton" name="remove_all_assignments_tb">
            <property name="toolTip">
             <string/>
            </property>

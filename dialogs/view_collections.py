@@ -13,16 +13,19 @@ from functools import partial
 
 from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
+from calibre.gui2 import Application
+from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.utils.icu import sort_key
 from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
-from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
+from calibre_plugins.marvin_manager.common_utils import (MyAbstractItemModel,
+    SizePersistedDialog)
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractListModel, QColor,
                       QDialog, QDialogButtonBox, QIcon,
                       QModelIndex, QPalette, QPixmap, QSize, QSizePolicy, QVariant,
-                      pyqtSignal)
+                      pyqtSignal, SIGNAL)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -40,14 +43,15 @@ class MyListModel(QAbstractListModel):
         QAbstractItemModel.__init__(self, parent, *args)
         self.listdata = datain
 
-    def rowCount(self, parent=QModelIndex()):
-        return len(self.listdata)
-
     def data(self, index, role):
         if index.isValid() and role == Qt.DisplayRole:
             return QVariant(self.listdata[index.row()])
         else:
             return QVariant()
+
+    def rowCount(self, parent=QModelIndex()):
+        return len(self.listdata)
+
 
 class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -57,11 +61,8 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     def accept(self):
         self._log_location()
         self.updated_calibre_collections = self._get_calibre_collections()
-        self.updated_marvin_collections = self._get_calibre_collections()
+        self.updated_marvin_collections = self._get_marvin_collections()
         self.results = {
-                        'command': self.stored_command,
-                        'initial_calibre_collections': self.initial_calibre_collections,
-                        'initial_marvin_collections': self.initial_marvin_collections,
                         'updated_calibre_collections': self.updated_calibre_collections,
                         'updated_marvin_collections': self.updated_marvin_collections
                        }
@@ -77,36 +78,25 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         BUTTON_ROLES = ['AcceptRole', 'RejectRole', 'DestructiveRole', 'ActionRole',
                         'HelpRole', 'YesRole', 'NoRole', 'ApplyRole', 'ResetRole']
         '''
-        self._log_location()
+        self._log_location(self.bb.buttonRole(button))
         if self.bb.buttonRole(button) == QDialogButtonBox.AcceptRole:
-            self._log("AcceptRole")
-            self._log("initial calibre collections: %s" % self.initial_calibre_collections)
-            self._log("initial marvin collections: %s" % self.initial_marvin_collections)
-
+            #self._log("AcceptRole")
             self.updated_calibre_collections = self._get_calibre_collections()
             self.updated_marvin_collections = self._get_marvin_collections()
-            self._log("updated calibre collections: %s" % self.updated_calibre_collections)
-            self._log("updated marvin collections: %s" % self.updated_marvin_collections)
-
             self.accept()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
             pass
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
-            self._log("RejectRole")
-            self.stored_command = None
+            #self._log("RejectRole")
+            self.updated_calibre_collections = self.initial_calibre_collections
+            self.updated_marvin_collections = self.initial_marvin_collections
             self.close()
 
     def esc(self, *args):
         self._log_location()
         self._clear_selected_rows()
-
-    def export_to_marvin(self):
-        self._log_location()
-
-    def import_from_marvin(self):
-        self._log_location()
 
     def initialize(self, parent, book_title, calibre_collections, marvin_collections, connected_device):
         '''
@@ -157,11 +147,11 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.remove_assignment_tb.clicked.connect(self._remove_collection_assignment)
 
         # ~~~~~~~~ Clear all collections button ~~~~~~~~
-        self.clear_all_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
+        self.remove_all_assignments_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                           'icons',
                                                           'clear_all.png')))
-        self.clear_all_collections_tb.setToolTip("Remove all collection assignments")
-        self.clear_all_collections_tb.clicked.connect(self._clear_all_collections)
+        self.remove_all_assignments_tb.setToolTip("Remove all collection assignments from calibre and Marvin")
+        self.remove_all_assignments_tb.clicked.connect(self._remove_all_assignments)
 
         # Populate collection models
         self._initialize_collections()
@@ -214,14 +204,6 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             self._log("closing dialog: %s" % command)
             self.close()
 
-    def store_command(self, command):
-        '''
-        Save the requested operation
-        '''
-        self._log_location(command)
-        self.stored_command = command
-        self.close()
-
     # ~~~~~~~~ Helpers ~~~~~~~~
     def _clear_calibre_selection(self):
         '''
@@ -243,57 +225,30 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         self._clear_calibre_selection()
         self._clear_marvin_selection()
 
-    def _clear_all_collections(self):
-        '''
-        '''
-        self._log_location()
-        self.stored_command = 'clear_all_collections'
-
-        # Delete calibre collection assignments
-        rows_to_delete = len(self.calibre_lw.model().listdata)
-        for row in range(rows_to_delete - 1, -1, -1):
-            self.calibre_lw.model().beginRemoveRows(QModelIndex(), row, row)
-            del self.calibre_lw.model().listdata[row]
-            self.calibre_lw.model().endRemoveRows()
-
-        # Delete Marvin collection assignments
-        rows_to_delete = len(self.marvin_lw.model().listdata)
-        for row in range(rows_to_delete - 1, -1, -1):
-            self.marvin_lw.model().beginRemoveRows(QModelIndex(), row, row)
-            del self.marvin_lw.model().listdata[row]
-            self.marvin_lw.model().endRemoveRows()
-
     def _export_to_marvin(self):
         '''
+        Copy calibre assignments to Marvin
         '''
         self._log_location()
-        scr = self._selected_calibre_rows()
-        smr = self._selected_marvin_rows()
-        self._log("scr: %s smr: %s" % (scr, smr))
-        self.stored_command = 'export_to_marvin'
+        self.marvin_lw.setModel(MyListModel(self._get_calibre_collections()))
 
     def _import_from_marvin(self):
         '''
         '''
         self._log_location()
-        scr = self._selected_calibre_rows()
-        smr = self._selected_marvin_rows()
-        self._log("scr: %s smr: %s" % (scr, smr))
-        self.stored_command = 'import_from_marvin'
+        self.calibre_lw.setModel(MyListModel(self._get_marvin_collections()))
 
     def _get_calibre_collections(self):
         '''
 
         '''
-        self._log_location()
-        return self.calibre_lw.model().listdata
+        return list(self.calibre_lw.model().listdata)
 
     def _get_marvin_collections(self):
         '''
 
         '''
-        self._log_location()
-        return self.marvin_lw.model().listdata
+        return list(self.marvin_lw.model().listdata)
 
     def _initialize_collections(self):
         '''
@@ -356,10 +311,31 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         '''
         self._log_location()
-        scr = self._selected_calibre_rows()
-        smr = self._selected_marvin_rows()
-        self._log("scr: %s smr: %s" % (scr, smr))
-        self.stored_command = 'merge_collections'
+
+        # Merge the two collection lists without dupes
+        cl = set(self._get_calibre_collections())
+        ml = set(self._get_marvin_collections())
+        deltas = ml - cl
+        merged_collections = sorted(self._get_calibre_collections() + list(deltas), key=sort_key)
+
+        # Assign to both
+        self.calibre_lw.setModel(MyListModel(merged_collections))
+        self.marvin_lw.setModel(MyListModel(merged_collections))
+
+    def _remove_all_assignments(self):
+        '''
+        '''
+        self._log_location()
+        self.stored_command = 'clear_all_collections'
+
+        # Confirm
+        title = "Are you sure?"
+        msg = ("<p>Delete all collection assignments from calibre and Marvin?</p>")
+        d = MessageBox(MessageBox.QUESTION, title, msg,
+                       show_copy_button=False)
+        if d.exec_():
+            self.calibre_lw.setModel(MyListModel([]))
+            self.marvin_lw.setModel(MyListModel([]))
 
     def _remove_collection_assignment(self):
         '''

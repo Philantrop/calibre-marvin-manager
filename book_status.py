@@ -942,10 +942,10 @@ class BookStatusDialog(SizePersistedDialog):
         cid = self._selected_cid(row)
         book_id = self._selected_book_id(row)
 
-        calibre_collections = self._get_calibre_collections(cid)
-        marvin_collections = self._get_marvin_collections(book_id)
+        original_calibre_collections = self._get_calibre_collections(cid)
+        original_marvin_collections = self._get_marvin_collections(book_id)
 
-        if calibre_collections == [] and marvin_collections == []:
+        if original_calibre_collections == [] and original_marvin_collections == []:
             title = self.installed_books[book_id].title
             msg = "<p>This book is not assigned to any collections.</p>"
             MessageBox(MessageBox.INFO, title, msg,
@@ -961,24 +961,30 @@ class BookStatusDialog(SizePersistedDialog):
                 cid = self._selected_cid(row)
                 dlg.initialize(self,
                                self.installed_books[book_id].title,
-                               calibre_collections,
-                               marvin_collections,
+                               original_calibre_collections,
+                               original_marvin_collections,
                                self.parent.connected_device)
                 dlg.exec_()
                 if dlg.result() == dlg.Accepted:
-                    results = dlg.results
+                    updated_calibre_collections = dlg.results['updated_calibre_collections']
+                    updated_marvin_collections = dlg.results['updated_marvin_collections']
 
-                    # Process changes here to cached_books and device_collections before
-                    # calling _update_collections. Condition should be the same as if
-                    # context menu event dispatched, and needs to handle one or multiple
-                    # books.
+                    if (original_calibre_collections == updated_calibre_collections and
+                        original_marvin_collections == updated_marvin_collections):
+                        self._log("no collection changes detected")
+                    else:
+                        if updated_calibre_collections != original_calibre_collections:
+                            # Update calibre collection assignments
+                            self._log("original_calibre_collections: %s" % original_calibre_collections)
+                            self._log("updated_calibre_collections: %s" % updated_calibre_collections)
 
-                    self._log(results)
+                        if updated_marvin_collections != original_marvin_collections:
+                            # Update Marvin collection assignments
+                            self._log("original_marvin_collections: %s" % original_marvin_collections)
+                            self._log("updated_marvin_collections: %s" % updated_marvin_collections)
 
-
-                    self._update_collections('apply_marvin_values')
                 else:
-                    self._log("No changes applied in Collections dialog")
+                    self._log("User cancelled Collections dialog")
             else:
                 self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -2619,7 +2625,7 @@ class BookStatusDialog(SizePersistedDialog):
     def _update_collections(self, action):
         '''
         For books whose Marvin collections and calibre collection assignments do not match,
-        merge the two lists and apply to both Marvin and calibre.
+        perform the action, apply results to both Marvin and calibre.
         Apply to selected rows
         '''
         self._log_location(action)
