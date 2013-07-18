@@ -98,7 +98,7 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.verbose = parent.verbose
 
         self._log_location(book_title)
-        self.setWindowTitle(book_title)
+        self.setWindowTitle("'%s' collection assignments" % book_title)
 
         # Subscribe to Marvin driver change events
         connected_device.marvin_device_signals.reader_app_status_changed.connect(
@@ -138,7 +138,7 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         # ~~~~~~~~ Clear all collections button ~~~~~~~~
         self.remove_all_assignments_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                           'icons',
-                                                          'clear_all.png')))
+                                                          'remove_all_collections.png')))
         self.remove_all_assignments_tb.setToolTip("Remove all collection assignments from calibre and Marvin")
         self.remove_all_assignments_tb.clicked.connect(self._remove_all_assignments)
 
@@ -152,7 +152,7 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             # Remind the user of calibre's custom column, disable buttons if no calibre field
             calibre_cf = self.prefs.get('collection_field_comboBox', '')
             if calibre_cf:
-                self.calibre_gb.setTitle("Calibre collections (%s)" % calibre_cf)
+                self.calibre_gb.setTitle("Calibre (%s)" % calibre_cf)
             else:
                 self.calibre_gb.setTitle("Calibre (no collections field)")
                 self.calibre_gb.setEnabled(False)

@@ -190,11 +190,15 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_from_marvin", row))
 
         elif col == self.parent.VOCABULARY_COL:
-            ac = menu.addAction("View vocabulary words")
+            ac = menu.addAction("View vocabulary for this book")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary", row))
             if len(selected_books) > 1:
                 ac.setEnabled(False)
+
+            ac = menu.addAction("View all vocabulary words")
+            ac.setIcon(QIcon(I('books_in_series.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_global_vocabulary", row))
 
         elif col == self.parent.WORD_COUNT_COL:
             ac = menu.addAction("Calculate word count")
@@ -487,15 +491,13 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
         if self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.AcceptRole:
-            self._log("AcceptRole")
             self.accept()
+
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.ActionRole:
             if button.objectName() == 'match_colors_button':
                 self.toggle_match_colors()
 #             elif button.objectName() == 'calculate_word_count_button':
 #                 self._calculate_word_count()
-#             elif button.objectName() == 'generate_deep_view_button':
-#                 self._generate_deep_view()
             elif button.objectName() == 'manage_collections_button':
                 self.show_manage_collections_dialog()
             elif button.objectName() == 'view_collections_button':
@@ -507,6 +509,8 @@ class BookStatusDialog(SizePersistedDialog):
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
+            elif button.objectName() == 'view_global_vocabulary_button':
+                self.show_assets_dialog('show_global_vocabulary', 0)
             elif button.objectName() == 'view_metadata_button':
                 selected_rows = self._selected_rows()
                 if selected_rows:
@@ -517,11 +521,12 @@ class BookStatusDialog(SizePersistedDialog):
                     MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
 
-
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
             self._delete_books()
+
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.HelpRole:
             self.show_help()
+
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.RejectRole:
             self.close()
 
@@ -535,22 +540,22 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'calculate_word_count':
             self._calculate_word_count()
         elif action in ['clear_new_flag', 'clear_reading_list_flag',
-                        'clear_read_flag', 'clear_all_flags']:
-            self._clear_flags(action)
-        elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
-            self._set_flags(action)
+                        'clear_read_flag', 'clear_all_flags',
+                        'set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
+            self._update_flags(action)
         elif action in ['show_articles', 'show_deep_view', 'show_highlights', 'show_vocabulary']:
             self.show_assets_dialog(action, row)
         elif action == 'manage_collections':
             self.show_manage_collections_dialog()
         elif action == 'show_collections':
             self.show_view_collections_dialog(row)
+        elif action == 'show_global_vocabulary':
+            self.show_assets_dialog('show_global_vocabulary', row)
         elif action in ['clear_all_collections', 'export_collections',
                         'import_collections', 'synchronize_collections']:
             self._update_collections(action)
         elif action == 'show_metadata':
             self.show_view_metadata_dialog(row)
-
         else:
             selected_books = self._selected_books()
             det_msg = ''
@@ -699,6 +704,12 @@ class BookStatusDialog(SizePersistedDialog):
                                                        'icons',
                                                        'edit_collections.png')))
 
+        # View Global vocabulary
+        if True:
+            self.gv_button = self.dialogButtonBox.addButton('View vocabulary', QDialogButtonBox.ActionRole)
+            self.gv_button.setObjectName('view_global_vocabulary_button')
+            self.gv_button.setIcon(QIcon(I('books_in_series.png')))
+
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
 
         self.l.addWidget(self.dialogButtonBox)
@@ -781,7 +792,14 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'show_deep_view':
             header = None
             group_box_title = 'Deep View content'
-            default_content = "Deep View content to be provided by Marvin"
+            default_content = "Deep View content to be provided by Marvin."
+            footer = None
+
+        elif action == 'show_global_vocabulary':
+            title = "Global vocabulary"
+            header = None
+            group_box_title = "Vocabulary words by book"
+            default_content = "<p>Global vocabulary to be provided by Marvin.</p>"
             footer = None
 
         elif action == 'show_highlights':
@@ -979,51 +997,12 @@ class BookStatusDialog(SizePersistedDialog):
                         if updated_calibre_collections != original_calibre_collections:
                             self._log("original_calibre_collections: %s" % original_calibre_collections)
                             self._log("updated_calibre_collections: %s" % updated_calibre_collections)
-
-                            # Update collections custom column
-                            lookup = self.parent.prefs.get('collection_field_lookup', None)
-                            if lookup is not None and cid is not None:
-                                # Get the current value from the lookup field
-                                db = self.opts.gui.current_db
-                                mi = db.get_metadata(cid, index_is_id=True)
-                                #old_collections = mi.get_user_metadata(lookup, False)['#value#']
-                                #self._log("Updating old collections value: %s" % repr(old_collections))
-
-                                um = mi.metadata_for_field(lookup)
-                                um['#value#'] = updated_calibre_collections
-                                mi.set_user_metadata(lookup, um)
-                                db.set_metadata(cid, mi, set_title=False, set_authors=False)
-                                db.commit()
+                            self._update_calibre_collections(cid, updated_calibre_collections)
 
                         if updated_marvin_collections != original_marvin_collections:
                             self._log("original_marvin_collections: %s" % original_marvin_collections)
                             self._log("updated_marvin_collections: %s" % updated_marvin_collections)
-
-                            # Merge active flags with updated marvin collections
-                            cached_books = self.parent.connected_device.cached_books
-                            path = self.installed_books[book_id].path
-                            active_flags = []
-                            for flag in self.flags.values():
-                                if flag in cached_books[path]['device_collections']:
-                                    active_flags.append(flag)
-
-                            updated_collections = sorted(active_flags +
-                                                         updated_marvin_collections,
-                                                         key=sort_key)
-
-                            # Update cached_books (with Flags)
-                            cached_books[path]['device_collections'] = updated_collections
-
-                            # Update Device model (with Flags)
-                            for row in self.opts.gui.memory_view.model().map:
-                                book = self.opts.gui.memory_view.model().db[row]
-                                if book.path == self.installed_books[book_id].path:
-                                    book.device_collections = updated_collections
-                                    break
-
-                            # Update Marvin
-                            self._log("DON'T FORGET TO TELL MARVIN ABOUT UPDATED COLLECTIONS")
-
+                            self._update_marvin_collections(book_id, updated_marvin_collections)
                 else:
                     self._log("User cancelled Collections dialog")
             else:
@@ -1224,6 +1203,15 @@ class BookStatusDialog(SizePersistedDialog):
         Clear specified flags for selected books
         sort_key is the bitfield representing current flag settings
         '''
+        def _build_flag_list(flagbits):
+            flags = []
+            if flagbits & self.NEW_FLAG:
+                flags.append(self.FLAGS['new'])
+            if flagbits & self.READING_FLAG:
+                flags.append(self.FLAGS['reading_list'])
+            if flagbits & self.READ_FLAG:
+                flags.append(self.FLAGS['read'])
+            return flags
 
         self._log_location(action)
         if action == 'clear_new_flag':
@@ -1237,6 +1225,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         selected_books = self._selected_books()
         for row in selected_books:
+            book_id = selected_books[row]['book_id']
             flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
             if mask == 0:
                 flagbits = 0
@@ -1248,8 +1237,8 @@ class BookStatusDialog(SizePersistedDialog):
                 # Update the model
                 self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
                 # Update self.installed_books flags list
-                book_id = selected_books[row]['book_id']
                 self.installed_books[book_id].flags = 0
+                flags = []
 
                 # Update Marvin db
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE CLEARED FLAGS ***")
@@ -1266,18 +1255,14 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
 
                 # Update self.installed_books flags list
-                book_id = selected_books[row]['book_id']
-                flags = []
-                if flagbits & self.NEW_FLAG:
-                    flags.append(self.FLAGS['new'])
-                if flagbits & self.READING_FLAG:
-                    flags.append(self.FLAGS['reading_list'])
-                if flagbits & self.READ_FLAG:
-                    flags.append(self.FLAGS['read'])
-                self.installed_books[book_id].flags = flags
+
+                self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
                 # Update Marvin db
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
+
+            path = selected_books[row]['path']
+            self._update_device_flags(book_id, path, _build_flag_list(flagbits))
 
         self.repaint()
 
@@ -2598,6 +2583,16 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Set specified flags for selected books
         '''
+        def _build_flag_list(flagbits):
+            flags = []
+            if flagbits & self.NEW_FLAG:
+                flags.append(self.FLAGS['new'])
+            if flagbits & self.READING_FLAG:
+                flags.append(self.FLAGS['reading_list'])
+            if flagbits & self.READ_FLAG:
+                flags.append(self.FLAGS['read'])
+            return flags
+
         self._log_location(action)
         if action == 'set_new_flag':
             mask = self.NEW_FLAG
@@ -2608,6 +2603,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         selected_books = self._selected_books()
         for row in selected_books:
+            book_id = selected_books[row]['book_id']
             flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
             if not flagbits & mask:
                 # Set the bit with OR
@@ -2621,18 +2617,14 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
 
                 # Update self.installed_books flags list
-                book_id = selected_books[row]['book_id']
-                flags = []
-                if flagbits & self.NEW_FLAG:
-                    flags.append(self.FLAGS['new'])
-                if flagbits & self.READING_FLAG:
-                    flags.append(self.FLAGS['reading_list'])
-                if flagbits & self.READ_FLAG:
-                    flags.append(self.FLAGS['read'])
-                self.installed_books[book_id].flags = flags
+                self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
                 # Update Marvin db
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
+
+            path = selected_books[row]['path']
+            self._update_device_flags(book_id, path, _build_flag_list(flagbits))
+
         self.repaint()
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
@@ -2663,40 +2655,143 @@ class BookStatusDialog(SizePersistedDialog):
         self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
                         b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
 
+    def _update_calibre_collections(self, cid, updated_calibre_collections):
+        '''
+        '''
+        self._log_location()
+        # Update collections custom column
+        lookup = self.parent.prefs.get('collection_field_lookup', None)
+        if lookup is not None and cid is not None:
+            # Get the current value from the lookup field
+            db = self.opts.gui.current_db
+            mi = db.get_metadata(cid, index_is_id=True)
+            #old_collections = mi.get_user_metadata(lookup, False)['#value#']
+            #self._log("Updating old collections value: %s" % repr(old_collections))
+
+            um = mi.metadata_for_field(lookup)
+            um['#value#'] = updated_calibre_collections
+            mi.set_user_metadata(lookup, um)
+            db.set_metadata(cid, mi, set_title=False, set_authors=False)
+            db.commit()
+
+    def _update_device_flags(self, book_id, path, updated_flags):
+        '''
+        Given a set of updated flags for path, update local copies:
+            cached_books[path]['device_collections']
+            Device model book.device_collections
+            (installed_books already updated in _clear_flags, _set_flags())
+        '''
+        self._log_location("%s: %s" % (self.installed_books[book_id].title, updated_flags))
+
+        # Get current collection assignments
+        marvin_collections = self.installed_books[book_id].device_collections
+        updated_collections = sorted(updated_flags + marvin_collections, key=sort_key)
+
+        # Update driver
+        cached_books = self.parent.connected_device.cached_books
+        cached_books[path]['device_collections'] = updated_collections
+
+        # Update Device model
+        for row in self.opts.gui.memory_view.model().map:
+            book = self.opts.gui.memory_view.model().db[row]
+            if book.path == path:
+                book.device_collections = updated_collections
+                break
+
     def _update_collections(self, action):
         '''
-        For books whose Marvin collections and calibre collection assignments do not match,
-        perform the action, apply results to both Marvin and calibre.
-        Apply to selected rows
+        Apply action to selected books.
+            export_collections
+            import_collections
+            synchronize_collections
+            clear_all_collections
         '''
         self._log_location(action)
 
         selected_books = self._selected_books()
         for row in selected_books:
-            self._log("processing %s" % selected_books[row]['title'])
+            book_id = self._selected_book_id(row)
+            cid = self._selected_cid(row)
+            calibre_collections = self._get_calibre_collections(cid)
+            marvin_collections = self._get_marvin_collections(book_id)
+            if action == 'export_collections':
+                # Apply calibre collections to Marvin
+                self._log("export_collections: %s" % selected_books[row]['title'])
+                self._update_marvin_collections(book_id, calibre_collections)
 
-        # Test code from action, needs to be tweaked
-        # Remember that device.cached_books needs to be updated as well as device_collections
-        if False:
-            self._log("self.gui.memory_view.model(): %s" % dir(self.gui.memory_view.model()))
-            self._log("map: %s" % self.gui.memory_view.model().map)
-            self._log("sorted_map: %s" % self.gui.memory_view.model().sorted_map)
-            self._log("memory_view.model().db")
-            #self._log(dir(self.gui.memory_view.model().db[0]))
-            self._log("all_field_keys: %s" % self.gui.memory_view.model().db[0].all_field_keys())
-            for row in self.gui.memory_view.model().map:
-                book = self.gui.memory_view.model().db[row]
-                self._log(".title: %s" % book.title)
-                self._log(".device_collections: %s" % book.device_collections)
-                self._log(".in_library: %s" % book.in_library)
-                self._log(".path: %s" % book.path)
-                self._log(".application_id: %s\n" % book.application_id)
-                #book.device_collections = ['I CHANGED THIS']
+            elif action == 'import_collections':
+                # Apply Marvin collections to calibre
+                self._log("import_collections: %s" % selected_books[row]['title'])
+                self._update_calibre_collections(cid, marvin_collections)
 
-        title = "Update collections"
-        msg = ("<p>{0}: not implemented</p>".format(action))
-        MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+            elif action == 'synchronize_collections':
+                # Merged collections to both calibre and Marvin
+                self._log("synchronize_collections: %s" % selected_books[row]['title'])
+                cl = set(calibre_collections)
+                ml = set(marvin_collections)
+                deltas = ml - cl
+                merged_collections = sorted(calibre_collections + list(deltas), key=sort_key)
+                self._update_calibre_collections(merged_collections)
+                self._update_marvin_collections(merged_collections)
+
+            elif action == 'clear_all_collections':
+                # Remove all collection assignments from both calibre and Marvin
+                self._log("clear_all_collections: %s" % selected_books[row]['title'])
+                self._update_calibre_collections(cid, [])
+                self._update_marvin_collections(book_id, [])
+
+            else:
+                self._log("unsupported action: %s" % action)
+                title = "Update collections"
+                msg = ("<p>{0}: not implemented</p>".format(action))
+                MessageBox(MessageBox.INFO, title, msg,
+                               show_copy_button=False).exec_()
+
+    def _update_flags(self, action):
+        '''
+        '''
+        if action in ['clear_new_flag', 'clear_reading_list_flag',
+                        'clear_read_flag', 'clear_all_flags']:
+            self._clear_flags(action)
+
+        elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
+            self._set_flags(action)
+
+        else:
+            self._log("unsupported action: %s" % action)
+            title = "Update flags"
+            msg = ("<p>{0}: not implemented</p>".format(action))
+            MessageBox(MessageBox.INFO, title, msg,
+                           show_copy_button=False).exec_()
+
+    def _update_marvin_collections(self, book_id, updated_marvin_collections):
+        '''
+        '''
+        self._log_location()
+
+        # Update installed_books
+        self.installed_books[book_id].device_collections = updated_marvin_collections
+
+        # Merge active flags with updated marvin collections
+        cached_books = self.parent.connected_device.cached_books
+        path = self.installed_books[book_id].path
+        active_flags = self.installed_books[book_id].flags
+        updated_collections = sorted(active_flags +
+                                     updated_marvin_collections,
+                                     key=sort_key)
+
+        # Update driver (cached_books)
+        cached_books[path]['device_collections'] = updated_collections
+
+        # Update Device model
+        for row in self.opts.gui.memory_view.model().map:
+            book = self.opts.gui.memory_view.model().db[row]
+            if book.path == path:
+                book.device_collections = updated_collections
+                break
+
+        # Update Marvin
+        self._log("DON'T FORGET TO TELL MARVIN ABOUT UPDATED COLLECTIONS")
 
     def _update_metadata(self):
         '''

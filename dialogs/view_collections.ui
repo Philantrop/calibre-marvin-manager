@@ -153,7 +153,7 @@
           </sizepolicy>
          </property>
          <property name="title">
-          <string>Marvin collections</string>
+          <string>Marvin</string>
          </property>
          <layout class="QVBoxLayout" name="verticalLayout_3">
           <item>
