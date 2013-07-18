@@ -7,7 +7,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import hashlib, importlib, locale, operator, os, re, sqlite3, sys, time
+import base64, hashlib, importlib, locale, operator, os, re, sqlite3, sys, time
 from datetime import datetime
 from functools import partial
 from lxml import etree
@@ -1141,6 +1141,106 @@ class BookStatusDialog(SizePersistedDialog):
                         self._log("'%s' has no Last Opened date" % selected_books[row]['title'])
         else:
             self._log("No date_read_field_lookup specified")
+
+    def _build_metadata_update(self, book_id, cid, book, mismatches):
+        '''
+        Build a metadata update command file for Marvin
+        '''
+        from xml.sax.saxutils import escape
+
+        self._log_location()
+
+        cached_books = self.parent.connected_device.cached_books
+        target_epub = self.installed_books[book_id].path
+
+        # Init the update_metadata command file
+        command_element = "updatemetadata"
+        update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+            command_element, time.mktime(time.localtime())))
+        root = update_soup.find(command_element)
+        root['cleanupcollections'] = 'yes'
+
+        book_tag = Tag(update_soup, 'book')
+        book_tag['author'] = escape(', '.join(book.authors))
+        book_tag['authorsort'] = escape(book.author_sort)
+        book_tag['filename'] = target_epub
+
+        naive = book.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
+        book_tag['pubdate'] = strftime('%Y-%m-%d', t=naive)
+        book_tag['publisher'] = ''
+        if book.publisher is not None:
+            book_tag['publisher'] = escape(book.publisher)
+        book_tag['series'] = ''
+        if book.series:
+            book_tag['series'] = escape(book.series)
+        book_tag['seriesindex'] = ''
+        if book.series_index:
+           book_tag['seriesindex'] = book.series_index
+        book_tag['title'] = escape(book.title)
+        book_tag['titlesort'] = escape(book.title_sort)
+        book_tag['uuid'] = book.uuid
+
+        # Cover
+        if 'cover_hash' in mismatches:
+            desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
+            try:
+                cover = thumbnail(book.cover_data[1],
+                                  desired_thumbnail_height,
+                                  desired_thumbnail_height)
+                self._log("thumb_width: %s" % cover[0])
+                self._log("thumb_height: %s" % cover[1])
+                cover_hash = hashlib.md5(cover[2]).hexdigest()
+
+                cover_tag = Tag(update_soup, 'cover')
+                cover_tag['hash'] = cover_hash
+                cover_tag['encoding'] = 'base64'
+                cover_tag.insert(0, base64.b64encode(cover[2]))
+                book_tag.insert(0, cover_tag)
+
+                # Update the driver's in-memory cover_hash
+                cached_books[target_epub]['cover_hash'] = cover_hash
+            except:
+                self._log("error calculating cover_hash for cid %d (%s)" % (cid, book.title))
+                import traceback
+                self._log(traceback.format_exc())
+        else:
+            self._log(" '%s': cover is up to date" % book.title)
+
+        # ~~~~~~ Subjects ~~~~~~
+        subjects_tag = Tag(update_soup, 'subjects')
+        for tag in sorted(book.tags, reverse=True):
+            subject_tag = Tag(update_soup, 'subject')
+            subject_tag.insert(0, escape(tag))
+            subjects_tag.insert(0, subject_tag)
+        book_tag.insert(0, subjects_tag)
+
+        # ~~~~~~ Collections + Flags ~~~~~~
+        ccas = self._get_calibre_collections(cid)
+        flags = self.installed_books[book_id].flags
+        collection_assignments = sorted(flags + ccas, key=sort_key)
+
+        # Update the driver cache
+        cached_books[target_epub]['device_collections'] = collection_assignments
+
+        collections_tag = Tag(update_soup, 'collections')
+        if collection_assignments:
+            for tag in collection_assignments:
+                c_tag = Tag(update_soup, 'collection')
+                c_tag.insert(0, escape(tag))
+                collections_tag.insert(0, c_tag)
+        book_tag.insert(0, collections_tag)
+
+        # Add the description
+        try:
+            description_tag = Tag(update_soup, 'description')
+            description_tag.insert(0, escape(book.comments))
+            book_tag.insert(0, description_tag)
+        except:
+            pass
+
+        update_soup.manifest.insert(0, book_tag)
+
+        return update_soup
 
     def _calculate_word_count(self):
         '''
@@ -2863,8 +2963,30 @@ class BookStatusDialog(SizePersistedDialog):
     def _update_marvin_metadata(self, book_id, cid, mismatches):
         '''
         Update Marvin from calibre metadata
+        This clones upload_books() in the iOS reader application driver
+        All metadata is asserted, cover optional if changes
         '''
-        self._log_location(mismatches)
+
+        # Get the current metadata
+        db = self.opts.gui.current_db
+        mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
+
+        self._log_location(mi.title)
+        self._log("mismatches:\n%s" % mismatches)
+
+        update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
+
+        # Copy the command file to the staging folder
+        self._stage_command_file("update_metadata", update_soup,
+            #show_command=self.prefs.get('development_mode', False))
+            show_command=True)
+
+        # Wait for completion
+        self._wait_for_command_completion("update_metadata")
+
+        # ???
+        # Update local copy of mainDb
+        #self._localize_database_path(self.books_subpath)
 
     def _update_metadata(self, action):
         '''
