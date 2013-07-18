@@ -580,7 +580,7 @@
    <item row="1" column="0">
     <widget class="QDialogButtonBox" name="bb">
      <property name="standardButtons">
-      <set>QDialogButtonBox::Close</set>
+      <set>QDialogButtonBox::NoButton</set>
      </property>
     </widget>
    </item>

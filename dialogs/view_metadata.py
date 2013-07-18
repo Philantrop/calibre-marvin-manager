@@ -19,7 +19,7 @@ from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
 from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
-                      QSize, QSizePolicy,
+                      QPushButton, QSize, QSizePolicy,
                       pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
@@ -51,24 +51,11 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         if self.bb.buttonRole(button) == QDialogButtonBox.AcceptRole:
             self._log("AcceptRole")
             self.accept()
-
-        elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
-            if button.objectName() == 'export_to_marvin_button':
-                self.export_to_marvin()
-            elif button.objectName() == 'import_from_marvin_button':
-                self.import_from_marvin()
-
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
             self.close()
 
     def esc(self, *args):
         self.close()
-
-    def export_to_marvin(self):
-        self._log_location()
-
-    def import_from_marvin(self):
-        self._log_location()
 
     def initialize(self, parent, book_id, cid, installed_book, marvin_db_path):
         '''
@@ -128,13 +115,13 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.export_to_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_calibre.png')))
-        self.export_to_marvin_button.clicked.connect(partial(self.store_command, 'export_to_marvin'))
+        self.export_to_marvin_button.clicked.connect(partial(self.store_command, 'export_metadata'))
 
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
         self.import_from_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_marvin.png')))
-        self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_from_marvin'))
+        self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_metadata'))
 
         # If no calibre book, or no mismatches, adjust the display accordingly
         if not self.cid:
@@ -158,6 +145,12 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             palette.setColor(QPalette.Background, marvin_red)
             self.marvin_gb.setPalette(palette)
 
+        # ~~~~~~~~ Add a Close or Cancel button ~~~~~~~~
+        self.close_button = QPushButton(QIcon(I('window-close.png')), 'Close')
+        if self.mismatches:
+            self.close_button.setText('Cancel')
+        self.bb.addButton(self.close_button, QDialogButtonBox.RejectRole)
+
         self.bb.clicked.connect(self.dispatch_button_click)
 
         # Restore position
@@ -180,7 +173,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         '''
         self._log_location(command)
         self.stored_command = command
-        self.close()
+        self.accept()
 
     def _log(self, msg=None):
         '''
@@ -242,9 +235,9 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         def _fetch_marvin_cover(with_border=False):
             # Retrieve Books:LargeCoverJpg if no cover_path
             if self.installed_book.cover_file:
-                self._log("fetch cover from Marvin sandbox")
+                self._log_location("fetching cover from Marvin sandbox")
             else:
-                self._log("fetch cover from mainDb")
+                self._log_location("fetching cover from mainDb")
                 con = sqlite3.connect(self.marvin_db_path)
                 with con:
                     con.row_factory = sqlite3.Row
@@ -294,7 +287,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                         self.marvin_cover_jpg = None
 
                 else:
-                    self._log("no cover data fetched from mainDb")
+                    self._log_location("no cover data fetched from mainDb")
 
         self.calibre_cover.setMaximumSize(QSize(self.COVER_ICON_SIZE, self.COVER_ICON_SIZE))
         self.calibre_cover.setText('')
@@ -454,9 +447,9 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                 self.calibre_subjects.setMinimumHeight(marvin_height)
                 self.calibre_subjects.setMaximumHeight(marvin_height)
         else:
-            self._log(repr(self.installed_book.tags))
+            #self._log(repr(self.installed_book.tags))
             cs = "<p><b>Subjects:</b> {0}</p>".format(', '.join(self.installed_book.tags))
-            self._log("cs: %s" % repr(cs))
+            #self._log("cs: %s" % repr(cs))
             self.calibre_subjects.setText(cs)
             self.marvin_subjects.setText(cs)
 

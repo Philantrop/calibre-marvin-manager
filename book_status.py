@@ -60,17 +60,19 @@ class MyTableView(QTableView):
         menu = QMenu(self)
 
         if col == self.parent.ANNOTATIONS_COL:
+            no_annotations = not selected_books[row]['has_annotations']
             ac = menu.addAction("View annotations && highlights")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
-            if len(selected_books) > 1:
+            if len(selected_books) > 1 or no_annotations:
                 ac.setEnabled(False)
 
         elif col == self.parent.ARTICLES_COL:
+            no_articles = not selected_books[row]['has_articles']
             ac = menu.addAction("View articles")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_articles", row))
-            if len(selected_books) > 1:
+            if len(selected_books) > 1 or no_articles:
                 ac.setEnabled(False)
 
         elif col == self.parent.COLLECTIONS_COL:
@@ -113,14 +115,40 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "manage_collections", row))
 
         elif col == self.parent.DEEP_VIEW_COL:
-            ac = menu.addAction("Generate Deep View™ content")
+            ac = menu.addAction("Generate Deep View content")
             ac.setIcon(QIcon(I('exec.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "create_deep_view", row))
 
-            ac = menu.addAction("View Deep View™ content")
+            menu.addSeparator()
+
+            no_dv_content = not selected_books[row]['has_dv_content']
+
+            ac = menu.addAction("Deep View content sorted alphabetically")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view", row))
-            if len(selected_books) > 1:
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                         "show_deep_view_alphabetically", row))
+            if len(selected_books) > 1 or no_dv_content:
+                ac.setEnabled(False)
+
+            ac = menu.addAction("Deep View content sorted by importance")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                         "show_deep_view_by_importance", row))
+            if len(selected_books) > 1 or no_dv_content:
+                ac.setEnabled(False)
+
+            ac = menu.addAction("Deep View content sorted by order of appearance")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                         "show_deep_view_by_appearance", row))
+            if len(selected_books) > 1 or no_dv_content:
+                ac.setEnabled(False)
+
+            ac = menu.addAction("Deep View content with annotations")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                         "show_deep_view_by_annotations", row))
+            if len(selected_books) > 1 or no_dv_content:
                 ac.setEnabled(False)
 
         elif col == self.parent.FLAGS_COL:
@@ -183,17 +211,19 @@ class MyTableView(QTableView):
 
             ac = menu.addAction("Export metadata from calibre to Marvin")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_to_marvin", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "export_metadata", row))
 
             ac = menu.addAction("Import metadata from Marvin to calibre")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "sync_metadata_from_marvin", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "import_metadata", row))
 
         elif col == self.parent.VOCABULARY_COL:
+            no_vocabulary = not selected_books[row]['has_vocabulary']
+
             ac = menu.addAction("View vocabulary for this book")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary", row))
-            if len(selected_books) > 1:
+            if len(selected_books) > 1 or no_vocabulary:
                 ac.setEnabled(False)
 
             ac = menu.addAction("View all vocabulary words")
@@ -543,7 +573,10 @@ class BookStatusDialog(SizePersistedDialog):
                         'clear_read_flag', 'clear_all_flags',
                         'set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._update_flags(action)
-        elif action in ['show_articles', 'show_deep_view', 'show_highlights', 'show_vocabulary']:
+        elif action in ['show_articles',
+                        'show_deep_view_alphabetically', 'show_deep_view_by_importance',
+                        'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
+                        'show_highlights', 'show_vocabulary']:
             self.show_assets_dialog(action, row)
         elif action == 'manage_collections':
             self.show_manage_collections_dialog()
@@ -556,6 +589,8 @@ class BookStatusDialog(SizePersistedDialog):
             self._update_collections(action)
         elif action == 'show_metadata':
             self.show_view_metadata_dialog(row)
+        elif action in ['export_metadata', 'import_metadata']:
+            self._update_metadata(action)
         else:
             selected_books = self._selected_books()
             det_msg = ''
@@ -789,14 +824,26 @@ class BookStatusDialog(SizePersistedDialog):
                 default_content = ("<p>No articles</p>")
             footer = None
 
-        elif action == 'show_deep_view':
+        elif action in ['show_deep_view_alphabetically', 'show_deep_view_by_importance',
+                        'show_deep_view_by_appearance', 'show_deep_view_by_annotations']:
             header = None
-            group_box_title = 'Deep View content'
-            default_content = "Deep View content to be provided by Marvin."
+            if action == 'show_deep_view_alphabetically':
+                group_box_title = "Alphabetically"
+
+            elif action == 'show_deep_view_by_importance':
+                group_box_title = "By importance"
+
+            elif action == 'show_deep_view_by_appearance':
+                group_box_title = "By appearance"
+
+            elif action == 'show_deep_view_by_annotations':
+                group_box_title = "With annotations"
+
+            default_content = "Deep View '{0}' content to be provided by Marvin.".format(group_box_title)
             footer = None
 
         elif action == 'show_global_vocabulary':
-            title = "Global vocabulary"
+            title = "All vocabulary words"
             header = None
             group_box_title = "Vocabulary words by book"
             default_content = "<p>Global vocabulary to be provided by Marvin.</p>"
@@ -1022,13 +1069,19 @@ class BookStatusDialog(SizePersistedDialog):
             dlg = this_dc.MetadataComparisonDialog(self, 'metadata_comparison')
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
+            mismatches = self.installed_books[book_id].metadata_mismatches
+
             dlg.initialize(self,
                            book_id,
                            cid,
                            self.installed_books[book_id],
                            self.parent.connected_device.local_db_path)
             dlg.exec_()
-            self._log("Results of metadata dialog: %s" % dlg.stored_command)
+            if dlg.result() == dlg.Accepted and mismatches:
+                action = dlg.stored_command
+                self._update_metadata(action)
+            else:
+                self._log("User cancelled Metadata dialog")
 
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
@@ -2550,6 +2603,10 @@ class BookStatusDialog(SizePersistedDialog):
             author = str(self.tm.arraydata[row][self.AUTHOR_COL].text())
             book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
             cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
+            has_annotations = bool(self.tm.arraydata[row][self.ANNOTATIONS_COL])
+            has_articles = bool(self.tm.arraydata[row][self.ARTICLES_COL])
+            has_dv_content = bool(self.tm.arraydata[row][self.DEEP_VIEW_COL])
+            has_vocabulary = bool(self.tm.arraydata[row][self.VOCABULARY_COL])
             last_opened = str(self.tm.arraydata[row][self.LAST_OPENED_COL].text())
             path = self.tm.arraydata[row][self.PATH_COL]
             title = str(self.tm.arraydata[row][self.TITLE_COL].text())
@@ -2558,6 +2615,10 @@ class BookStatusDialog(SizePersistedDialog):
                                    'author': author,
                                    'book_id': book_id,
                                    'cid': cid,
+                                   'has_annotations': has_annotations,
+                                   'has_articles': has_articles,
+                                   'has_dv_content': has_dv_content,
+                                   'has_vocabulary': has_vocabulary,
                                    'last_opened': last_opened,
                                    'path': path,
                                    'title': title,
@@ -2673,6 +2734,12 @@ class BookStatusDialog(SizePersistedDialog):
             mi.set_user_metadata(lookup, um)
             db.set_metadata(cid, mi, set_title=False, set_authors=False)
             db.commit()
+
+    def _update_calibre_metadata(self, book_id, cid, mismatches):
+        '''
+        Update calibre from Marvin metadata
+        '''
+        self._log_location(mismatches)
 
     def _update_device_flags(self, book_id, path, updated_flags):
         '''
@@ -2793,14 +2860,37 @@ class BookStatusDialog(SizePersistedDialog):
         # Update Marvin
         self._log("DON'T FORGET TO TELL MARVIN ABOUT UPDATED COLLECTIONS")
 
-    def _update_metadata(self):
+    def _update_marvin_metadata(self, book_id, cid, mismatches):
+        '''
+        Update Marvin from calibre metadata
+        '''
+        self._log_location(mismatches)
+
+    def _update_metadata(self, action):
         '''
         '''
-        self._log_location()
+        self._log_location(action)
+
+        selected_books = self._selected_books()
+        for row in selected_books:
+            book_id = self._selected_book_id(row)
+            cid = self._selected_cid(row)
+            mismatches = self.installed_books[book_id].metadata_mismatches
+            if action == 'export_metadata':
+                # Apply calibre metadata to Marvin
+                self._update_marvin_metadata(book_id, cid, mismatches)
+
+            elif action == 'import_metadata':
+                # Apply Marvin metadata to calibre
+                self._update_calibre_metadata(book_id, cid, mismatches)
+
+
+        """
         title = "Synchronize metadata"
         msg = ("<p>Not implemented</p>")
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
+        """
 
     def _update_remote_hash_cache(self):
         '''
