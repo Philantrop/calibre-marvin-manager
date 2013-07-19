@@ -1,0 +1,91 @@
+
+In-memory caches
+Driver - cached books (books, upload_books)
+cached_books[path]
+----------------------
+* 'author'
+* 'authors'
+* 'author_sort'
+* 'cover_hash'
+* 'description'
+* 'device_collections'
+* 'pubdate'
+* 'publisher'
+* 'series'
+* 'series_index'
+* 'tags'
+* 'title'
+* 'title_sort'
+* 'uuid'
+
+Device - self.opts.gui.memory_view.model().db[row] is a Metadata object
+.standard_field_keys():
+-----------------------
+.application_id
+.author_link_map
+.author_sort
+.author_sort_map
+.authors
+.book_producer
+.comments
+.cover
+.cover_data
+.db_id
+.device_collections
+.formats
+.guide
+.identifiers
+.in_library [UUID | AUTHOR]
+.languages
+.last_modified
+.lpath
+.manifest
+.mime
+.pubdate
+.publication_type
+.publisher
+.rating
+.rights
+.series
+.series_index
+.size
+.spine
+.tags
+.thumbnail
+.timestamp
+.title
+.title_sort
+.toc
+.user_categories
+.uuid
+
+Marvin Manager - installed_books[book_id] is a Metadata object
+populated in _get_installed_books()
+-------------------------
+.articles
+.author_sort
+.cid
+.calibre_collections
+.comments
+.cover_file
+.device_collections
+.date_opened
+.deep_view_prepared
+.flags
+.hash
+.highlights
+.metadata_mismatches
+.mid
+.on_device
+.path
+.progress
+.pubdate
+.tags
+.title_sort
+.uuid
+.vocabulary
+.word_count
+
+mainDb.sqlite is mirrored in local storage by the driver
+_localize_database_path()
+

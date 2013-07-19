@@ -310,6 +310,14 @@ class MarkupTableModel(QAbstractTableModel):
     GREEN_HUE = 0.333
     WHITE_HUE = 1.0
 
+    # Match quality colors
+    if True:
+        GREEN = 4
+        YELLOW = 3
+        ORANGE = 2
+        RED = 1
+        WHITE = 0
+
     def __init__(self, parent=None, centered_columns=[], right_aligned_columns=[], *args):
         """
         datain: a list of lists
@@ -373,19 +381,57 @@ class MarkupTableModel(QAbstractTableModel):
         elif role == Qt.TextAlignmentRole and (col in self.right_aligned_columns):
             return Qt.AlignRight
 
-        elif role == Qt.ToolTipRole and col in [self.parent.TITLE_COL,
-                                                self.parent.AUTHOR_COL]:
-            return "<p>Double-click for metadata<br/>Right-click for more options</p>"
-        elif role == Qt.ToolTipRole and col in [self.parent.ANNOTATIONS_COL,
-                                                self.parent.ARTICLES_COL,
-                                                self.parent.COLLECTIONS_COL,
-                                                self.parent.VOCABULARY_COL]:
-            return "<p>Double-click to view<br/>Right-click for more options</p>"
-        elif role == Qt.ToolTipRole and col in [self.parent.FLAGS_COL]:
-            return "<p>Right-click for options</p>"
-        elif role == Qt.ToolTipRole and col in [self.parent.WORD_COUNT_COL]:
-            return "<p>Double-click to generate word count</p>"
+        elif role == Qt.ToolTipRole:
+            # Build the prefix based upon match quality
+            match_quality = self.arraydata[row][self.parent.MATCHED_COL]
+            tip = '<p>'
+            if match_quality == self.GREEN:
+                tip += 'Matched in calibre library'
+            elif match_quality == self.YELLOW:
+                tip += 'Matched in calibre library with differing metadata'
+            elif match_quality == self.ORANGE:
+                tip += 'Duplicate of matched book in calibre library'
+            elif match_quality == self.RED:
+                tip += 'Duplicated in Marvin library'
+            else:
+                tip += 'Book in Marvin library only'
 
+            # Add the suffix based upon column
+            if col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
+                return tip + "<br/>Double-click to view metadata<br/>Right-click for more options</p>"
+
+            elif col in [self.parent.ANNOTATIONS_COL,
+                         self.parent.ARTICLES_COL]:
+                has_content = bool(self.arraydata[row][col])
+                if has_content:
+                    return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
+                else:
+                    return tip + '</p>'
+
+            elif col == self.parent.COLLECTIONS_COL:
+                has_content = bool(self.arraydata[row][col].sort_key)
+                if has_content:
+                    return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
+                else:
+                    return tip + '<br/>Right-click for more options</p>'
+
+            elif col in [self.parent.DEEP_VIEW_COL, self.parent.VOCABULARY_COL]:
+                has_content = bool(self.arraydata[row][col])
+                if has_content:
+                    return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
+                else:
+                    return tip + '<br/>Right-click for more options</p>'
+
+
+            elif col in [self.parent.FLAGS_COL]:
+                return tip + "<br/>Right-click for options</p>"
+
+            elif col in [self.parent.WORD_COUNT_COL]:
+                return (tip + "<br/>Double-click to generate word count" +
+                              "<br/>Right-click to generate word count for multiple books</p>")
+
+            else:
+                return tip + '</p>'
 
         elif role != Qt.DisplayRole:
             return QVariant()
@@ -496,6 +542,14 @@ class BookStatusDialog(SizePersistedDialog):
         <manifest>
         </manifest>
         </{0}>'''
+
+    # Match quality color constants
+    if True:
+        GREEN = 4
+        YELLOW = 3
+        ORANGE = 2
+        RED = 1
+        WHITE = 0
 
     marvin_device_status_changed = pyqtSignal(str)
 
@@ -1187,8 +1241,6 @@ class BookStatusDialog(SizePersistedDialog):
                 cover = thumbnail(book.cover_data[1],
                                   desired_thumbnail_height,
                                   desired_thumbnail_height)
-                self._log("thumb_width: %s" % cover[0])
-                self._log("thumb_height: %s" % cover[1])
                 cover_hash = hashlib.md5(cover[2]).hexdigest()
 
                 cover_tag = Tag(update_soup, 'cover')
@@ -1197,7 +1249,9 @@ class BookStatusDialog(SizePersistedDialog):
                 cover_tag.insert(0, base64.b64encode(cover[2]))
                 book_tag.insert(0, cover_tag)
 
-                # Update the driver's in-memory cover_hash
+                # Update the driver's in-memory cover_hash. cover_hash is also in
+                # mismatches, but better to use generated
+                # *** Should this also be updating the cover_hash cache? ***
                 cached_books[target_epub]['cover_hash'] = cover_hash
             except:
                 self._log("error calculating cover_hash for cid %d (%s)" % (cid, book.title))
@@ -1564,28 +1618,28 @@ class BookStatusDialog(SizePersistedDialog):
                              repr(book_data.on_device),
                              repr(book_data.hash)))
                 self._log("metadata_mismatches: %s" % repr(book_data.metadata_mismatches))
-            match_quality = 0
+            match_quality = self.WHITE
 
             if (book_data.uuid > '' and
                 [book_data.uuid] == book_data.matches and
                 not book_data.metadata_mismatches):
                 # GREEN: Hard match - uuid match, metadata match
-                match_quality = 4
+                match_quality = self.GREEN
 
             elif ((book_data.on_device == 'Main' and
                    book_data.metadata_mismatches) or
                   ([book_data.uuid] == book_data.matches)):
                 # YELLOW: Soft match - hash match,
-                match_quality = 3
+                match_quality = self.YELLOW
 
             elif (book_data.uuid in book_data.matches):
                 # ORANGE: Duplicate of calibre copy
-                match_quality = 2
+                match_quality = self.ORANGE
 
             elif (book_data.hash in self.marvin_hash_map and
                   len(self.marvin_hash_map[book_data.hash]) > 1):
                 # RED: Marvin-only duplicate
-                match_quality = 1
+                match_quality = self.RED
 
             if self.opts.prefs.get('development_mode', False):
                 self._log("%s match_quality: %s" % (book_data.title, match_quality))
@@ -2502,6 +2556,17 @@ class BookStatusDialog(SizePersistedDialog):
                                                  repr(installed_books[book].word_count)))
         return installed_books
 
+    def _localize_marvin_database(self):
+        '''
+        Copy remote_db_path from iOS to local storage using device pointers
+        '''
+        self._log_location()
+
+        local_db_path = self.parent.connected_device.local_db_path
+        remote_db_path = self.parent.connected_device.books_subpath
+        with open(local_db_path, 'wb') as out:
+            self.ios.copy_from_idevice(remote_db_path, out)
+
     def _localize_hash_cache(self, cached_books):
         '''
         Check for existence of hash cache on iDevice. Confirm/create folder
@@ -2960,7 +3025,7 @@ class BookStatusDialog(SizePersistedDialog):
         # Update Marvin
         self._log("DON'T FORGET TO TELL MARVIN ABOUT UPDATED COLLECTIONS")
 
-    def _update_marvin_metadata(self, book_id, cid, mismatches):
+    def _update_marvin_metadata(self, book_id, cid, mismatches, model_row):
         '''
         Update Marvin from calibre metadata
         This clones upload_books() in the iOS reader application driver
@@ -2974,19 +3039,79 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location(mi.title)
         self._log("mismatches:\n%s" % mismatches)
 
-        update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
+        if False:
+            update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
 
-        # Copy the command file to the staging folder
-        self._stage_command_file("update_metadata", update_soup,
-            #show_command=self.prefs.get('development_mode', False))
-            show_command=True)
+            # Copy the command file to the staging folder
+            self._stage_command_file("update_metadata", update_soup,
+                show_command=self.prefs.get('show_staged_commands', False))
 
-        # Wait for completion
-        self._wait_for_command_completion("update_metadata")
+            # Wait for completion
+            self._wait_for_command_completion("update_metadata", update_local_db=True)
 
-        # ???
-        # Update local copy of mainDb
-        #self._localize_database_path(self.books_subpath)
+        # Update in-memory caches
+        cached_books = self.parent.connected_device.cached_books
+        path = self.installed_books[book_id].path
+
+        # Find the book in Device map
+        for device_view_row in self.opts.gui.memory_view.model().map:
+            book = self.opts.gui.memory_view.model().db[device_view_row]
+            if book.path == path:
+                break
+        else:
+            self._log("ERROR: couldn't find '%s' in memory_view" % path)
+            device_view_row = None
+
+        '''
+        mismatch keys:
+            authors, author_sort, comments, cover_hash, pubdate, publisher,
+            series, series_index, tags, title, title_sort, uuid
+        visible memory_view properties (order of appearance):
+            in_library, title, title_sort, authors, author_sort, ?date_added?, size, collections
+        '''
+
+        for key in mismatches:
+            if key == 'authors':
+                authors = mismatches[key]['calibre']
+                cached_books[path]['authors'] = authors
+                cached_books[path]['author'] = ', '.join(authors)
+                self.installed_books[book_id].authors = authors
+                self.opts.gui.memory_view.model().db[device_view_row].authors = authors
+
+            if key == 'author_sort':
+                author_sort = mismatches[key]['calibre']
+                cached_books[path]['author_sort'] = author_sort
+                self.installed_books[book_id].author_sort = author_sort
+                self.opts.gui.memory_view.model().db[device_view_row].author_sort = author_sort
+
+            if key == 'comments':
+                comments = mismatches[key]['calibre']
+                cached_books[path]['description'] = comments
+                self.installed_books[book_id].comments = comments
+
+            if key == 'title':
+                title = mismatches[key]['calibre']
+                cached_books[path]['title'] = title
+                self.installed_books[book_id].title = title
+                self.opts.gui.memory_view.model().db[device_view_row].title = title
+
+            if key == 'title_sort':
+                title_sort = mismatches[key]['calibre']
+                cached_books[path]['title_sort'] = title_sort
+                self.installed_books[book_id].title_sort = title_sort
+                self.opts.gui.memory_view.model().db[device_view_row].title_sort = title_sort
+
+            if key == 'uuid':
+                uuid = mismatches[key]['calibre']
+                cached_books[path]['uuid'] = uuid
+                self.installed_books[book_id].uuid = uuid
+                self.opts.gui.memory_view.model().db[device_view_row].uuid = uuid
+                self.opts.gui.memory_view.model().db[device_view_row].in_library = "UUID"
+
+        # Update metadata match quality in the visible model
+        self.tm.arraydata[model_row][self.MATCHED_COL] = self.GREEN
+        self.repaint()
+        self._clear_selected_rows()
 
     def _update_metadata(self, action):
         '''
@@ -2994,25 +3119,29 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location(action)
 
         selected_books = self._selected_books()
+
+        pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata",
+                         on_top=True)
+        total_books = len(selected_books)
+        pb.set_maximum(total_books)
+        pb.set_value(0)
+        pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
+        pb.show()
+
         for row in selected_books:
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             mismatches = self.installed_books[book_id].metadata_mismatches
+            pb.set_label('{:^100}'.format(self.installed_books[book_id].title))
             if action == 'export_metadata':
                 # Apply calibre metadata to Marvin
-                self._update_marvin_metadata(book_id, cid, mismatches)
+                self._update_marvin_metadata(book_id, cid, mismatches, row)
 
             elif action == 'import_metadata':
                 # Apply Marvin metadata to calibre
-                self._update_calibre_metadata(book_id, cid, mismatches)
-
-
-        """
-        title = "Synchronize metadata"
-        msg = ("<p>Not implemented</p>")
-        MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
-        """
+                self._update_calibre_metadata(book_id, cid, mismatches, row)
+            pb.increment()
+        pb.hide()
 
     def _update_remote_hash_cache(self):
         '''
@@ -3029,7 +3158,7 @@ class BookStatusDialog(SizePersistedDialog):
             # Copy local cache to iDevice
             self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
 
-    def _wait_for_command_completion(self, command_name, send_signal=True):
+    def _wait_for_command_completion(self, command_name, update_local_db=True):
         '''
         Wait for Marvin to issue progress reports via status.xml
         Marvin creates status.xml upon receiving command, increments <progress>
@@ -3130,10 +3259,10 @@ class BookStatusDialog(SizePersistedDialog):
                                      (datetime.now().strftime('%H:%M:%S.%f'),
                                       command_name))
                 break
-        """
-        if self.report_progress is not None:
-            self.report_progress(1.0, _('finished'))
-        """
+
+        # Update local copy of Marvin db
+        if update_local_db:
+            self._localize_marvin_database()
 
     def _watchdog_timed_out(self):
         '''
