@@ -41,7 +41,7 @@ from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, Book, HelpView, InventoryCollections, MyAbstractItemModel,
-    MyBlockingBusy, ProgressBar, SizePersistedDialog, Struct)
+    MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog, Struct)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_Mangler_resources', 'dialogs')
 
@@ -2073,6 +2073,8 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         self._log_location(self.updated_match_quality)
+        self.flasher = RowFlasher(self, self.tm, self.MATCHED_COL)
+        self.flasher.start()
 
     def _generate_booklist(self):
         '''
@@ -2957,30 +2959,6 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location(mismatches)
 
-    def _update_device_flags(self, book_id, path, updated_flags):
-        '''
-        Given a set of updated flags for path, update local copies:
-            cached_books[path]['device_collections']
-            Device model book.device_collections
-            (installed_books already updated in _clear_flags, _set_flags())
-        '''
-        self._log_location("%s: %s" % (self.installed_books[book_id].title, updated_flags))
-
-        # Get current collection assignments
-        marvin_collections = self.installed_books[book_id].device_collections
-        updated_collections = sorted(updated_flags + marvin_collections, key=sort_key)
-
-        # Update driver
-        cached_books = self.parent.connected_device.cached_books
-        cached_books[path]['device_collections'] = updated_collections
-
-        # Update Device model
-        for row in self.opts.gui.memory_view.model().map:
-            book = self.opts.gui.memory_view.model().db[row]
-            if book.path == path:
-                book.device_collections = updated_collections
-                break
-
     def _update_collections(self, action):
         '''
         Apply action to selected books.
@@ -3029,6 +3007,30 @@ class BookStatusDialog(SizePersistedDialog):
                 msg = ("<p>{0}: not implemented</p>".format(action))
                 MessageBox(MessageBox.INFO, title, msg,
                                show_copy_button=False).exec_()
+
+    def _update_device_flags(self, book_id, path, updated_flags):
+        '''
+        Given a set of updated flags for path, update local copies:
+            cached_books[path]['device_collections']
+            Device model book.device_collections
+            (installed_books already updated in _clear_flags, _set_flags())
+        '''
+        self._log_location("%s: %s" % (self.installed_books[book_id].title, updated_flags))
+
+        # Get current collection assignments
+        marvin_collections = self.installed_books[book_id].device_collections
+        updated_collections = sorted(updated_flags + marvin_collections, key=sort_key)
+
+        # Update driver
+        cached_books = self.parent.connected_device.cached_books
+        cached_books[path]['device_collections'] = updated_collections
+
+        # Update Device model
+        for row in self.opts.gui.memory_view.model().map:
+            book = self.opts.gui.memory_view.model().db[row]
+            if book.path == path:
+                book.device_collections = updated_collections
+                break
 
     def _update_flags(self, action):
         '''

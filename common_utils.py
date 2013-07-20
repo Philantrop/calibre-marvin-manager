@@ -39,7 +39,7 @@ from calibre.utils.logging import Log
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
     QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox, QDoubleSpinBox, QFont, QIcon,
     QKeySequence, QLabel, QLineEdit, QMenu, QPixmap, QProgressBar, QPlainTextEdit,
-    QRadioButton, QSize, QSizePolicy, QSlider, QSpinBox, QString, QThread, QUrl,
+    QRadioButton, QSize, QSizePolicy, QSlider, QSpinBox, QString, QThread, QTimer, QUrl,
     QVBoxLayout,
     SIGNAL, pyqtSignal)
 from PyQt4.QtWebKit import QWebView
@@ -375,6 +375,51 @@ class InventoryCollections(QThread):
                 if mi.get_user_metadata(self.cfl, False)['#value#']:
                     active_collections.append(record[id])
         return active_collections
+
+
+class RowFlasher(QThread):
+    '''
+    '''
+    on_time = 250
+    off_time = 500
+    cycles = 10
+
+    def __init__(self, parent, model, col):
+        QThread.__init__(self)
+        self.model = model
+        self.parent = parent
+        self.rows_to_flash = parent.updated_match_quality
+        self.col = col
+
+        self.cycles = self.parent.prefs.get('flasher_cycles', 10)
+        self.mode = self.parent.prefs.get('flasher_initial_mode', 'old')
+        self.off_time = self.parent.prefs.get('flasher_off_time', 500)
+        self.on_time = self.parent.prefs.get('flasher_on_time', 250)
+
+        # Start the show
+        self.toggle_values(self.mode)
+        QTimer.singleShot(self.on_time, self.update)
+
+    def toggle_values(self, mode):
+        for row, item in self.rows_to_flash.items():
+            self.model.arraydata[row][self.col] = item[mode]
+        self.parent.repaint()
+
+    def update(self):
+        self.cycles -= 1
+        if self.cycles:
+            if self.mode == 'new':
+                self.toggle_values('old')
+                self.mode = 'old'
+                QTimer.singleShot(self.off_time, self.update)
+            elif self.mode == 'old':
+                self.toggle_values('new')
+                self.mode = 'new'
+                QTimer.singleShot(self.on_time, self.update)
+        else:
+            # Always end with new values
+            self.toggle_values('new')
+            self.terminate()
 
 
 '''     Helper Classes  '''
