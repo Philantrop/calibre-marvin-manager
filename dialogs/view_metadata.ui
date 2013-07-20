@@ -292,7 +292,7 @@
         <item>
          <widget class="QPushButton" name="export_to_marvin_button">
           <property name="text">
-           <string>Export from Calibre to Marvin</string>
+           <string>Export metadata to Marvin</string>
           </property>
          </widget>
         </item>
@@ -568,7 +568,7 @@
         <item>
          <widget class="QPushButton" name="import_from_marvin_button">
           <property name="text">
-           <string>Import from Marvin to Calibre</string>
+           <string>Import metadata to Calibre</string>
           </property>
          </widget>
         </item>

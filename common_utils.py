@@ -292,6 +292,15 @@ class IndexLibrary(QThread):
         self.uuid_map = self.index_by_uuid()
         self.emit(self.signal)
 
+    def add_to_hash_map(self, hash, uuid):
+        '''
+        When a book has been bound to a calibre uuid, we need to add it to the hash map
+        '''
+        if hash not in self.hash_map:
+            self.hash_map[hash] = [uuid]
+        else:
+            self.hash_map[hash].append(uuid)
+
     def build_hash_map(self):
         '''
         Generate a reverse dict of hash:[uuid] from self.uuid_map

@@ -433,9 +433,9 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.marvin_subjects.setSizePolicy(sp)
 
         if 'tags' in self.mismatches:
-            cs = "<p><b>Subjects:</b> {0}</p>".format(', '.join(self.mismatches['tags']['calibre']))
+            cs = "<b>Subjects:</b> {0}".format(', '.join(self.mismatches['tags']['calibre']))
             self.calibre_subjects.setText(self.YELLOW_BG.format(cs))
-            ms = "<p><b>Subjects:</b> {0}</p>".format(', '.join(self.mismatches['tags']['Marvin']))
+            ms = "<b>Subjects:</b> {0}".format(', '.join(self.mismatches['tags']['Marvin']))
             self.marvin_subjects.setText(self.YELLOW_BG.format(ms))
 
             calibre_height = self.calibre_subjects.sizeHint().height()
@@ -448,7 +448,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                 self.calibre_subjects.setMaximumHeight(marvin_height)
         else:
             #self._log(repr(self.installed_book.tags))
-            cs = "<p><b>Subjects:</b> {0}</p>".format(', '.join(self.installed_book.tags))
+            cs = "<b>Subjects:</b> {0}".format(', '.join(self.installed_book.tags))
             #self._log("cs: %s" % repr(cs))
             self.calibre_subjects.setText(cs)
             self.marvin_subjects.setText(cs)

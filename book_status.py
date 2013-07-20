@@ -382,7 +382,6 @@ class MarkupTableModel(QAbstractTableModel):
             return Qt.AlignRight
 
         elif role == Qt.ToolTipRole:
-            # Build the prefix based upon match quality
             match_quality = self.arraydata[row][self.parent.MATCHED_COL]
             tip = '<p>'
             if match_quality == self.GREEN:
@@ -435,7 +434,6 @@ class MarkupTableModel(QAbstractTableModel):
 
         elif role != Qt.DisplayRole:
             return QVariant()
-
 
         return QVariant(self.arraydata[index.row()][index.column()])
 
@@ -715,6 +713,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.remote_cache_folder = '/'.join(['/Library','calibre.mm'])
         self.remote_hash_cache = None
         self.show_match_colors = self.prefs.get('show_match_colors', False)
+        self.updated_match_quality = None
         self.verbose = parent.verbose
 
         # Subscribe to Marvin driver change events
@@ -1248,11 +1247,6 @@ class BookStatusDialog(SizePersistedDialog):
                 cover_tag['encoding'] = 'base64'
                 cover_tag.insert(0, base64.b64encode(cover[2]))
                 book_tag.insert(0, cover_tag)
-
-                # Update the driver's in-memory cover_hash. cover_hash is also in
-                # mismatches, but better to use generated
-                # *** Should this also be updating the cover_hash cache? ***
-                cached_books[target_epub]['cover_hash'] = cover_hash
             except:
                 self._log("error calculating cover_hash for cid %d (%s)" % (cid, book.title))
                 import traceback
@@ -1607,7 +1601,7 @@ class BookStatusDialog(SizePersistedDialog):
             3: Marvin hash matches calibre hash (soft match): Yellow
             2: Marvin hash duplicates: Orange
             1: Calibre hash duplicates: Red
-            0: Marvin only, single copy
+            0: Marvin only, single copy: White
             '''
 
             if self.opts.prefs.get('development_mode', False):
@@ -1700,6 +1694,8 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.title,
                 book_data.title_sort.upper())
             return title
+
+        self._log_location()
 
         tabledata = []
 
@@ -1812,6 +1808,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         btd = self._selected_books()
         books_to_delete = sorted([btd[b]['title'] for b in btd], key=sort_key)
+        self.updated_match_quality = {}
 
         if books_to_delete:
             if True:
@@ -1844,36 +1841,62 @@ class BookStatusDialog(SizePersistedDialog):
                         self.tm.endRemoveRows()
 
                     # Delete the books on Device
-                    job = self.parent.gui.remove_paths(delete_map.keys())
+                    if self.prefs.get('execute_marvin_commands', True):
+                        job = self.parent.gui.remove_paths(delete_map.keys())
 
-                    # Delete books in the Device model
-                    model.mark_for_deletion(job, delete_map.values(), rows_are_ids=True)
-                    model.deletion_done(job, succeeded=True)
-                    for rtd in delete_map.values():
-                        del model.db[rtd]
+                        # Delete books in the Device model
+                        model.mark_for_deletion(job, delete_map.values(), rows_are_ids=True)
+                        model.deletion_done(job, succeeded=True)
+                        for rtd in delete_map.values():
+                            del model.db[rtd]
 
-                    # Put on a show while waiting for the delete job to finish
-                    QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-                    blocking_busy = MyBlockingBusy(self.opts.gui, "Updating Marvin Library…", size=60)
-                    blocking_busy.start()
-                    blocking_busy.show()
-                    while not job.is_finished:
-                        Application.processEvents()
-                    blocking_busy.stop()
-                    blocking_busy.accept()
-                    QApplication.restoreOverrideCursor()
+                        # Put on a show while waiting for the delete job to finish
+                        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+                        blocking_busy = MyBlockingBusy(self.opts.gui, "Updating Marvin Library…", size=60)
+                        blocking_busy.start()
+                        blocking_busy.show()
+                        while not job.is_finished:
+                            Application.processEvents()
+                        blocking_busy.stop()
+                        blocking_busy.accept()
+                        QApplication.restoreOverrideCursor()
 
-                    # Remove from cached_paths in driver
-                    if True:
-                        for ptd in paths_to_delete:
-                            self.parent.connected_device.cached_books.pop(ptd)
+                        # Remove from cached_paths in driver
+                        if True:
+                            for ptd in paths_to_delete:
+                                self.parent.connected_device.cached_books.pop(ptd)
+                        else:
+                            # The book is not in booklists, how/when removed?
+                            self.parent.connected_device.remove_books_from_metadata(paths_to_delete,
+                                self.parent.gui.booklists())
+
+                        # Update the visible Device model
+                        model.paths_deleted(paths_to_delete)
                     else:
-                        # The book is not in booklists, how/when removed?
-                        self.parent.connected_device.remove_books_from_metadata(paths_to_delete,
-                            self.parent.gui.booklists())
+                        self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
 
-                    # Update the visible Device model
-                    model.paths_deleted(paths_to_delete)
+                    # Remove from self.installed_books
+                    book_ids_to_delete = [btd[b]['book_id'] for b in btd]
+                    for book_id in book_ids_to_delete:
+                        deleted = self.installed_books.pop(book_id)
+                        self._log("deleted: %s hash: %s matches: %s" % (deleted.title,
+                                                                        deleted.hash,
+                                                                        deleted.matches))
+                        self._log("library_hash_map: %s" % self.library_scanner.hash_map[deleted.hash])
+
+                        for book_id, book in self.installed_books.items():
+                            if book.hash == deleted.hash:
+                                row = self._find_book_id_in_model(book_id)
+                                if row:
+                                    old = self.tm.arraydata[row][self.MATCHED_COL]
+                                    self.tm.arraydata[row][self.MATCHED_COL] = self.GREEN
+                                    self.updated_match_quality[row] = {'book_id': book_id,
+                                                                           'old': old,
+                                                                           'new': self.GREEN}
+
+                    # Launch row flasher
+                    self._flash_affected_rows()
+
                 else:
                     self._log("delete cancelled")
 
@@ -1993,6 +2016,21 @@ class BookStatusDialog(SizePersistedDialog):
         os.remove(lbp)
         return hash
 
+    def _find_book_id_in_model(self, book_id):
+        '''
+        Given a book_id, find its row in the displayed model
+        '''
+        self._log_location()
+
+        for row, item in enumerate(self.tm.arraydata):
+            #if self.tm.arraydata[row][self.BOOK_ID_COL] == book_id:
+            if item[self.BOOK_ID_COL] == book_id:
+                self._log("found %s at row %d" % (book_id, row))
+                break
+        else:
+            row = None
+        return row
+
     def _find_fuzzy_matches(self, library_scanner, installed_books):
         '''
         Compare computed hashes of installed books to library books.
@@ -2006,8 +2044,8 @@ class BookStatusDialog(SizePersistedDialog):
         hard_matches = {}
         soft_matches = []
         for book in installed_books:
-            #self._log("evaluating %s hash: %s uuid: %s" % (mb.title, mb.hash, mb.uuid))
             mb = installed_books[book]
+            #self._log("evaluating %s hash: %s uuid: %s" % (mb.title, mb.hash, mb.uuid))
             uuids = []
             if mb.hash in library_hash_map:
                 if mb.uuid in library_hash_map[mb.hash]:
@@ -2018,6 +2056,10 @@ class BookStatusDialog(SizePersistedDialog):
                     #self._log("%s matches hash, but not uuid" % mb.title)
                     soft_matches.append(mb)
                     uuids = [mb.uuid]
+            else:
+                #self._log("%s not in library_hash_map" % mb.title)
+                pass
+            #self._log("storing %s" % repr(uuids))
             mb.matches = uuids
 
         # Review the soft matches against the hard matches
@@ -2026,6 +2068,11 @@ class BookStatusDialog(SizePersistedDialog):
             for mb in soft_matches:
                 if mb.hash in hard_matches:
                     mb.matches += hard_matches[mb.hash].matches
+
+    def _flash_affected_rows(self):
+        '''
+        '''
+        self._log_location(self.updated_match_quality)
 
     def _generate_booklist(self):
         '''
@@ -2854,6 +2901,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.repaint()
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
+
         self._log_location(command_name)
 
         if show_command:
@@ -2876,10 +2924,13 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("command_name: %s" % command_name)
                 self._log(command_soup.prettify())
 
-        self.ios.write(command_soup.renderContents(),
-                       b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]))
-        self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
-                        b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
+        if self.prefs.get('execute_marvin_commands', True):
+            self.ios.write(command_soup.renderContents(),
+                           b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]))
+            self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
+                            b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
+        else:
+            self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
 
     def _update_calibre_collections(self, cid, updated_calibre_collections):
         '''
@@ -3025,7 +3076,7 @@ class BookStatusDialog(SizePersistedDialog):
         # Update Marvin
         self._log("DON'T FORGET TO TELL MARVIN ABOUT UPDATED COLLECTIONS")
 
-    def _update_marvin_metadata(self, book_id, cid, mismatches, model_row):
+    def _update_marvin_metadata(self, book_id, cid, mismatches, model_row, pb):
         '''
         Update Marvin from calibre metadata
         This clones upload_books() in the iOS reader application driver
@@ -3039,15 +3090,19 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location(mi.title)
         self._log("mismatches:\n%s" % mismatches)
 
-        if False:
-            update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
+        update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
 
-            # Copy the command file to the staging folder
-            self._stage_command_file("update_metadata", update_soup,
-                show_command=self.prefs.get('show_staged_commands', False))
+        # Copy the command file to the staging folder
+        self._stage_command_file("update_metadata", update_soup,
+            show_command=self.prefs.get('show_staged_commands', False))
 
-            # Wait for completion
-            self._wait_for_command_completion("update_metadata", update_local_db=True)
+        # Show partial progress
+        pb.increment()
+
+        # Wait for completion
+        self._wait_for_command_completion("update_metadata", update_local_db=True)
+
+        pb.increment()
 
         # Update in-memory caches
         cached_books = self.parent.connected_device.cached_books
@@ -3063,11 +3118,13 @@ class BookStatusDialog(SizePersistedDialog):
             device_view_row = None
 
         '''
+        We need to tweak the in-memory versions of the Marvin library as if they had
+        been loaded initially.
         mismatch keys:
             authors, author_sort, comments, cover_hash, pubdate, publisher,
             series, series_index, tags, title, title_sort, uuid
-        visible memory_view properties (order of appearance):
-            in_library, title, title_sort, authors, author_sort, ?date_added?, size, collections
+        visible/relevant memory_view properties (order of appearance):
+            in_library, title, title_sort, authors, author_sort, device_collections
         '''
 
         for key in mismatches:
@@ -3089,6 +3146,32 @@ class BookStatusDialog(SizePersistedDialog):
                 cached_books[path]['description'] = comments
                 self.installed_books[book_id].comments = comments
 
+            if key == 'cover_hash':
+                cover_hash = mismatches[key]['calibre']
+                cached_books[path]['cover_hash'] = cover_hash
+
+            if key == 'pubdate':
+                pubdate = mismatches[key]['calibre']
+                cached_books[path]['pubdate'] = pubdate
+                self.installed_books[book_id].pubdate = pubdate
+
+            if key == 'publisher':
+                publisher = mismatches[key]['calibre']
+                cached_books[path]['publisher'] = publisher
+
+            if key == 'series':
+                series = mismatches[key]['calibre']
+                cached_books[path]['series'] = series
+
+            if key == 'series_index':
+                series_index = mismatches[key]['calibre']
+                cached_books[path]['series_index'] = series_index
+
+            if key == 'tags':
+                tags = mismatches[key]['calibre']
+                cached_books[path]['tags'] = tags
+                self.installed_books[book_id].tags = tags
+
             if key == 'title':
                 title = mismatches[key]['calibre']
                 cached_books[path]['title'] = title
@@ -3104,17 +3187,32 @@ class BookStatusDialog(SizePersistedDialog):
             if key == 'uuid':
                 uuid = mismatches[key]['calibre']
                 cached_books[path]['uuid'] = uuid
+                self.installed_books[book_id].matches = [uuid]
+
                 self.installed_books[book_id].uuid = uuid
                 self.opts.gui.memory_view.model().db[device_view_row].uuid = uuid
                 self.opts.gui.memory_view.model().db[device_view_row].in_library = "UUID"
 
+                # Add to hash_map
+                self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
+
+
         # Update metadata match quality in the visible model
+        old = self.tm.arraydata[model_row][self.MATCHED_COL]
         self.tm.arraydata[model_row][self.MATCHED_COL] = self.GREEN
+        self.updated_match_quality[model_row] = {'book_id': book_id,
+                                                 'old': old,
+                                                 'new': self.GREEN}
+
         self.repaint()
         self._clear_selected_rows()
 
+        # Launch row flasher
+        self._flash_affected_rows()
+
     def _update_metadata(self, action):
         '''
+        Dispatched method responsible for updating progress bar twice per book
         '''
         self._log_location(action)
 
@@ -3123,10 +3221,13 @@ class BookStatusDialog(SizePersistedDialog):
         pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata",
                          on_top=True)
         total_books = len(selected_books)
-        pb.set_maximum(total_books)
+        # Show progress in dispatched method - 2 times
+        pb.set_maximum(total_books * 2)
         pb.set_value(0)
         pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
         pb.show()
+
+        self.updated_match_quality = {}
 
         for row in selected_books:
             book_id = self._selected_book_id(row)
@@ -3135,12 +3236,18 @@ class BookStatusDialog(SizePersistedDialog):
             pb.set_label('{:^100}'.format(self.installed_books[book_id].title))
             if action == 'export_metadata':
                 # Apply calibre metadata to Marvin
-                self._update_marvin_metadata(book_id, cid, mismatches, row)
+                self._update_marvin_metadata(book_id, cid, mismatches, row, pb)
 
             elif action == 'import_metadata':
                 # Apply Marvin metadata to calibre
                 self._update_calibre_metadata(book_id, cid, mismatches, row)
-            pb.increment()
+
+            # Clear the metadata_mismatch
+            self.installed_books[book_id].metadata_mismatches = {}
+
+            if pb.close_requested:
+                break
+
         pb.hide()
 
     def _update_remote_hash_cache(self):
@@ -3165,104 +3272,108 @@ class BookStatusDialog(SizePersistedDialog):
         from 0.0 to 1.0 as command progresses.
         '''
         self._log_location(command_name)
-        self._log("%s: waiting for '%s'" %
-                                     (datetime.now().strftime('%H:%M:%S.%f'),
-                                     self.parent.connected_device.status_fs))
 
-        # Set initial watchdog timer for ACK
-        WATCHDOG_TIMEOUT = 10.0
-        watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-        self.operation_timed_out = False
-        watchdog.start()
+        if self.prefs.get('execute_marvin_commands', True):
+            self._log("%s: waiting for '%s'" %
+                                         (datetime.now().strftime('%H:%M:%S.%f'),
+                                         self.parent.connected_device.status_fs))
 
-        while True:
-            if not self.ios.exists(self.parent.connected_device.status_fs):
-                # status.xml not created yet
-                if self.operation_timed_out:
+            # Set initial watchdog timer for ACK
+            WATCHDOG_TIMEOUT = 10.0
+            watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+            self.operation_timed_out = False
+            watchdog.start()
+
+            while True:
+                if not self.ios.exists(self.parent.connected_device.status_fs):
+                    # status.xml not created yet
+                    if self.operation_timed_out:
+                        self.ios.remove(self.parent.connected_device.status_fs)
+                        raise UserFeedback("Marvin operation timed out.",
+                                            details=None, level=UserFeedback.WARN)
+                    time.sleep(0.10)
+
+                else:
+                    watchdog.cancel()
+
+                    self._log("%s: monitoring progress of %s" %
+                                         (datetime.now().strftime('%H:%M:%S.%f'),
+                                          command_name))
+
+                    # Start a new watchdog timer per iteration
+                    watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                    self.operation_timed_out = False
+                    watchdog.start()
+
+                    code = '-1'
+                    current_timestamp = 0.0
+                    while code == '-1':
+                        try:
+                            if self.operation_timed_out:
+                                self.ios.remove(self.parent.connected_device.status_fs)
+                                raise UserFeedback("Marvin operation timed out.",
+                                                    details=None, level=UserFeedback.WARN)
+
+                            status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
+                            code = status.get('code')
+                            timestamp = float(status.get('timestamp'))
+                            if timestamp != current_timestamp:
+                                current_timestamp = timestamp
+                                d = datetime.now()
+                                progress = float(status.find('progress').text)
+                                self._log("{0}: {1:>2} {2:>3}%".format(
+                                                     d.strftime('%H:%M:%S.%f'),
+                                                     code,
+                                                     "%3.0f" % (progress * 100)))
+                                """
+                                # Report progress
+                                if self.report_progress is not None:
+                                    self.report_progress(0.5 + progress/2, '')
+                                """
+
+                                # Reset watchdog timer
+                                watchdog.cancel()
+                                watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                                watchdog.start()
+                            time.sleep(0.01)
+
+                        except:
+                            time.sleep(0.01)
+                            self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
+
+                    # Command completed
+                    watchdog.cancel()
+
+                    final_code = status.get('code')
+                    if final_code != '0':
+                        if final_code == '-1':
+                            final_status= "in progress"
+                        if final_code == '1':
+                            final_status = "warnings"
+                        if final_code == '2':
+                            final_status = "errors"
+
+                        messages = status.find('messages')
+                        msgs = [msg.text for msg in messages]
+                        details = "code: %s\n" % final_code
+                        details += '\n'.join(msgs)
+                        self._log(details)
+                        raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
+                                            % (final_status),
+                                           details=details, level=UserFeedback.WARN)
+
                     self.ios.remove(self.parent.connected_device.status_fs)
-                    raise UserFeedback("Marvin operation timed out.",
-                                        details=None, level=UserFeedback.WARN)
-                time.sleep(0.10)
 
-            else:
-                watchdog.cancel()
+                    self._log("%s: '%s' complete" %
+                                         (datetime.now().strftime('%H:%M:%S.%f'),
+                                          command_name))
+                    break
 
-                self._log("%s: monitoring progress of %s" %
-                                     (datetime.now().strftime('%H:%M:%S.%f'),
-                                      command_name))
-
-                # Start a new watchdog timer per iteration
-                watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                self.operation_timed_out = False
-                watchdog.start()
-
-                code = '-1'
-                current_timestamp = 0.0
-                while code == '-1':
-                    try:
-                        if self.operation_timed_out:
-                            self.ios.remove(self.parent.connected_device.status_fs)
-                            raise UserFeedback("Marvin operation timed out.",
-                                                details=None, level=UserFeedback.WARN)
-
-                        status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
-                        code = status.get('code')
-                        timestamp = float(status.get('timestamp'))
-                        if timestamp != current_timestamp:
-                            current_timestamp = timestamp
-                            d = datetime.now()
-                            progress = float(status.find('progress').text)
-                            self._log("{0}: {1:>2} {2:>3}%".format(
-                                                 d.strftime('%H:%M:%S.%f'),
-                                                 code,
-                                                 "%3.0f" % (progress * 100)))
-                            """
-                            # Report progress
-                            if self.report_progress is not None:
-                                self.report_progress(0.5 + progress/2, '')
-                            """
-
-                            # Reset watchdog timer
-                            watchdog.cancel()
-                            watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                            watchdog.start()
-                        time.sleep(0.01)
-
-                    except:
-                        time.sleep(0.01)
-                        self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
-
-                # Command completed
-                watchdog.cancel()
-
-                final_code = status.get('code')
-                if final_code != '0':
-                    if final_code == '-1':
-                        final_status= "in progress"
-                    if final_code == '1':
-                        final_status = "warnings"
-                    if final_code == '2':
-                        final_status = "errors"
-
-                    messages = status.find('messages')
-                    msgs = [msg.text for msg in messages]
-                    details = "code: %s\n" % final_code
-                    details += '\n'.join(msgs)
-                    self._log(details)
-                    raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
-                                        % (final_status),
-                                       details=details, level=UserFeedback.WARN)
-
-                self.ios.remove(self.parent.connected_device.status_fs)
-
-                self._log("%s: '%s' complete" %
-                                     (datetime.now().strftime('%H:%M:%S.%f'),
-                                      command_name))
-                break
-
-        # Update local copy of Marvin db
-        if update_local_db:
-            self._localize_marvin_database()
+            # Update local copy of Marvin db
+            if update_local_db:
+                self._localize_marvin_database()
+        else:
+            self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
 
     def _watchdog_timed_out(self):
         '''

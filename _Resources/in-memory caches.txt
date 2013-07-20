@@ -74,6 +74,7 @@ populated in _get_installed_books()
 .flags
 .hash
 .highlights
+.matches
 .metadata_mismatches
 .mid
 .on_device
