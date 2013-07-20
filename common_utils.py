@@ -379,26 +379,27 @@ class InventoryCollections(QThread):
 
 class RowFlasher(QThread):
     '''
+    Flash rows_to_flash to show where ops occurred
     '''
-    on_time = 250
-    off_time = 500
-    cycles = 10
 
-    def __init__(self, parent, model, col):
+    def __init__(self, parent, model, col, rows_to_flash):
         QThread.__init__(self)
+        self.signal = SIGNAL("flasher_complete")
         self.model = model
         self.parent = parent
-        self.rows_to_flash = parent.updated_match_quality
+        self.rows_to_flash = rows_to_flash
         self.col = col
+        self.mode = 'old'
 
-        self.cycles = self.parent.prefs.get('flasher_cycles', 10)
-        self.mode = self.parent.prefs.get('flasher_initial_mode', 'old')
-        self.off_time = self.parent.prefs.get('flasher_off_time', 500)
-        self.on_time = self.parent.prefs.get('flasher_on_time', 250)
+        self.cycles = self.parent.prefs.get('flasher_cycles', 3) + 1
+        self.new_time = self.parent.prefs.get('flasher_new_time', 250)
+        self.old_time = self.parent.prefs.get('flasher_old_time', 75)
 
-        # Start the show
-        self.toggle_values(self.mode)
-        QTimer.singleShot(self.on_time, self.update)
+    def run(self):
+        QTimer.singleShot(self.old_time, self.update)
+        while self.cycles:
+            QApplication.processEvents()
+        self.emit(self.signal)
 
     def toggle_values(self, mode):
         for row, item in self.rows_to_flash.items():
@@ -406,21 +407,16 @@ class RowFlasher(QThread):
         self.parent.repaint()
 
     def update(self):
-        self.cycles -= 1
-        if self.cycles:
-            if self.mode == 'new':
-                self.toggle_values('old')
-                self.mode = 'old'
-                QTimer.singleShot(self.off_time, self.update)
-            elif self.mode == 'old':
-                self.toggle_values('new')
-                self.mode = 'new'
-                QTimer.singleShot(self.on_time, self.update)
-        else:
-            # Always end with new values
+        if self.mode == 'new':
+            self.toggle_values('old')
+            self.mode = 'old'
+            QTimer.singleShot(self.old_time, self.update)
+        elif self.mode == 'old':
             self.toggle_values('new')
-            self.terminate()
-
+            self.mode = 'new'
+            self.cycles -= 1
+            if self.cycles:
+                QTimer.singleShot(self.new_time, self.update)
 
 '''     Helper Classes  '''
 

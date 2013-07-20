@@ -2072,9 +2072,15 @@ class BookStatusDialog(SizePersistedDialog):
     def _flash_affected_rows(self):
         '''
         '''
-        self._log_location(self.updated_match_quality)
-        self.flasher = RowFlasher(self, self.tm, self.MATCHED_COL)
+        self._log_location(sorted(self.updated_match_quality.keys()))
+        self.flasher = RowFlasher(self, self.tm, self.MATCHED_COL, self.updated_match_quality)
+        self.connect(self.flasher, self.flasher.signal, self._flasher_complete)
         self.flasher.start()
+
+    def _flasher_complete(self):
+        '''
+        '''
+        self._log_location()
 
     def _generate_booklist(self):
         '''
@@ -3085,6 +3091,9 @@ class BookStatusDialog(SizePersistedDialog):
         All metadata is asserted, cover optional if changes
         '''
 
+        # Highlight the row we're working on
+        self.tv.selectRow(model_row)
+
         # Get the current metadata
         db = self.opts.gui.current_db
         mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
@@ -3198,23 +3207,17 @@ class BookStatusDialog(SizePersistedDialog):
                 # Add to hash_map
                 self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
 
+            self._clear_selected_rows()
 
         # Update metadata match quality in the visible model
         old = self.tm.arraydata[model_row][self.MATCHED_COL]
-        self.tm.arraydata[model_row][self.MATCHED_COL] = self.GREEN
         self.updated_match_quality[model_row] = {'book_id': book_id,
                                                  'old': old,
                                                  'new': self.GREEN}
 
-        self.repaint()
-        self._clear_selected_rows()
-
-        # Launch row flasher
-        self._flash_affected_rows()
-
     def _update_metadata(self, action):
         '''
-        Dispatched method responsible for updating progress bar twice per book
+        Dispatched method is responsible for updating progress bar twice per book
         '''
         self._log_location(action)
 
@@ -3251,6 +3254,9 @@ class BookStatusDialog(SizePersistedDialog):
                 break
 
         pb.hide()
+
+        # Launch row flasher
+        self._flash_affected_rows()
 
     def _update_remote_hash_cache(self):
         '''
