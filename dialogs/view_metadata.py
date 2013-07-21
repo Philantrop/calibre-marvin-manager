@@ -57,7 +57,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
     def esc(self, *args):
         self.close()
 
-    def initialize(self, parent, book_id, cid, installed_book, marvin_db_path):
+    def initialize(self, parent, book_id, cid, installed_book, enable_metadata_updates, marvin_db_path):
         '''
         __init__ is called on SizePersistedDialog()
         shared attributes of interest:
@@ -116,12 +116,14 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                                                    'icons',
                                                    'from_calibre.png')))
         self.export_to_marvin_button.clicked.connect(partial(self.store_command, 'export_metadata'))
+        self.export_to_marvin_button.setEnabled(enable_metadata_updates)
 
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
         self.import_from_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                    'icons',
                                                    'from_marvin.png')))
         self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_metadata'))
+        self.import_from_marvin_button.setEnabled(enable_metadata_updates)
 
         # If no calibre book, or no mismatches, adjust the display accordingly
         if not self.cid:

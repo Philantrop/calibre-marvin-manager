@@ -210,13 +210,20 @@ class MyTableView(QTableView):
             if len(selected_books) > 1:
                 ac.setEnabled(False)
 
+            # If match_quality < YELLOW, metadata updates disabled
+            enable_metadata_updates = True
+            if len(selected_books) == 1 and self.parent.tm.arraydata[row][self.parent.MATCHED_COL] < self.parent.YELLOW:
+                enable_metadata_updates = False
+
             ac = menu.addAction("Export metadata from calibre to Marvin")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_calibre.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "export_metadata", row))
+            ac.setEnabled(enable_metadata_updates)
 
             ac = menu.addAction("Import metadata from Marvin to calibre")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "import_metadata", row))
+            ac.setEnabled(enable_metadata_updates)
 
             menu.addSeparator()
 
@@ -1130,11 +1137,13 @@ class BookStatusDialog(SizePersistedDialog):
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             mismatches = self.installed_books[book_id].metadata_mismatches
+            enable_metadata_updates = self.tm.arraydata[row][self.MATCHED_COL] >= self.YELLOW
 
             dlg.initialize(self,
                            book_id,
                            cid,
                            self.installed_books[book_id],
+                           enable_metadata_updates,
                            self.parent.connected_device.local_db_path)
             dlg.exec_()
             if dlg.result() == dlg.Accepted and mismatches:
@@ -1888,7 +1897,7 @@ class BookStatusDialog(SizePersistedDialog):
                     book_ids_to_delete = [btd[b]['book_id'] for b in btd]
                     for book_id in book_ids_to_delete:
                         deleted = self.installed_books.pop(book_id)
-                        if True:
+                        if False:
                             self._log("deleted: %s hash: %s matches: %s" % (deleted.title,
                                                                             deleted.hash,
                                                                             deleted.matches))
@@ -3246,6 +3255,15 @@ class BookStatusDialog(SizePersistedDialog):
         self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
         selected_books = self._selected_books()
+
+        for row in selected_books:
+            book_id = self._selected_book_id(row)
+            if self.tm.arraydata[row][self.MATCHED_COL] == self.ORANGE:
+                title = "Duplicate book"
+                msg = ("<p>'{0}' is a duplicate.</p>".format(self.installed_books[book_id].title) +
+                       "<p>Remove duplicates before updating metadata.</p>")
+                return MessageBox(MessageBox.WARNING, title, msg,
+                                  show_copy_button=False).exec_()
 
         pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata",
                          on_top=True)
