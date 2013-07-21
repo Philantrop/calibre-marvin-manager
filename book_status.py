@@ -18,7 +18,8 @@ from PyQt4 import QtCore, QtGui
 from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
                       QCheckBox, QColor, QCursor, QDialog, QDialogButtonBox, QFont, QIcon,
-                      QLabel, QMenu, QModelIndex, QPainter, QPixmap, QString,
+                      QItemSelectionModel, QLabel, QMenu, QModelIndex, QPainter, QPixmap,
+                      QString,
                       QTableView, QTableWidgetItem, QTimer,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
@@ -2081,6 +2082,8 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         self._log_location()
+        for rect in self.saved_selection_region.rects():
+            self.tv.setSelection(rect, QItemSelectionModel.Select)
 
     def _generate_booklist(self):
         '''
@@ -3221,6 +3224,9 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location(action)
 
+        # Save the selection region for restoration
+        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+
         selected_books = self._selected_books()
 
         pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata",
@@ -3234,7 +3240,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.updated_match_quality = {}
 
-        for row in selected_books:
+        for row in sorted(selected_books):
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             mismatches = self.installed_books[book_id].metadata_mismatches
