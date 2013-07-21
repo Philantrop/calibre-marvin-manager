@@ -218,6 +218,12 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "import_metadata", row))
 
+            menu.addSeparator()
+
+            ac = menu.addAction("Delete")
+            ac.setIcon(QIcon(I('trash.png')))
+            ac.triggered.connect(self.parent._delete_books)
+
         elif col == self.parent.VOCABULARY_COL:
             no_vocabulary = not selected_books[row]['has_vocabulary']
 
@@ -1809,6 +1815,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         btd = self._selected_books()
         books_to_delete = sorted([btd[b]['title'] for b in btd], key=sort_key)
+
+        self.saved_selection_region = None
         self.updated_match_quality = {}
 
         if books_to_delete:
@@ -1880,20 +1888,28 @@ class BookStatusDialog(SizePersistedDialog):
                     book_ids_to_delete = [btd[b]['book_id'] for b in btd]
                     for book_id in book_ids_to_delete:
                         deleted = self.installed_books.pop(book_id)
-                        self._log("deleted: %s hash: %s matches: %s" % (deleted.title,
-                                                                        deleted.hash,
-                                                                        deleted.matches))
-                        self._log("library_hash_map: %s" % self.library_scanner.hash_map[deleted.hash])
+                        if True:
+                            self._log("deleted: %s hash: %s matches: %s" % (deleted.title,
+                                                                            deleted.hash,
+                                                                            deleted.matches))
+                            if deleted.hash in self.library_scanner.hash_map:
+                                self._log("library_hash_map: %s" % self.library_scanner.hash_map[deleted.hash])
 
                         for book_id, book in self.installed_books.items():
                             if book.hash == deleted.hash:
                                 row = self._find_book_id_in_model(book_id)
                                 if row:
+                                    # Is this book in library or Marvin only?
+                                    if self.tm.arraydata[row][self.CALIBRE_ID_COL]:
+                                        new = self.GREEN
+                                    else:
+                                        new = self.WHITE
+
                                     old = self.tm.arraydata[row][self.MATCHED_COL]
-                                    self.tm.arraydata[row][self.MATCHED_COL] = self.GREEN
+                                    #self.tm.arraydata[row][self.MATCHED_COL] = self.GREEN
                                     self.updated_match_quality[row] = {'book_id': book_id,
                                                                            'old': old,
-                                                                           'new': self.GREEN}
+                                                                           'new': new}
 
                     # Launch row flasher
                     self._flash_affected_rows()
@@ -2073,17 +2089,19 @@ class BookStatusDialog(SizePersistedDialog):
     def _flash_affected_rows(self):
         '''
         '''
-        self._log_location(sorted(self.updated_match_quality.keys()))
-        self.flasher = RowFlasher(self, self.tm, self.MATCHED_COL, self.updated_match_quality)
-        self.connect(self.flasher, self.flasher.signal, self._flasher_complete)
-        self.flasher.start()
+        if self.updated_match_quality:
+            self._log_location(sorted(self.updated_match_quality.keys()))
+            self.flasher = RowFlasher(self, self.tm, self.MATCHED_COL, self.updated_match_quality)
+            self.connect(self.flasher, self.flasher.signal, self._flasher_complete)
+            self.flasher.start()
 
     def _flasher_complete(self):
         '''
         '''
         self._log_location()
-        for rect in self.saved_selection_region.rects():
-            self.tv.setSelection(rect, QItemSelectionModel.Select)
+        if self.saved_selection_region:
+            for rect in self.saved_selection_region.rects():
+                self.tv.setSelection(rect, QItemSelectionModel.Select)
 
     def _generate_booklist(self):
         '''
