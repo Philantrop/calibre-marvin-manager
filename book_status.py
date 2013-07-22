@@ -2184,12 +2184,16 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _generate_reading_progress(self, book_data):
         '''
-        Special-case progress to 100% if book is marked Read
+        Special-case progress:
+              0% if book is marked NEW
+            100% if book is marked Read
         '''
 
         percent_read = ''
         if self.opts.prefs.get('show_progress_as_percentage', False):
-            if 'READ' in book_data.flags:
+            if  'NEW' in book.data.flags:
+                percent_read = ''
+            elif 'READ' in book_data.flags:
                 percent_read = "100%   "
             elif book_data.progress < 0.01:
                 percent_read = ''
@@ -2201,7 +2205,9 @@ class BookStatusDialog(SizePersistedDialog):
         else:
             #base_name = "progress000.png"
             base_name = "progress_none.png"
-            if 'READ' in book_data.flags:
+            if 'NEW' in book_data.flags:
+                base_name = "progress_none.png"
+            elif 'READ' in book_data.flags:
                 base_name = "progress100.png"
             elif book_data.progress >= 0.01 and book_data.progress < 0.11:
                 base_name = "progress010.png"
@@ -2965,10 +2971,13 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location(action)
         if action == 'set_new_flag':
             mask = self.NEW_FLAG
+            inhibit = self.NEW_FLAG + self.READING_FLAG
         elif action == 'set_reading_list_flag':
             mask = self.READING_FLAG
+            inhibit = self.NEW_FLAG + self.READING_FLAG + self.READ_FLAG
         elif action == 'set_read_flag':
             mask = self.READ_FLAG
+            inhibit = self.READING_FLAG + self.READ_FLAG
 
         selected_books = self._selected_books()
         for row in selected_books:
@@ -2977,6 +2986,7 @@ class BookStatusDialog(SizePersistedDialog):
             if not flagbits & mask:
                 # Set the bit with OR
                 flagbits = flagbits | mask
+                flagbits = flagbits & inhibit
                 basename = "flags%d.png" % flagbits
                 new_flags_widget = SortableImageWidgetItem(self,
                                                        os.path.join(self.parent.opts.resources_path,
