@@ -1425,7 +1425,6 @@ class BookStatusDialog(SizePersistedDialog):
 
                 # Delete the local copy
                 os.remove(lbp)
-                pb.increment()
 
                 # Update the model
                 wc = locale.format("%d", wordcount.words, grouping=True)
@@ -1438,9 +1437,28 @@ class BookStatusDialog(SizePersistedDialog):
                 book_id = selected_books[row]['book_id']
                 self.installed_books[book_id].word_count = wc
 
-                # Update Marvin db
-                self._log("DON'T FORGET TO TELL MARVIN")
+                # Tell Marvin about the updated word_count
+                command_name = 'update_metadata_items'
+                command_element = 'updatemetadataitems'
+                update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                    command_element, time.mktime(time.localtime())))
+                book_tag = Tag(update_soup, 'book')
+                book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                book_tag['filename'] = self.installed_books[book_id].path
+                book_tag['title'] = self.installed_books[book_id].title
+                book_tag['uuid'] = self.installed_books[book_id].uuid
 
+                book_tag['wordcount'] =  wordcount.words
+                update_soup.manifest.insert(0, book_tag)
+
+                # Copy command file to staging folder
+                self._stage_command_file(command_name, update_soup,
+                    show_command=self.prefs.get('show_staged_commands', False))
+
+                # Wait for completion
+                self._wait_for_command_completion("update_metadata", update_local_db=True)
+
+                pb.increment()
 
             pb.hide()
 
