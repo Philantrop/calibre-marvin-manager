@@ -360,40 +360,47 @@ class InventoryCollections(QThread):
         self.signal = SIGNAL("collection_inventory_complete")
         self.cdb = parent.opts.gui.current_db
         self.cfl = parent.prefs.get('collection_field_lookup', None)
-        self.collection_ids = None
+        self.ids = []
+        #self.heatmap = {}
 
     def run(self):
-        self.collection_ids = self.inventory_collections()
+        self.inventory_collections()
         self.emit(self.signal)
 
     def inventory_collections(self):
         id = self.cdb.FIELD_MAP['id']
-        active_collections = []
         if self.cfl is not None:
             for record in self.cdb.data.iterall():
                 mi = self.cdb.get_metadata(record[id], index_is_id=True)
-                if mi.get_user_metadata(self.cfl, False)['#value#']:
-                    active_collections.append(record[id])
-        return active_collections
+                collection_list = mi.get_user_metadata(self.cfl, False)['#value#']
+                if collection_list:
+                    # Add this cid to list of library books with active collection assignments
+                    self.ids.append(record[id])
 
+                    if False:
+                        # Update the heatmap
+                        for ca in collection_list:
+                            if ca not in self.heatmap:
+                                self.heatmap[ca] = 1
+                            else:
+                                self.heatmap[ca] += 1
 
 class RowFlasher(QThread):
     '''
     Flash rows_to_flash to show where ops occurred
     '''
 
-    def __init__(self, parent, model, col, rows_to_flash):
+    def __init__(self, parent, model, rows_to_flash):
         QThread.__init__(self)
         self.signal = SIGNAL("flasher_complete")
         self.model = model
         self.parent = parent
         self.rows_to_flash = rows_to_flash
-        self.col = col
         self.mode = 'old'
 
         self.cycles = self.parent.prefs.get('flasher_cycles', 3) + 1
-        self.new_time = self.parent.prefs.get('flasher_new_time', 250)
-        self.old_time = self.parent.prefs.get('flasher_old_time', 75)
+        self.new_time = self.parent.prefs.get('flasher_new_time', 300)
+        self.old_time = self.parent.prefs.get('flasher_old_time', 100)
 
     def run(self):
         QTimer.singleShot(self.old_time, self.update)
@@ -403,8 +410,7 @@ class RowFlasher(QThread):
 
     def toggle_values(self, mode):
         for row, item in self.rows_to_flash.items():
-            self.model.arraydata[row][self.col] = item[mode]
-        self.parent.repaint()
+            self.model.set_match_quality(row, item[mode])
 
     def update(self):
         if self.mode == 'new':

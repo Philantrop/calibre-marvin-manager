@@ -34,6 +34,8 @@ if True:
     from view_collections_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
 
+RENAMING_ENABLED = False
+
 class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
@@ -98,7 +100,7 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.verbose = parent.verbose
 
         self._log_location(book_title)
-        self.setWindowTitle("'%s' collection assignments" % book_title)
+        self.setWindowTitle("Collection assignments")
 
         # Subscribe to Marvin driver change events
         connected_device.marvin_device_signals.reader_app_status_changed.connect(
@@ -130,16 +132,19 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.remove_assignment_tb.setToolTip("Remove a collection assignment")
         self.remove_assignment_tb.clicked.connect(self._remove_collection_assignment)
 
-        # ~~~~~~~~ Rename collection button ~~~~~~~~
-        self.rename_collection_tb.setIcon(QIcon(I('edit_input.png')))
-        self.rename_collection_tb.setToolTip("Rename collection")
-        self.rename_collection_tb.clicked.connect(self._rename_collection)
+        if RENAMING_ENABLED:
+            # ~~~~~~~~ Rename collection button ~~~~~~~~
+            self.rename_collection_tb.setIcon(QIcon(I('edit_input.png')))
+            self.rename_collection_tb.setToolTip("Rename collection")
+            self.rename_collection_tb.clicked.connect(self._rename_collection)
+        else:
+            self.rename_collection_tb.setVisible(False)
 
         # ~~~~~~~~ Clear all collections button ~~~~~~~~
         self.remove_all_assignments_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
                                                           'icons',
                                                           'remove_all_collections.png')))
-        self.remove_all_assignments_tb.setToolTip("Remove all collection assignments from calibre and Marvin")
+        self.remove_all_assignments_tb.setToolTip("Remove all collection assignments")
         self.remove_all_assignments_tb.clicked.connect(self._remove_all_assignments)
 
         # Populate collection models
@@ -276,21 +281,24 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             for ca in self.calibre_collections:
                 item = ListWidgetItem(ca)
                 item.setData(Qt.UserRole, ca)
-                item.setFlags(item.flags() | Qt.ItemIsEditable)
+                if RENAMING_ENABLED:
+                    item.setFlags(item.flags() | Qt.ItemIsEditable)
                 self.calibre_lw.addItem(item)
 
         for ma in self.marvin_collections:
             item = ListWidgetItem(ma)
             item.setData(Qt.UserRole, ma)
-            item.setFlags(item.flags() | Qt.ItemIsEditable)
+            if RENAMING_ENABLED:
+                item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.marvin_lw.addItem(item)
 
         # Capture click events to clear selections in opposite list
         self.calibre_lw.clicked.connect(self._clear_marvin_selection)
-        self.calibre_lw.doubleClicked.connect(self.rename_calibre_tag)
-
         self.marvin_lw.clicked.connect(self._clear_calibre_selection)
-        self.marvin_lw.doubleClicked.connect(self.rename_marvin_tag)
+
+        if RENAMING_ENABLED:
+            self.calibre_lw.doubleClicked.connect(self.rename_calibre_tag)
+            self.marvin_lw.doubleClicked.connect(self.rename_marvin_tag)
 
     def _log(self, msg=None):
         '''
@@ -387,6 +395,12 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         elif self.marvin_lw.selectedItems():
             deletes = self.marvin_lw.selectedItems()
             _remove_assignments(deletes, self.marvin_lw)
+
+        else:
+            title = "No collection selected"
+            msg = ("<p>Select a collection assignment to remove.</p>")
+            MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
 
     def _rename_collection(self):
         '''

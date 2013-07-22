@@ -212,7 +212,7 @@ class MyTableView(QTableView):
 
             # If match_quality < YELLOW, metadata updates disabled
             enable_metadata_updates = True
-            if len(selected_books) == 1 and self.parent.tm.arraydata[row][self.parent.MATCHED_COL] < self.parent.YELLOW:
+            if len(selected_books) == 1 and self.parent.tm.match_quality(row) < self.parent.YELLOW:
                 enable_metadata_updates = False
 
             ac = menu.addAction("Export metadata from calibre to Marvin")
@@ -345,9 +345,6 @@ class MarkupTableModel(QAbstractTableModel):
         self.headerdata = parent.LIBRARY_HEADER
         self.show_match_colors = parent.show_match_colors
 
-    def rowCount(self, parent):
-        return len(self.arraydata)
-
     def columnCount(self, parent):
         return len(self.headerdata)
 
@@ -357,7 +354,7 @@ class MarkupTableModel(QAbstractTableModel):
             return QVariant()
 
         elif role == Qt.BackgroundRole and self.show_match_colors:
-            match_quality = self.arraydata[row][self.parent.MATCHED_COL]
+            match_quality = self.match_quality(row)
             if match_quality == 4:
                 return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == 3:
@@ -396,7 +393,7 @@ class MarkupTableModel(QAbstractTableModel):
             return Qt.AlignRight
 
         elif role == Qt.ToolTipRole:
-            match_quality = self.arraydata[row][self.parent.MATCHED_COL]
+            match_quality = self.match_quality(row)
             tip = '<p>'
             if match_quality == self.GREEN:
                 tip += 'Matched in calibre library'
@@ -451,11 +448,6 @@ class MarkupTableModel(QAbstractTableModel):
 
         return QVariant(self.arraydata[index.row()][index.column()])
 
-    def refresh(self, show_match_colors):
-        self.show_match_colors = show_match_colors
-        self.dataChanged.emit(self.createIndex(0,0),
-                              self.createIndex(self.rowCount(0), self.columnCount(0)))
-
     def headerData(self, col, orientation, role):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
@@ -465,6 +457,21 @@ class MarkupTableModel(QAbstractTableModel):
 #                 return QString("Tooltip for col %d" % col)
 
         return QVariant()
+
+    def match_quality(self, row):
+        return self.arraydata[row][self.parent.MATCHED_COL]
+
+    def set_match_quality(self, row, value):
+        self.arraydata[row][self.parent.MATCHED_COL] = value
+        self.parent.repaint()
+
+    def refresh(self, show_match_colors):
+        self.show_match_colors = show_match_colors
+        self.dataChanged.emit(self.createIndex(0,0),
+                              self.createIndex(self.rowCount(0), self.columnCount(0)))
+
+    def rowCount(self, parent):
+        return len(self.arraydata)
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
@@ -825,20 +832,21 @@ class BookStatusDialog(SizePersistedDialog):
     def launch_collections_scanner(self):
         '''
         Invoke InventoryCollections to identify cids with collection assignments
-        After indexing, self.library_inventory.collection_ids is list of cids
+        After indexing, self.library_collections.ids is list of cids
         '''
         self._log_location()
-        self.library_inventory = InventoryCollections(self)
-        self.connect(self.library_inventory, self.library_inventory.signal, self.library_inventory_complete)
-        QTimer.singleShot(0, self.start_library_inventory)
+        self.library_collections = InventoryCollections(self)
+        self.connect(self.library_collections, self.library_collections.signal, self.library_collections_complete)
+        QTimer.singleShot(0, self.start_library_collections_inventory)
 
         if False:
             # Wait for scan to start
-            while not self.library_inventory.isRunning():
+            while not self.library_collections.isRunning():
                 Application.processEvents()
 
-    def library_inventory_complete(self):
-        self._log_location(repr(self.library_inventory.collection_ids))
+    def library_collections_complete(self):
+        self._log_location()
+        self._log("ids: %s" % repr(self.library_collections.ids))
 
     def marvin_status_changed(self, command):
         '''
@@ -1025,7 +1033,7 @@ class BookStatusDialog(SizePersistedDialog):
 
 #                     dlg.initialize(self,
 #                                    current_collections,
-#                                    self.library_inventory.collection_ids,
+#                                    self.library_collections.ids,
 #                                    self.parent.connected_device)
 
                     dlg = this_dc.MyDeviceCategoryEditor(self, tag_to_match=None,
@@ -1033,12 +1041,12 @@ class BookStatusDialog(SizePersistedDialog):
                                                          connected_device=self.parent.connected_device)
                     dlg.exec_()
                     if dlg.result() == dlg.Accepted:
-                        if self.library_inventory.isRunning():
-                            self.library_inventory.wait()
+                        if self.library_collections.isRunning():
+                            self.library_collections.wait()
                         self._log("original: %s" % current_collections)
                         self._log("to_rename: %s" % dlg.to_rename)
                         self._log("to_delete %s" % dlg.to_delete)
-                        self._log("collection_ids: %s" % self.library_inventory.collection_ids)
+                        self._log("ids: %s" % self.library_collections.ids)
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -1050,12 +1058,12 @@ class BookStatusDialog(SizePersistedDialog):
                     sys.path.remove(dialog_resources_path)
                     dlg = this_dc.CollectionsManagementDialog(self, 'collections_manager')
 
-                    if self.library_inventory.isRunning():
-                        self.library_inventory.wait()
+                    if self.library_collections.isRunning():
+                        self.library_collections.wait()
 
                     dlg.initialize(self,
                                    current_collections,
-                                   self.library_inventory.collection_ids,
+                                   self.library_collections.ids,
                                    self.parent.connected_device)
                     dlg.exec_()
                 else:
@@ -1137,7 +1145,7 @@ class BookStatusDialog(SizePersistedDialog):
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             mismatches = self.installed_books[book_id].metadata_mismatches
-            enable_metadata_updates = self.tm.arraydata[row][self.MATCHED_COL] >= self.YELLOW
+            enable_metadata_updates = self.tm.match_quality(row) >= self.YELLOW
 
             dlg.initialize(self,
                            book_id,
@@ -1158,8 +1166,8 @@ class BookStatusDialog(SizePersistedDialog):
     def size_hint(self):
         return QtCore.QSize(self.perfect_width, self.height())
 
-    def start_library_inventory(self):
-        self.library_inventory.start()
+    def start_library_collections_inventory(self):
+        self.library_collections.start()
 
     def toggle_match_colors(self):
         self.show_match_colors = not self.show_match_colors
@@ -1451,11 +1459,13 @@ class BookStatusDialog(SizePersistedDialog):
                                                        os.path.join(self.parent.opts.resources_path,
                                                          'icons', basename),
                                                        flagbits, self.FLAGS_COL)
+                # Update self.installed_books flags list
+                flags = []
+                self.installed_books[book_id].flags = flags
+
                 # Update the model
                 self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
-                # Update self.installed_books flags list
-                self.installed_books[book_id].flags = 0
-                flags = []
+                self._update_reading_progress(self.installed_books[book_id], row)
 
                 # Update Marvin db
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE CLEARED FLAGS ***")
@@ -1468,12 +1478,12 @@ class BookStatusDialog(SizePersistedDialog):
                                                        os.path.join(self.parent.opts.resources_path,
                                                          'icons', basename),
                                                        flagbits, self.FLAGS_COL)
+                # Update self.installed_books flags list
+                self.installed_books[book_id].flags = _build_flag_list(flagbits)
+
                 # Update the model
                 self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
-
-                # Update self.installed_books flags list
-
-                self.installed_books[book_id].flags = _build_flag_list(flagbits)
+                self._update_reading_progress(self.installed_books[book_id], row)
 
                 # Update Marvin db
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
@@ -1655,51 +1665,6 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("%s match_quality: %s" % (book_data.title, match_quality))
             return match_quality
 
-        def _generate_reading_progress(book_data):
-            '''
-
-            '''
-
-            percent_read = ''
-            if self.opts.prefs.get('show_progress_as_percentage', False):
-                if book_data.progress < 0.01:
-                    percent_read = ''
-                else:
-                    # Pad the right side for visual comfort, since this col is
-                    # right-aligned
-                    percent_read = "{:3.0f}%   ".format(book_data.progress * 100)
-                progress = SortableTableWidgetItem(percent_read, book_data.progress)
-            else:
-                #base_name = "progress000.png"
-                base_name = "progress_none.png"
-                if book_data.progress >= 0.01 and book_data.progress < 0.11:
-                    base_name = "progress010.png"
-                elif book_data.progress >= 0.11 and book_data.progress < 0.22:
-                    base_name = "progress020.png"
-                elif book_data.progress >= 0.22 and book_data.progress < 0.33:
-                    base_name = "progress030.png"
-                elif book_data.progress >= 0.33 and book_data.progress < 0.44:
-                    base_name = "progress040.png"
-                elif book_data.progress >= 0.44 and book_data.progress < 0.55:
-                    base_name = "progress050.png"
-                elif book_data.progress >= 0.55 and book_data.progress < 0.66:
-                    base_name = "progress060.png"
-                elif book_data.progress >= 0.66 and book_data.progress < 0.77:
-                    base_name = "progress070.png"
-                elif book_data.progress >= 0.77 and book_data.progress < 0.88:
-                    base_name = "progress080.png"
-                elif book_data.progress >= 0.88 and book_data.progress < 0.95:
-                    base_name = "progress090.png"
-                elif book_data.progress >= 0.95:
-                    base_name = "progress100.png"
-
-                progress = SortableImageWidgetItem(self,
-                                            os.path.join(self.parent.opts.resources_path,
-                                                         'icons', base_name),
-                                            book_data.progress,
-                                            self.PROGRESS_COL)
-            return progress
-
         def _generate_title(book_data):
             '''
             '''
@@ -1722,7 +1687,7 @@ class BookStatusDialog(SizePersistedDialog):
             flags = _generate_flags_profile(book_data)
             last_opened = _generate_last_opened(book_data)
             match_quality = _generate_match_quality(book_data)
-            progress = _generate_reading_progress(book_data)
+            progress = self._generate_reading_progress(book_data)
             title = _generate_title(book_data)
 
             article_count = 0
@@ -1914,8 +1879,8 @@ class BookStatusDialog(SizePersistedDialog):
                                     else:
                                         new = self.WHITE
 
-                                    old = self.tm.arraydata[row][self.MATCHED_COL]
-                                    #self.tm.arraydata[row][self.MATCHED_COL] = self.GREEN
+                                    old = self.tm.match_quality(row)
+                                    self.tm.set_match_quality(row, new)
                                     self.updated_match_quality[row] = {'book_id': book_id,
                                                                            'old': old,
                                                                            'new': new}
@@ -2100,7 +2065,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         if self.updated_match_quality:
             self._log_location(sorted(self.updated_match_quality.keys()))
-            self.flasher = RowFlasher(self, self.tm, self.MATCHED_COL, self.updated_match_quality)
+            self.flasher = RowFlasher(self, self.tm, self.updated_match_quality)
             self.connect(self.flasher, self.flasher.signal, self._flasher_complete)
             self.flasher.start()
 
@@ -2172,6 +2137,55 @@ class BookStatusDialog(SizePersistedDialog):
 #             self._log("%s: %s" % (hash, hash_map[hash]))
 
         return hash_map
+
+    def _generate_reading_progress(self, book_data):
+        '''
+        Special-case progress to 100% if book is marked Read
+        '''
+
+        percent_read = ''
+        if self.opts.prefs.get('show_progress_as_percentage', False):
+            if 'READ' in book_data.flags:
+                percent_read = "100%   "
+            elif book_data.progress < 0.01:
+                percent_read = ''
+            else:
+                # Pad the right side for visual comfort, since this col is
+                # right-aligned
+                percent_read = "{:3.0f}%   ".format(book_data.progress * 100)
+            progress = SortableTableWidgetItem(percent_read, book_data.progress)
+        else:
+            #base_name = "progress000.png"
+            base_name = "progress_none.png"
+            if 'READ' in book_data.flags:
+                base_name = "progress100.png"
+            elif book_data.progress >= 0.01 and book_data.progress < 0.11:
+                base_name = "progress010.png"
+            elif book_data.progress >= 0.11 and book_data.progress < 0.22:
+                base_name = "progress020.png"
+            elif book_data.progress >= 0.22 and book_data.progress < 0.33:
+                base_name = "progress030.png"
+            elif book_data.progress >= 0.33 and book_data.progress < 0.44:
+                base_name = "progress040.png"
+            elif book_data.progress >= 0.44 and book_data.progress < 0.55:
+                base_name = "progress050.png"
+            elif book_data.progress >= 0.55 and book_data.progress < 0.66:
+                base_name = "progress060.png"
+            elif book_data.progress >= 0.66 and book_data.progress < 0.77:
+                base_name = "progress070.png"
+            elif book_data.progress >= 0.77 and book_data.progress < 0.88:
+                base_name = "progress080.png"
+            elif book_data.progress >= 0.88 and book_data.progress < 0.95:
+                base_name = "progress090.png"
+            elif book_data.progress >= 0.95:
+                base_name = "progress100.png"
+
+            progress = SortableImageWidgetItem(self,
+                                        os.path.join(self.parent.opts.resources_path,
+                                                     'icons', base_name),
+                                        book_data.progress,
+                                        self.PROGRESS_COL)
+        return progress
 
     def _get_calibre_collections(self, cid):
         '''
@@ -2929,6 +2943,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                 # Update self.installed_books flags list
                 self.installed_books[book_id].flags = _build_flag_list(flagbits)
+                self._update_reading_progress(self.installed_books[book_id], row)
 
                 # Update Marvin db
                 self._log("*** DON'T FORGET TO TELL MARVIN ABOUT THE UPDATED FLAGS ***")
@@ -2989,11 +3004,113 @@ class BookStatusDialog(SizePersistedDialog):
             db.set_metadata(cid, mi, set_title=False, set_authors=False)
             db.commit()
 
-    def _update_calibre_metadata(self, book_id, cid, mismatches):
+    def _update_calibre_metadata(self, book_id, cid, mismatches, model_row, pb):
         '''
         Update calibre from Marvin metadata
+        If uuids differ, we need to send an update_metadata command to Marvin
+        pb is incremented twice per book.
         '''
-        self._log_location(mismatches)
+
+        pb.increment()
+
+        # Highlight the row we're working on
+        self.tv.selectRow(model_row)
+
+        # Get the current metadata
+        db = self.opts.gui.current_db
+        mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
+
+        self._log_location(mi.title)
+        self._log("mismatches:\n%s" % mismatches)
+
+        # We need these if uuid needs to be updated
+        cached_books = self.parent.connected_device.cached_books
+        path = self.installed_books[book_id].path
+
+        # Find the book in Device map
+        for device_view_row in self.opts.gui.memory_view.model().map:
+            book = self.opts.gui.memory_view.model().db[device_view_row]
+            if book.path == path:
+                break
+        else:
+            self._log("ERROR: couldn't find '%s' in memory_view" % path)
+            device_view_row = None
+
+        '''
+        Update calibre metadata from Marvin
+        mismatch keys:
+            authors, author_sort, comments, cover_hash, pubdate, publisher,
+            series, series_index, tags, title, title_sort, uuid
+        '''
+        for key in mismatches:
+            if key == 'authors':
+                authors = mismatches[key]['Marvin']
+                db.set_authors(cid, authors, allow_case_change=True)
+
+            if key == 'author_sort':
+                author_sort = mismatches[key]['Marvin']
+                db.set_author_sort(cid, author_sort)
+
+            if key == 'comments':
+                comments = mismatches[key]['Marvin']
+                db.set_comment(cid, comments)
+
+            if key == 'cover_hash':
+                # If covers don't match, import Marvin cover, then send it back with new hash
+                cover_hash = mismatches[key]['Marvin']
+
+            if key == 'pubdate':
+                pubdate = mismatches[key]['Marvin']
+                db.set_pubdate(cid, pubdate)
+
+            if key == 'publisher':
+                publisher = mismatches[key]['Marvin']
+                db.set_publisher(cid, publisher, allow_case_change=True)
+
+            if key == 'series':
+                series = mismatches[key]['Marvin']
+                db.set_series(cid, series, allow_case_change=True)
+
+            if key == 'series_index':
+                series_index = mismatches[key]['Marvin']
+                db.set_series_index(cid, series_index)
+
+            if key == 'tags':
+                tags = sorted(mismatches[key]['Marvin'], key=sort_key)
+                db.set_tags(cid, tags, allow_case_change=True)
+
+            if key == 'title':
+                title = mismatches[key]['Marvin']
+                db.set_title(cid, title)
+
+            if key == 'title_sort':
+                title_sort = mismatches[key]['Marvin']
+                db.set_title_sort(cid, title_sort)
+
+            if key == 'uuid':
+                # Update Marvin's uuid to match calibre's
+                uuid = mismatches[key]['calibre']
+                cached_books[path]['uuid'] = uuid
+                self.installed_books[book_id].matches = [uuid]
+
+                self.installed_books[book_id].uuid = uuid
+                self.opts.gui.memory_view.model().db[device_view_row].uuid = uuid
+                self.opts.gui.memory_view.model().db[device_view_row].in_library = "UUID"
+
+                # Add to hash_map
+                self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
+
+            self._clear_selected_rows()
+
+        pb.increment()
+
+        # Update metadata match quality in the visible model
+        old = self.tm.match_quality(model_row)
+        new = self.GREEN
+        self.tm.set_match_quality(model_row, new)
+        self.updated_match_quality[model_row] = {'book_id': book_id,
+                                                 'old': old,
+                                                 'new': new}
 
     def _update_collections(self, action):
         '''
@@ -3240,7 +3357,8 @@ class BookStatusDialog(SizePersistedDialog):
             self._clear_selected_rows()
 
         # Update metadata match quality in the visible model
-        old = self.tm.arraydata[model_row][self.MATCHED_COL]
+        old = self.tm.match_quality(model_row)
+        self.tm.set_match_quality(model_row, self.GREEN)
         self.updated_match_quality[model_row] = {'book_id': book_id,
                                                  'old': old,
                                                  'new': self.GREEN}
@@ -3258,7 +3376,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         for row in selected_books:
             book_id = self._selected_book_id(row)
-            if self.tm.arraydata[row][self.MATCHED_COL] == self.ORANGE:
+            if self.tm.match_quality(row) == self.ORANGE:
                 title = "Duplicate book"
                 msg = ("<p>'{0}' is a duplicate.</p>".format(self.installed_books[book_id].title) +
                        "<p>Remove duplicates before updating metadata.</p>")
@@ -3287,7 +3405,7 @@ class BookStatusDialog(SizePersistedDialog):
 
             elif action == 'import_metadata':
                 # Apply Marvin metadata to calibre
-                self._update_calibre_metadata(book_id, cid, mismatches, row)
+                self._update_calibre_metadata(book_id, cid, mismatches, row, pb)
 
             # Clear the metadata_mismatch
             self.installed_books[book_id].metadata_mismatches = {}
@@ -3299,6 +3417,14 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Launch row flasher
         self._flash_affected_rows()
+
+    def _update_reading_progress(self, book, row):
+        '''
+        Refresh Progress column
+        '''
+        self._log_location()
+        progress = self._generate_reading_progress(book)
+        self.tm.arraydata[row][self.PROGRESS_COL] = progress
 
     def _update_remote_hash_cache(self):
         '''
