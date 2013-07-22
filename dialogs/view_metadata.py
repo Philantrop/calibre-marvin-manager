@@ -238,6 +238,8 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             # Retrieve Books:LargeCoverJpg if no cover_path
             if self.installed_book.cover_file:
                 self._log_location("fetching cover from Marvin sandbox")
+                self._log("*** NOT IMPLEMENTED ***")
+
             else:
                 self._log_location("fetching cover from mainDb")
                 con = sqlite3.connect(self.marvin_db_path)
@@ -255,9 +257,8 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
 
                 if len(rows):
                     try:
-                        # Save Marvin cover in case we're importing to calibre
-                        self.marvin_cover_jpg = rows[0][b'LargeCoverJpg']
-                        marvin_thumb = thumbnail(self.marvin_cover_jpg,
+                        marvin_cover_jpg = rows[0][b'LargeCoverJpg']
+                        marvin_thumb = thumbnail(marvin_cover_jpg,
                                                  self.COVER_ICON_SIZE,
                                                  self.COVER_ICON_SIZE)
                         pixmap = QPixmap()
@@ -286,7 +287,6 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                                                aspectRatioMode=Qt.KeepAspectRatio,
                                                transformMode=Qt.SmoothTransformation)
                         self.marvin_cover.setPixmap(pixmap)
-                        self.marvin_cover_jpg = None
 
                 else:
                     self._log_location("no cover data fetched from mainDb")

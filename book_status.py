@@ -12,7 +12,7 @@ from datetime import datetime
 from functools import partial
 from lxml import etree
 from threading import Timer
-
+from xml.sax.saxutils import escape
 
 from PyQt4 import QtCore, QtGui
 from PyQt4.Qt import (Qt, QAbstractTableModel,
@@ -1267,8 +1267,6 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Build a metadata update command file for Marvin
         '''
-        from xml.sax.saxutils import escape
-
         self._log_location()
 
         cached_books = self.parent.connected_device.cached_books
@@ -1969,7 +1967,7 @@ class BookStatusDialog(SizePersistedDialog):
                         # Call the Marvin driver to copy the command file to the staging folder
                         self._log("staging command file")
                         self._stage_command_file(command_name, command_soup,
-                            show_command=self.prefs.get('development_mode', False))
+                            show_command=self.prefs.get('show_staged_commands', False))
 
                         # Wait for completion
                         self._log("waiting for completion")
@@ -2050,6 +2048,38 @@ class BookStatusDialog(SizePersistedDialog):
         # Delete the local copy
         os.remove(lbp)
         return hash
+
+    def _fetch_marvin_cover(self, book_id):
+        '''
+        Retrieve Books:LargeCoverJpg if no cover_path
+        '''
+        marvin_cover = None
+        if self.installed_books[book_id].cover_file:
+            self._log_location("fetching cover from Marvin sandbox")
+            self._log("*** NOT IMPLEMENTED ***")
+            # Return cover file as bytes
+
+        else:
+            self._log_location("fetching cover from mainDb")
+            con = sqlite3.connect(self.parent.connected_device.local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+
+                # Fetch LargeCoverJpg from mainDb
+                cover_cur = con.cursor()
+                cover_cur.execute('''SELECT
+                                      LargeCoverJpg
+                                     FROM Books
+                                     WHERE ID = '{0}'
+                                  '''.format(book_id))
+                rows = cover_cur.fetchall()
+
+            if len(rows):
+                marvin_cover = rows[0][b'LargeCoverJpg']
+            else:
+                self._log_location("no cover data fetched from mainDb")
+
+        return marvin_cover
 
     def _find_book_id_in_model(self, book_id):
         '''
@@ -3012,7 +3042,7 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location(command_name)
 
         if show_command:
-            if command_name == 'update_metadata':
+            if command_name in ['update_metadata', 'update_metadata_items']:
                 soup = BeautifulStoneSoup(command_soup.renderContents())
                 # <descriptions>
                 descriptions = soup.findAll('description')
@@ -3024,7 +3054,9 @@ class BookStatusDialog(SizePersistedDialog):
                 covers = soup.findAll('cover')
                 for cover in covers:
                     cover_tag = Tag(soup, 'cover')
-                    cover_tag.insert(0, "(cover removed for debug stream)")
+                    cover_tag['hash'] = cover['hash']
+                    cover_tag['encoding'] = cover['encoding']
+                    cover_tag.insert(0, "(cover bytes removed for debug stream)")
                     cover.replaceWith(cover_tag)
                 self._log(soup.prettify())
             else:
@@ -3095,8 +3127,10 @@ class BookStatusDialog(SizePersistedDialog):
         mismatch keys:
             authors, author_sort, comments, cover_hash, pubdate, publisher,
             series, series_index, tags, title, title_sort, uuid
+        Process in alpha order so that cover change are processed before changing uuid
+        cover_hash and uuid have special handling, as they require Marvin to be notified of changes
         '''
-        for key in mismatches:
+        for key in sorted(mismatches.keys()):
             if key == 'authors':
                 authors = mismatches[key]['Marvin']
                 db.set_authors(cid, authors, allow_case_change=True)
@@ -3112,6 +3146,42 @@ class BookStatusDialog(SizePersistedDialog):
             if key == 'cover_hash':
                 # If covers don't match, import Marvin cover, then send it back with new hash
                 cover_hash = mismatches[key]['Marvin']
+                # Get the Marvin cover, add it to calibre
+                marvin_cover = self._fetch_marvin_cover(book_id)
+                if marvin_cover is not None:
+                    db.set_cover(cid, marvin_cover)
+                    cover_hash = hashlib.md5(marvin_cover).hexdigest()
+
+                    # Tell Marvin about the updated cover_hash
+                    command_name = 'update_metadata_items'
+                    command_element = 'updatemetadataitems'
+                    update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                        command_element, time.mktime(time.localtime())))
+                    book_tag = Tag(update_soup, 'book')
+                    book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                    book_tag['filename'] = self.installed_books[book_id].path
+                    book_tag['title'] = self.installed_books[book_id].title
+                    book_tag['uuid'] = mismatches[key]['Marvin']
+
+                    cover_tag = Tag(update_soup, 'cover')
+                    cover_tag['hash'] = cover_hash
+                    cover_tag['encoding'] = 'base64'
+                    cover_tag.insert(0, base64.b64encode(marvin_cover))
+                    book_tag.insert(0, cover_tag)
+
+                    update_soup.manifest.insert(0, book_tag)
+
+                    # Copy command file to staging folder
+                    self._stage_command_file(command_name, update_soup,
+                        show_command=self.prefs.get('show_staged_commands', False))
+
+                    # Wait for completion
+                    self._wait_for_command_completion("update_metadata", update_local_db=True)
+
+                    # Update cached_books
+                    cached_books[path]['cover_hash'] = cover_hash
+                else:
+                    self._log("No cover data available from Marvin")
 
             if key == 'pubdate':
                 pubdate = mismatches[key]['Marvin']
@@ -3151,8 +3221,29 @@ class BookStatusDialog(SizePersistedDialog):
                 self.opts.gui.memory_view.model().db[device_view_row].uuid = uuid
                 self.opts.gui.memory_view.model().db[device_view_row].in_library = "UUID"
 
-                # Add to hash_map
+                # Add uuid to hash_map
                 self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
+
+                # Tell Marvin about the updated uuid
+                command_name = 'update_metadata_items'
+                command_element = 'updatemetadataitems'
+                update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                    command_element, time.mktime(time.localtime())))
+                book_tag = Tag(update_soup, 'book')
+                book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                book_tag['filename'] = self.installed_books[book_id].path
+                book_tag['title'] = self.installed_books[book_id].title
+                book_tag['uuid'] = mismatches[key]['Marvin']
+
+                book_tag['newuuid'] =  mismatches[key]['calibre']
+                update_soup.manifest.insert(0, book_tag)
+
+                # Copy command file to staging folder
+                self._stage_command_file(command_name, update_soup,
+                    show_command=self.prefs.get('show_staged_commands', False))
+
+                # Wait for completion
+                self._wait_for_command_completion("update_metadata", update_local_db=True)
 
             self._clear_selected_rows()
 
