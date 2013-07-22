@@ -212,7 +212,7 @@ class MyTableView(QTableView):
 
             # If match_quality < YELLOW, metadata updates disabled
             enable_metadata_updates = True
-            if len(selected_books) == 1 and self.parent.tm.match_quality(row) < self.parent.YELLOW:
+            if len(selected_books) == 1 and self.parent.tm.get_match_quality(row) < self.parent.YELLOW:
                 enable_metadata_updates = False
 
             ac = menu.addAction("Export metadata from calibre to Marvin")
@@ -354,7 +354,7 @@ class MarkupTableModel(QAbstractTableModel):
             return QVariant()
 
         elif role == Qt.BackgroundRole and self.show_match_colors:
-            match_quality = self.match_quality(row)
+            match_quality = self.get_match_quality(row)
             if match_quality == 4:
                 return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == 3:
@@ -393,7 +393,7 @@ class MarkupTableModel(QAbstractTableModel):
             return Qt.AlignRight
 
         elif role == Qt.ToolTipRole:
-            match_quality = self.match_quality(row)
+            match_quality = self.get_match_quality(row)
             tip = '<p>'
             if match_quality == self.GREEN:
                 tip += 'Matched in calibre library'
@@ -458,13 +458,6 @@ class MarkupTableModel(QAbstractTableModel):
 
         return QVariant()
 
-    def match_quality(self, row):
-        return self.arraydata[row][self.parent.MATCHED_COL]
-
-    def set_match_quality(self, row, value):
-        self.arraydata[row][self.parent.MATCHED_COL] = value
-        self.parent.repaint()
-
     def refresh(self, show_match_colors):
         self.show_match_colors = show_match_colors
         self.dataChanged.emit(self.createIndex(0,0),
@@ -487,6 +480,58 @@ class MarkupTableModel(QAbstractTableModel):
         if order == Qt.DescendingOrder:
             self.arraydata.reverse()
         self.emit(SIGNAL("layoutChanged()"))
+
+    # ~~~~~~~~~~~ Getters and Setters ~~~~~~~~~~~
+    def get_annotations(self, row):
+        return self.arraydata[row][self.parent.ANNOTATIONS_COL]
+
+    def get_articles(self, row):
+        return self.arraydata[row][self.parent.ARTICLES_COL]
+
+    def get_author(self, row):
+        return self.arraydata[row][self.parent.AUTHOR_COL]
+
+    def get_book_id(self, row):
+        return self.arraydata[row][self.parent.BOOK_ID_COL]
+
+    def get_calibre_id(self, row):
+        return self.arraydata[row][self.parent.CALIBRE_ID_COL]
+
+    def get_deep_view(self, row):
+        return self.arraydata[row][self.parent.DEEP_VIEW_COL]
+
+    def get_flags(self, row):
+        return self.arraydata[row][self.parent.FLAGS_COL]
+    def set_flags(self, row, value):
+        self.arraydata[row][self.parent.FLAGS_COL] = value
+        #self.parent.repaint()
+
+    def get_last_opened(self, row):
+        return self.arraydata[row][self.parent.LAST_OPENED_COL]
+
+    def get_match_quality(self, row):
+        return self.arraydata[row][self.parent.MATCHED_COL]
+    def set_match_quality(self, row, value):
+        self.arraydata[row][self.parent.MATCHED_COL] = value
+        #self.parent.repaint()
+
+    def get_path(self, row):
+        return self.arraydata[row][self.parent.PATH_COL]
+
+    def get_title(self, row):
+        return self.arraydata[row][self.parent.TITLE_COL]
+
+    def get_uuid(self, row):
+        return self.arraydata[row][self.parent.UUID_COL]
+
+    def get_vocabulary(self, row):
+        return self.arraydata[row][self.parent.VOCABULARY_COL]
+
+    def get_word_count(self, row):
+        return self.arraydata[row][self.parent.WORD_COUNT_COL]
+    def set_word_count(self, row, value):
+        self.arraydata[row][self.parent.WORD_COUNT_COL] = value
+        #self.parent.repaint()
 
 
 class BookStatusDialog(SizePersistedDialog):
@@ -706,8 +751,7 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                    show_copy_button=False).exec_()
         elif column == self.WORD_COUNT_COL:
-            #self._calculate_word_count()
-            pass
+            self._calculate_word_count()
         else:
             self._log("no double-click handler for %s" % self.LIBRARY_HEADER[column])
 
@@ -1145,7 +1189,7 @@ class BookStatusDialog(SizePersistedDialog):
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             mismatches = self.installed_books[book_id].metadata_mismatches
-            enable_metadata_updates = self.tm.match_quality(row) >= self.YELLOW
+            enable_metadata_updates = self.tm.get_match_quality(row) >= self.YELLOW
 
             dlg.initialize(self,
                            book_id,
@@ -1387,7 +1431,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                 # Update the model
                 wc = locale.format("%d", wordcount.words, grouping=True)
-                self.tm.arraydata[row][self.WORD_COUNT_COL] = "{0} ".format(wc)
+                self.tm.set_word_count(row, "{0} ".format(wc))
 
                 # Update the spreadsheet for those watching at home
                 self.repaint()
@@ -1451,7 +1495,7 @@ class BookStatusDialog(SizePersistedDialog):
         selected_books = self._selected_books()
         for row in selected_books:
             book_id = selected_books[row]['book_id']
-            flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
+            flagbits = self.tm.get_flags(row).sort_key
             if mask == 0:
                 flagbits = 0
                 basename = "flags0.png"
@@ -1464,7 +1508,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self.installed_books[book_id].flags = flags
 
                 # Update the model
-                self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
+                self.tm.set_flags(row, new_flags_widget)
                 self._update_reading_progress(self.installed_books[book_id], row)
 
                 # Update Marvin db
@@ -1482,7 +1526,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
                 # Update the model
-                self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
+                self.tm.set_flags(row, new_flags_widget)
                 self._update_reading_progress(self.installed_books[book_id], row)
 
                 # Update Marvin db
@@ -1874,12 +1918,12 @@ class BookStatusDialog(SizePersistedDialog):
                                 row = self._find_book_id_in_model(book_id)
                                 if row:
                                     # Is this book in library or Marvin only?
-                                    if self.tm.arraydata[row][self.CALIBRE_ID_COL]:
+                                    if self.tm.get_calibre_id(row):
                                         new = self.GREEN
                                     else:
                                         new = self.WHITE
 
-                                    old = self.tm.match_quality(row)
+                                    old = self.tm.get_match_quality(row)
                                     self.tm.set_match_quality(row, new)
                                     self.updated_match_quality[row] = {'book_id': book_id,
                                                                            'old': old,
@@ -2014,7 +2058,7 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         for row, item in enumerate(self.tm.arraydata):
-            #if self.tm.arraydata[row][self.BOOK_ID_COL] == book_id:
+            #if self.tm.get_book_id(row) == book_id:
             if item[self.BOOK_ID_COL] == book_id:
                 self._log("found %s at row %d" % (book_id, row))
                 break
@@ -2855,7 +2899,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Return selected Marvin book_id
         '''
-        return self.tm.arraydata[row][self.BOOK_ID_COL]
+        return self.tm.get_book_id(row)
 
     def _selected_books(self):
         '''
@@ -2864,17 +2908,17 @@ class BookStatusDialog(SizePersistedDialog):
         selected_books = {}
 
         for row in self._selected_rows():
-            author = str(self.tm.arraydata[row][self.AUTHOR_COL].text())
-            book_id = self.tm.arraydata[row][self.BOOK_ID_COL]
-            cid = self.tm.arraydata[row][self.CALIBRE_ID_COL]
-            has_annotations = bool(self.tm.arraydata[row][self.ANNOTATIONS_COL])
-            has_articles = bool(self.tm.arraydata[row][self.ARTICLES_COL])
-            has_dv_content = bool(self.tm.arraydata[row][self.DEEP_VIEW_COL])
-            has_vocabulary = bool(self.tm.arraydata[row][self.VOCABULARY_COL])
-            last_opened = str(self.tm.arraydata[row][self.LAST_OPENED_COL].text())
-            path = self.tm.arraydata[row][self.PATH_COL]
-            title = str(self.tm.arraydata[row][self.TITLE_COL].text())
-            uuid = self.tm.arraydata[row][self.UUID_COL]
+            author = str(self.tm.get_author(row).text())
+            book_id = self.tm.get_book_id(row)
+            cid = self.tm.get_calibre_id(row)
+            has_annotations = bool(self.tm.get_annotations(row))
+            has_articles = bool(self.tm.get_articles(row))
+            has_dv_content = bool(self.tm.get_deep_view(row))
+            has_vocabulary = bool(self.tm.get_vocabulary(row))
+            last_opened = str(self.tm.get_last_opened(row).text())
+            path = self.tm.get_path(row)
+            title = str(self.tm.get_title(row).text())
+            uuid = self.tm.get_uuid(row)
             selected_books[row] = {
                                    'author': author,
                                    'book_id': book_id,
@@ -2895,7 +2939,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Return selected calibre id
         '''
-        return self.tm.arraydata[row][self.CALIBRE_ID_COL]
+        return self.tm.get_calibre_id(row)
 
     def _selected_rows(self):
         '''
@@ -2929,7 +2973,7 @@ class BookStatusDialog(SizePersistedDialog):
         selected_books = self._selected_books()
         for row in selected_books:
             book_id = selected_books[row]['book_id']
-            flagbits = self.tm.arraydata[row][self.FLAGS_COL].sort_key
+            flagbits = self.tm.get_flags(row).sort_key
             if not flagbits & mask:
                 # Set the bit with OR
                 flagbits = flagbits | mask
@@ -2939,7 +2983,7 @@ class BookStatusDialog(SizePersistedDialog):
                                                          'icons', basename),
                                                        flagbits, self.FLAGS_COL)
                 # Update the model
-                self.tm.arraydata[row][self.FLAGS_COL] = new_flags_widget
+                self.tm.set_flags(row, new_flags_widget)
 
                 # Update self.installed_books flags list
                 self.installed_books[book_id].flags = _build_flag_list(flagbits)
@@ -3105,7 +3149,7 @@ class BookStatusDialog(SizePersistedDialog):
         pb.increment()
 
         # Update metadata match quality in the visible model
-        old = self.tm.match_quality(model_row)
+        old = self.tm.get_match_quality(model_row)
         new = self.GREEN
         self.tm.set_match_quality(model_row, new)
         self.updated_match_quality[model_row] = {'book_id': book_id,
@@ -3357,7 +3401,7 @@ class BookStatusDialog(SizePersistedDialog):
             self._clear_selected_rows()
 
         # Update metadata match quality in the visible model
-        old = self.tm.match_quality(model_row)
+        old = self.tm.get_match_quality(model_row)
         self.tm.set_match_quality(model_row, self.GREEN)
         self.updated_match_quality[model_row] = {'book_id': book_id,
                                                  'old': old,
@@ -3376,7 +3420,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         for row in selected_books:
             book_id = self._selected_book_id(row)
-            if self.tm.match_quality(row) == self.ORANGE:
+            if self.tm.get_match_quality(row) == self.ORANGE:
                 title = "Duplicate book"
                 msg = ("<p>'{0}' is a duplicate.</p>".format(self.installed_books[book_id].title) +
                        "<p>Remove duplicates before updating metadata.</p>")
