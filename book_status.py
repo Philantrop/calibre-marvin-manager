@@ -118,34 +118,41 @@ class MyTableView(QTableView):
         elif col == self.parent.DEEP_VIEW_COL:
             ac = menu.addAction("Generate Deep View content")
             ac.setIcon(QIcon(I('exec.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "create_deep_view", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "generate_deep_view", row))
 
             menu.addSeparator()
 
             no_dv_content = not selected_books[row]['has_dv_content']
 
-            ac = menu.addAction("Deep View content sorted alphabetically")
+            ac = menu.addAction("Deep View articles")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                         "show_deep_view_articles", row))
+            if len(selected_books) > 1 or no_dv_content:
+                ac.setEnabled(False)
+
+            ac = menu.addAction("Deep View names sorted alphabetically")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                          "show_deep_view_alphabetically", row))
             if len(selected_books) > 1 or no_dv_content:
                 ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View content sorted by importance")
+            ac = menu.addAction("Deep View names sorted by importance")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                          "show_deep_view_by_importance", row))
             if len(selected_books) > 1 or no_dv_content:
                 ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View content sorted by order of appearance")
+            ac = menu.addAction("Deep View names sorted by order of appearance")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                          "show_deep_view_by_appearance", row))
             if len(selected_books) > 1 or no_dv_content:
                 ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View content with annotations")
+            ac = menu.addAction("Deep View names with annotations")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                          "show_deep_view_by_annotations", row))
@@ -601,11 +608,15 @@ class BookStatusDialog(SizePersistedDialog):
 
     # Marvin XML command template
     if True:
-        COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
+        METADATA_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
         <{0} timestamp=\'{1}\'>
         <manifest>
         </manifest>
         </{0}>'''
+
+        GENERAL_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
+        <command type=\'{0}\' timestamp=\'{1}\'>
+        </command>'''
 
     # Match quality color constants
     if True:
@@ -691,7 +702,9 @@ class BookStatusDialog(SizePersistedDialog):
                         'clear_read_flag', 'clear_all_flags',
                         'set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._update_flags(action)
-        elif action in ['show_articles',
+        elif action == 'generate_deep_view':
+            self._generate_deep_view()
+        elif action in ['show_articles', 'show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
                         'show_highlights', 'show_vocabulary']:
@@ -922,12 +935,45 @@ class BookStatusDialog(SizePersistedDialog):
                    'content': <default content>,
                    'footer': <footer text>}
         '''
+        def _build_parameters(book, update_soup):
+            parameters_tag = Tag(update_soup, 'parameters')
+            parameters_tag['count'] = "4"
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "filename"
+            parameter_tag.insert(0, book.path)
+            parameters_tag.insert(0, parameter_tag)
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "uuid"
+            parameter_tag.insert(0, book.uuid)
+            parameters_tag.insert(0, parameter_tag)
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "author"
+            parameter_tag.insert(0, escape(', '.join(book.authors)))
+            parameters_tag.insert(0, parameter_tag)
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "title"
+            parameter_tag.insert(0, book.title)
+            parameters_tag.insert(0, parameter_tag)
+
+            return parameters_tag
+
         self._log_location(action)
 
         book_id = self._selected_book_id(row)
         title = self.installed_books[book_id].title
 
         if action == 'show_articles':
+            command_name = "command"
+            command_type = "GetArticlesHTML"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            update_soup.command.insert(0, parameters_tag)
+
             header = None
             group_box_title = 'Articles'
             articles = self.installed_books[book_id].articles
@@ -943,32 +989,74 @@ class BookStatusDialog(SizePersistedDialog):
                 default_content = ("<p>No articles</p>")
             footer = None
 
-        elif action in ['show_deep_view_alphabetically', 'show_deep_view_by_importance',
-                        'show_deep_view_by_appearance', 'show_deep_view_by_annotations']:
+        elif action == 'show_deep_view_articles':
+            command_name = "command"
+            command_type = "GetDeepViewArticlesHTML"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            update_soup.command.insert(0, parameters_tag)
+
+            header = None
+            group_box_title = 'Deep View articles'
+            default_content = ("<p>Deep View articles provided by Marvin…</p>")
+            footer = None
+
+        elif action in ('show_deep_view_alphabetically', 'show_deep_view_by_importance',
+                        'show_deep_view_by_appearance', 'show_deep_view_by_annotations'):
+            command_name = "command"
+            command_type = "GetDeepViewNamesHTML"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+
+            # <parameter> for order
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "order"
+
             header = None
             if action == 'show_deep_view_alphabetically':
-                group_box_title = "Alphabetically"
+                group_box_title = "Deep View names alphabetically"
+                parameter_tag.insert(0, "alphabetically")
 
             elif action == 'show_deep_view_by_importance':
-                group_box_title = "By importance"
+                group_box_title = "Deep View names by importance"
+                parameter_tag.insert(0, "importance")
 
             elif action == 'show_deep_view_by_appearance':
-                group_box_title = "By appearance"
+                group_box_title = "Deep View names by appearance"
+                parameter_tag.insert(0, "appearance")
 
             elif action == 'show_deep_view_by_annotations':
-                group_box_title = "With annotations"
+                group_box_title = "Deep View names with annotations"
+                parameter_tag.insert(0, "annotated")
 
-            default_content = "Deep View '{0}' content to be provided by Marvin.".format(group_box_title)
+            parameters_tag.insert(0, parameter_tag)
+            update_soup.command.insert(0, parameters_tag)
+
+            default_content = "{0} to be provided by Marvin.".format(group_box_title)
             footer = None
 
         elif action == 'show_global_vocabulary':
+            command_name = "command"
+            command_type = "GetGlobalVocabularyHTML"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+
             title = "All vocabulary words"
             header = None
             group_box_title = "Vocabulary words by book"
-            default_content = "<p>Global vocabulary to be provided by Marvin.</p>"
+            default_content = "<p>No Global vocabulary list returned by Marvin.</p>"
             footer = None
 
         elif action == 'show_highlights':
+            command_name = "command"
+            command_type = "GetAnnotationsHTML"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            update_soup.command.insert(0, parameters_tag)
+
             header = None
             group_box_title = 'Highlights and Annotations'
             if self.installed_books[book_id].highlights:
@@ -981,6 +1069,13 @@ class BookStatusDialog(SizePersistedDialog):
                      )
 
         elif action == 'show_vocabulary':
+            command_name = "command"
+            command_type = "GetLocalVocabularyHTML"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            update_soup.command.insert(0, parameters_tag)
+
             header = None
             group_box_title = 'Vocabulary words'
             if self.installed_books[book_id].vocabulary:
@@ -996,13 +1091,25 @@ class BookStatusDialog(SizePersistedDialog):
             default_content = "Default content"
             footer = None
 
-        content = {
-                    'default_content': default_content,
-                    'footer': footer,
-                    'header': header,
-                    'group_box_title': group_box_title,
-                    'title': title
-                  }
+        # Copy command file to staging folder
+        self._stage_command_file(command_name, update_soup,
+            show_command=self.prefs.get('show_staged_commands', False))
+
+        # Wait for completion
+        html_response = self._wait_for_command_completion("command",
+                                                          update_local_db=False,
+                                                          get_response="html_response.html")
+
+        if not html_response:
+            content = default_content
+
+        content_dict = {
+                        'footer': footer,
+                        'group_box_title': group_box_title,
+                        'header': header,
+                        'html_content': content,
+                        'title': title
+                       }
 
         klass = os.path.join(dialog_resources_path, 'html_viewer.py')
         if os.path.exists(klass):
@@ -1012,7 +1119,7 @@ class BookStatusDialog(SizePersistedDialog):
             sys.path.remove(dialog_resources_path)
             dlg = this_dc.HTMLViewerDialog(self, 'html_viewer')
             dlg.initialize(self,
-                           content,
+                           content_dict,
                            book_id,
                            self.installed_books[book_id],
                            self.parent.connected_device.local_db_path)
@@ -1274,7 +1381,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Init the update_metadata command file
         command_element = "updatemetadata"
-        update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+        update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
             command_element, time.mktime(time.localtime())))
         root = update_soup.find(command_element)
         root['cleanupcollections'] = 'yes'
@@ -1440,7 +1547,7 @@ class BookStatusDialog(SizePersistedDialog):
                 # Tell Marvin about the updated word_count
                 command_name = 'update_metadata_items'
                 command_element = 'updatemetadataitems'
-                update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
                     command_element, time.mktime(time.localtime())))
                 book_tag = Tag(update_soup, 'book')
                 book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
@@ -1969,7 +2076,7 @@ class BookStatusDialog(SizePersistedDialog):
                     # Build the command file
                     command_name = 'delete_books'
                     command_element = 'deletebooks'
-                    command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                    command_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
                                                       command_element,
                                                       time.mktime(time.localtime())))
                     books_to_delete = self._selected_books()
@@ -2204,10 +2311,39 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         self._log_location()
+
+        command_name = "command"
+        command_type = "GenerateDeepView"
+        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+            command_type, time.mktime(time.localtime())))
+
+        selected_books = self._selected_books()
+        if selected_books:
+            # Build a manifest of selected books
+            manifest_tag = Tag(update_soup, 'manifest')
+            for row in sorted(selected_books.keys(), reverse=True):
+                book_id = selected_books[row]['book_id']
+                book_tag = Tag(update_soup, 'book')
+                book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                book_tag['filename'] = self.installed_books[book_id].path
+                book_tag['title'] = self.installed_books[book_id].title
+                book_tag['uuid'] = self.installed_books[book_id].uuid
+                manifest_tag.insert(0, book_tag)
+            update_soup.command.insert(0, manifest_tag)
+
+            # Copy command file to staging folder
+            self._stage_command_file(command_name, update_soup,
+                show_command=self.prefs.get('show_staged_commands', False))
+
+            # Wait for completion
+            self._wait_for_command_completion("update_metadata", update_local_db=True)
+
+        """
         title = "Generate Deep View"
         msg = ("<p>Not implemented</p>")
         MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
+        """
 
     def _generate_marvin_hash_map(self, installed_books):
         '''
@@ -3173,7 +3309,7 @@ class BookStatusDialog(SizePersistedDialog):
                     # Tell Marvin about the updated cover_hash
                     command_name = 'update_metadata_items'
                     command_element = 'updatemetadataitems'
-                    update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                    update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
                         command_element, time.mktime(time.localtime())))
                     book_tag = Tag(update_soup, 'book')
                     book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
@@ -3245,7 +3381,7 @@ class BookStatusDialog(SizePersistedDialog):
                 # Tell Marvin about the updated uuid
                 command_name = 'update_metadata_items'
                 command_element = 'updatemetadataitems'
-                update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
                     command_element, time.mktime(time.localtime())))
                 book_tag = Tag(update_soup, 'book')
                 book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
@@ -3604,13 +3740,15 @@ class BookStatusDialog(SizePersistedDialog):
             # Copy local cache to iDevice
             self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
 
-    def _wait_for_command_completion(self, command_name, update_local_db=True):
+    def _wait_for_command_completion(self, command_name, update_local_db=True, get_response=None):
         '''
         Wait for Marvin to issue progress reports via status.xml
         Marvin creates status.xml upon receiving command, increments <progress>
         from 0.0 to 1.0 as command progresses.
         '''
         self._log_location(command_name)
+
+        response = None
 
         if self.prefs.get('execute_marvin_commands', True):
             self._log("%s: waiting for '%s'" %
@@ -3687,10 +3825,12 @@ class BookStatusDialog(SizePersistedDialog):
                     if final_code != '0':
                         if final_code == '-1':
                             final_status= "in progress"
-                        if final_code == '1':
+                        elif final_code == '1':
                             final_status = "warnings"
-                        if final_code == '2':
+                        elif final_code == '2':
                             final_status = "errors"
+                        elif final_code == '3':
+                            final_status = "cancelled"
 
                         messages = status.find('messages')
                         msgs = [msg.text for msg in messages]
@@ -3700,6 +3840,15 @@ class BookStatusDialog(SizePersistedDialog):
                         raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
                                             % (final_status),
                                            details=details, level=UserFeedback.WARN)
+
+                    # Get the response file from the staging folder
+                    if get_response:
+                        rf = b'/'.join([self.parent.connected_device.staging_folder, get_response])
+                        self._log("fetching response '%s'" % rf)
+                        if not self.ios.exists(self.parent.connected_device.status_fs):
+                            response = "%s not found" % rf
+                        else:
+                            response = self.ios.read(rf)
 
                     self.ios.remove(self.parent.connected_device.status_fs)
 
@@ -3711,8 +3860,11 @@ class BookStatusDialog(SizePersistedDialog):
             # Update local copy of Marvin db
             if update_local_db:
                 self._localize_marvin_database()
+
         else:
             self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
+
+        return response
 
     def _watchdog_timed_out(self):
         '''

@@ -94,7 +94,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.html_gb.setTitle(content['group_box_title'])
 
         # Initialize the contents of the TextBrowser
-        self.html_tb.setText(content['default_content'])
+        self.html_tb.setText(content['html_content'])
 
         # Set the bg color of the content to the dialog bg color
         bgcolor = self.palette().color(QPalette.Background)
