@@ -62,6 +62,13 @@ class MyTableView(QTableView):
         menu = QMenu(self)
 
         if col == self.parent.ANNOTATIONS_COL:
+            # Test for calibre cids
+            calibre_cids = False
+            for row in selected_books:
+                if selected_books[row]['cid'] is not None:
+                    calibre_cids = True
+                    break
+
             afn = self.parent.prefs.get('annotations_field_comboBox', None)
             no_annotations = not selected_books[row]['has_annotations']
 
@@ -75,12 +82,12 @@ class MyTableView(QTableView):
             enabled = False
             if afn:
                 # Do any of the selected books have annotations?
-                if len(selected_books) > 1:
+                if len(selected_books) > 1 and calibre_cids:
                     for sr in selected_books:
                         if selected_books[sr]['has_annotations']:
                             enabled = True
                             break
-                elif len(selected_books) == 1 and selected_books[row]['has_annotations']:
+                elif len(selected_books) == 1 and selected_books[row]['has_annotations'] and calibre_cids:
                     enabled = True
                 ac = menu.addAction("Add Highlights to '{0}' column".format(afn))
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
