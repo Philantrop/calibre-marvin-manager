@@ -51,7 +51,7 @@ class ConfigWidget(QWidget):
 
         self.collection_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.collection_field_comboBox.setObjectName('collection_field_comboBox')
-        self.collection_field_comboBox.setToolTip('custom field for Marvin collections')
+        self.collection_field_comboBox.setToolTip('Custom field for Marvin collections')
         self.cfg_custom_fields_qgl.addWidget(self.collection_field_comboBox, current_row, 1)
         current_row += 1
 
@@ -62,8 +62,19 @@ class ConfigWidget(QWidget):
 
         self.date_read_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.date_read_field_comboBox.setObjectName('date_read_field_comboBox')
-        self.date_read_field_comboBox.setToolTip('custom field for Date read')
+        self.date_read_field_comboBox.setToolTip('Custom field for Date read')
         self.cfg_custom_fields_qgl.addWidget(self.date_read_field_comboBox, current_row, 1)
+        current_row += 1
+
+        # Highlights
+        self.cfg_annotations_label = QLabel('Highlights')
+        self.cfg_annotations_label.setAlignment(Qt.AlignLeft)
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_annotations_label, current_row, 0)
+
+        self.annotations_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
+        self.annotations_field_comboBox.setObjectName('annotations_field_comboBox')
+        self.annotations_field_comboBox.setToolTip('Custom field for Marvin annotations and highlights')
+        self.cfg_custom_fields_qgl.addWidget(self.annotations_field_comboBox, current_row, 1)
         current_row += 1
 
         spacerItem1 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -101,6 +112,16 @@ class ConfigWidget(QWidget):
         # ~~~~~~~~ End of construction zone ~~~~~~~~
         self.resize(self.sizeHint())
 
+        # Populate/restore the Annotations comboBox
+        self.eligible_annotations_fields = self.get_eligible_annotations_fields()
+        self.annotations_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_annotations_fields.keys(), key=lambda s: s.lower())
+        self.annotations_field_comboBox.addItems(ecf)
+        cf = self.prefs.get('annotations_field_comboBox', '')
+        idx = self.annotations_field_comboBox.findText(cf)
+        if idx > -1:
+            self.annotations_field_comboBox.setCurrentIndex(idx)
+
         # Populate/restore the Collections comboBox
         self.eligible_collection_fields = self.get_eligible_collection_fields()
         self.collection_field_comboBox.addItems([''])
@@ -125,6 +146,20 @@ class ConfigWidget(QWidget):
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
+
+    def get_eligible_annotations_fields(self):
+        '''
+        Discover qualifying custom fields for annotations
+        '''
+        self._log_location()
+
+        eligible_annotations_fields = {}
+        for cf in self.gui.current_db.custom_field_keys():
+            cft = self.gui.current_db.metadata_for_field(cf)['datatype']
+            cfn = self.gui.current_db.metadata_for_field(cf)['name']
+            if cft in ['comments']:
+                eligible_annotations_fields[cfn] = cf
+        return eligible_annotations_fields
 
     def get_eligible_collection_fields(self):
         '''
@@ -157,6 +192,14 @@ class ConfigWidget(QWidget):
 
     def save_settings(self):
         self._log_location()
+
+        # Save annotations field
+        cf = str(self.annotations_field_comboBox.currentText())
+        self.prefs.set('annotations_field_comboBox', cf)
+        if cf:
+            self.prefs.set('annotations_field_lookup', self.eligible_annotations_fields[cf])
+        else:
+            self.prefs.set('annotations_field_lookup', '')
 
         # Save collection field
         cf = str(self.collection_field_comboBox.currentText())

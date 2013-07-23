@@ -61,12 +61,33 @@ class MyTableView(QTableView):
         menu = QMenu(self)
 
         if col == self.parent.ANNOTATIONS_COL:
+            afn = self.parent.prefs.get('annotations_field_comboBox', None)
             no_annotations = not selected_books[row]['has_annotations']
-            ac = menu.addAction("View annotations && highlights")
+
+            ac = menu.addAction("View Highlights")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
             if len(selected_books) > 1 or no_annotations:
                 ac.setEnabled(False)
+
+            # Fetch Highlights if custom field specified
+            enabled = False
+            if afn:
+                # Do any of the selected books have annotations?
+                if len(selected_books) > 1:
+                    for sr in selected_books:
+                        if selected_books[sr]['has_annotations']:
+                            enabled = True
+                            break
+                elif len(selected_books) == 1 and selected_books[row]['has_annotations']:
+                    enabled = True
+                ac = menu.addAction("Add Highlights to '{0}' column".format(afn))
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "fetch_annotations", row))
+            else:
+                ac = menu.addAction("No custom field specified for Highlights")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
+            ac.setEnabled(enabled)
 
         elif col == self.parent.ARTICLES_COL:
             no_articles = not selected_books[row]['has_articles']
@@ -713,6 +734,8 @@ class BookStatusDialog(SizePersistedDialog):
                         'clear_read_flag', 'clear_all_flags',
                         'set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._update_flags(action)
+        elif action == 'fetch_annotations':
+            self._fetch_annotations()
         elif action == 'generate_deep_view':
             self._generate_deep_view()
         elif action in ['show_articles', 'show_deep_view_articles',
@@ -2139,6 +2162,83 @@ class BookStatusDialog(SizePersistedDialog):
             msg = "<p>Select one or more books to delete.</p>"
             MessageBox(MessageBox.INFO, title, msg,
                    show_copy_button=False).exec_()
+
+    def _fetch_annotations(self):
+        '''
+        A lightweight version of fetch annotations
+        Request HTML annotations from Marvin, add to custom column specified in config
+        '''
+        def _build_parameters(book, update_soup):
+            parameters_tag = Tag(update_soup, 'parameters')
+            parameters_tag['count'] = "4"
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "filename"
+            parameter_tag.insert(0, book.path)
+            parameters_tag.insert(0, parameter_tag)
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "uuid"
+            parameter_tag.insert(0, book.uuid)
+            parameters_tag.insert(0, parameter_tag)
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "author"
+            parameter_tag.insert(0, escape(', '.join(book.authors)))
+            parameters_tag.insert(0, parameter_tag)
+
+            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag['name'] = "title"
+            parameter_tag.insert(0, book.title)
+            parameters_tag.insert(0, parameter_tag)
+
+            return parameters_tag
+
+        self._log_location()
+
+        lookup = self.parent.prefs.get('annotations_field_lookup', None)
+        if lookup:
+            for row, book in self._selected_books().items():
+                cid = book['cid']
+                if cid is not None:
+                    if book['has_annotations']:
+                        self._log("row %d has annotations" % row)
+                        book_id = book['book_id']
+
+                        # Build the command
+                        command_name = "command"
+                        command_type = "GetAnnotationsHTML"
+                        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                            command_type, time.mktime(time.localtime())))
+                        parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+                        update_soup.command.insert(0, parameters_tag)
+
+                        # Copy command file to staging folder
+                        self._stage_command_file(command_name, update_soup,
+                            show_command=self.prefs.get('show_staged_commands', False))
+
+                        # Wait for completion
+                        html_response = self._wait_for_command_completion(command_name,
+                                                                          update_local_db=False,
+                                                                          get_response="html_response.html")
+                        if not html_response:
+                            content = '\n'.join(self.installed_books[book_id].highlights)
+
+                        # Apply to custom column
+                        # Get the current value from the lookup field
+                        db = self.opts.gui.current_db
+                        mi = db.get_metadata(cid, index_is_id=True)
+                        old_value = mi.get_user_metadata(lookup, False)['#value#']
+                        #self._log("Updating old value: %s" % repr(old_value))
+
+                        um = mi.metadata_for_field(lookup)
+                        um['#value#'] = content
+                        mi.set_user_metadata(lookup, um)
+                        db.set_metadata(cid, mi, set_title=False, set_authors=False)
+                        db.commit()
+
+                    else:
+                        self._log("row %d has no annotations" % row)
 
     def _fetch_marvin_content_hash(self, path):
         '''
