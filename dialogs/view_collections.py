@@ -76,8 +76,8 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
             #self._log("RejectRole")
-            self.updated_calibre_collections = self.initial_calibre_collections
-            self.updated_marvin_collections = self.initial_marvin_collections
+            self.updated_calibre_collections = self.calibre_collections
+            self.updated_marvin_collections = self.marvin_collections
             self.close()
 
     def esc(self, *args):
@@ -166,11 +166,12 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
                 self.import_from_marvin_tb.setEnabled(False)
                 self.merge_collections_tb.setEnabled(False)
 
-            # If collections already equal, disable import/export/merge
-            if self.calibre_collections == self.marvin_collections:
-                self.export_to_marvin_tb.setEnabled(False)
-                self.import_from_marvin_tb.setEnabled(False)
-                self.merge_collections_tb.setEnabled(False)
+            if False:
+                # If collections already equal, disable import/export/merge
+                if self.calibre_collections == self.marvin_collections:
+                    self.export_to_marvin_tb.setEnabled(False)
+                    self.import_from_marvin_tb.setEnabled(False)
+                    self.merge_collections_tb.setEnabled(False)
         else:
             # Save initial state
             self.initial_marvin_collections = list(self._get_marvin_collections())
