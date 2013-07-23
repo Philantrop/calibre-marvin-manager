@@ -42,7 +42,8 @@ from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, Book, HelpView, InventoryCollections, MyAbstractItemModel,
-    MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog, Struct)
+    MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog, Struct,
+    updateCalibreGUIView)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_Mangler_resources', 'dialogs')
 
@@ -223,12 +224,39 @@ class MyTableView(QTableView):
 
             title = "No 'Date read' custom field selected"
             if date_read_field:
-                title = "Apply date to '%s' column" % date_read_field
+                title = "Apply to '%s' column" % date_read_field
             ac = menu.addAction(title)
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "apply_date_read", row))
 
             if (not date_read_field) or (not calibre_cids) or (not last_opened):
+                ac.setEnabled(False)
+
+        elif col == self.parent.PROGRESS_COL:
+            progress_field = self.parent.prefs.get('progress_field_comboBox', None)
+
+            # Test for calibre cids
+            calibre_cids = False
+            for row in selected_books:
+                if selected_books[row]['cid'] is not None:
+                    calibre_cids = True
+                    break
+
+            # Test for active Progress
+            progress = False
+            for row in selected_books:
+                if selected_books[row]['progress'] > 0:
+                    progress = True
+                    break
+
+            title = "No 'Progress' custom field selected"
+            if progress_field:
+                title = "Apply to '%s' column" % progress_field
+            ac = menu.addAction(title)
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "apply_progress", row))
+
+            if (not progress_field) or (not calibre_cids) or (not progress):
                 ac.setEnabled(False)
 
         elif col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
@@ -372,6 +400,9 @@ class MarkupTableModel(QAbstractTableModel):
         self.right_aligned_columns = right_aligned_columns
         self.headerdata = parent.LIBRARY_HEADER
         self.show_match_colors = parent.show_match_colors
+
+    def all_rows(self):
+        return self.arraydata
 
     def columnCount(self, parent):
         return len(self.headerdata)
@@ -700,6 +731,8 @@ class BookStatusDialog(SizePersistedDialog):
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
+            elif button.objectName() == 'refresh_custom_columns_button':
+                self.refresh_custom_columns()
             elif button.objectName() == 'view_global_vocabulary_button':
                 self.show_assets_dialog('show_global_vocabulary', 0)
             elif button.objectName() == 'view_metadata_button':
@@ -728,6 +761,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         if action == 'apply_date_read':
             self._apply_date_read()
+        elif action == 'apply_progress':
+            self._apply_progress()
         elif action == 'calculate_word_count':
             self._calculate_word_count()
         elif action in ['clear_new_flag', 'clear_reading_list_flag',
@@ -904,6 +939,27 @@ class BookStatusDialog(SizePersistedDialog):
                                                        'icons',
                                                        'edit_collections.png')))
 
+        # Refresh custom columns
+        if True:
+            self.refresh_button = self.dialogButtonBox.addButton('Refresh', QDialogButtonBox.ActionRole)
+            self.refresh_button.setObjectName('refresh_custom_columns_button')
+            self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                   'icons',
+                                                   'from_marvin.png')))
+            # Disable button if no custom fields specified
+            enabled = []
+            for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
+                        'progress_field_comboBox']:
+                cfv = self.parent.prefs.get(cfn, None)
+                if cfv:
+                    enabled.append(cfv)
+            if cfv:
+                tooltip = "Refresh custom columns %s" % ', '.join(sorted(enabled, key=sort_key))
+            else:
+                tooltip = "No custom columns specified in configuration"
+            self.refresh_button.setToolTip(tooltip)
+            self.refresh_button.setEnabled(bool(cfv))
+
         # View Global vocabulary
         if True:
             self.gv_button = self.dialogButtonBox.addButton('View vocabulary', QDialogButtonBox.ActionRole)
@@ -958,6 +1014,57 @@ class BookStatusDialog(SizePersistedDialog):
         if command in ['disconnected', 'yanked']:
             self._log("closing dialog: %s" % command)
             self.close()
+
+    def refresh_custom_columns(self):
+        '''
+        Refresh enabled custom columns from Marvin content
+        '''
+        self._log_location()
+
+        enabled = []
+        for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
+                    'progress_field_comboBox']:
+            cfv = self.parent.prefs.get(cfn, None)
+            if cfv:
+                enabled.append(cfv)
+        cols_to_refresh = ', '.join(sorted(enabled, key=sort_key))
+
+        pb = ProgressBar(parent=self.opts.gui, window_title="Refreshing {0}".format(cols_to_refresh),
+                         on_top=True)
+        pb.set_label('{:^100}'.format(" label goes here "))
+        pb.set_value(0)
+        pb.show()
+
+        if len(self._selected_rows()) < 2:
+            total_books = len(self.tm.all_rows())
+            pb.set_maximum(total_books)
+            pb.set_value(0)
+            pb.show()
+
+            for i, row in enumerate(self.tm.all_rows()):
+                self.tv.selectRow(row)
+                pb.set_label('{:^100}'.format(self.tm.all_rows[row]['title']))
+                self._fetch_annotations()
+                self._apply_date_read()
+                self._apply_progress()
+                pb.increment()
+        else:
+            rows_to_refresh = sorted(self._selected_books())
+            total_books = len(rows_to_refresh)
+            pb.set_maximum(total_books)
+            pb.set_value(0)
+            pb.show()
+
+            for row in rows_to_refresh:
+                self.tv.selectRow(row)
+                pb.set_label('{:^100}'.format(self._selected_books()[row]['title']))
+                self._fetch_annotations()
+                self._apply_date_read()
+                self._apply_progress()
+                pb.increment()
+
+        pb.hide()
+        updateCalibreGUIView()
 
     def show_assets_dialog(self, action, row):
         '''
@@ -1399,8 +1506,34 @@ class BookStatusDialog(SizePersistedDialog):
                         db.commit()
                     else:
                         self._log("'%s' has no Last Opened date" % selected_books[row]['title'])
+            #updateCalibreGUIView()
         else:
             self._log("No date_read_field_lookup specified")
+
+    def _apply_progress(self):
+        '''
+        Fetch Progress, apply to custom field
+        '''
+        self._log_location()
+        lookup = self.parent.prefs.get('progress_field_lookup', None)
+        if lookup:
+            selected_books = self._selected_books()
+            for row in selected_books:
+                cid = selected_books[row]['cid']
+                if cid is not None:
+                    # Get the current value from the lookup field
+                    db = self.opts.gui.current_db
+                    mi = db.get_metadata(cid, index_is_id=True)
+                    new_progress = self.tm.get_progress(row).sort_key * 100
+                    if new_progress:
+                        um = mi.metadata_for_field(lookup)
+                        um['#value#'] = new_progress
+                        mi.set_user_metadata(lookup, um)
+                        db.set_metadata(cid, mi, set_title=False, set_authors=False)
+                        db.commit()
+            #updateCalibreGUIView()
+        else:
+            self._log("No progress_field_lookup specified")
 
     def _build_metadata_update(self, book_id, cid, book, mismatches):
         '''
@@ -1719,6 +1852,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
         self.tv.clearSelection()
+        self.repaint()
 
     def _compute_epub_hash(self, zipfile):
         '''
@@ -2238,7 +2372,9 @@ class BookStatusDialog(SizePersistedDialog):
                         db.commit()
 
                     else:
-                        self._log("row %d has no annotations" % row)
+                        self._log("'%s' has no annotations" % book['title'])
+
+            updateCalibreGUIView()
 
     def _fetch_marvin_content_hash(self, path):
         '''
@@ -3276,6 +3412,7 @@ class BookStatusDialog(SizePersistedDialog):
             has_vocabulary = bool(self.tm.get_vocabulary(row))
             last_opened = str(self.tm.get_last_opened(row).text())
             path = self.tm.get_path(row)
+            progress = self.tm.get_progress(row).sort_key
             title = str(self.tm.get_title(row).text())
             uuid = self.tm.get_uuid(row)
             selected_books[row] = {
@@ -3288,6 +3425,7 @@ class BookStatusDialog(SizePersistedDialog):
                                    'has_vocabulary': has_vocabulary,
                                    'last_opened': last_opened,
                                    'path': path,
+                                   'progress': progress,
                                    'title': title,
                                    'uuid': uuid
                                   }

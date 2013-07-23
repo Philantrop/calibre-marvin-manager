@@ -77,6 +77,17 @@ class ConfigWidget(QWidget):
         self.cfg_custom_fields_qgl.addWidget(self.annotations_field_comboBox, current_row, 1)
         current_row += 1
 
+        # Progress
+        self.cfg_progress_label = QLabel('Progress')
+        self.cfg_progress_label.setAlignment(Qt.AlignLeft)
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_progress_label, current_row, 0)
+
+        self.progress_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
+        self.progress_field_comboBox.setObjectName('progress_field_comboBox')
+        self.progress_field_comboBox.setToolTip('Custom field for Marvin reading progress')
+        self.cfg_custom_fields_qgl.addWidget(self.progress_field_comboBox, current_row, 1)
+        current_row += 1
+
         spacerItem1 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_custom_fields_qgl.addItem(spacerItem1)
 
@@ -113,7 +124,7 @@ class ConfigWidget(QWidget):
         self.resize(self.sizeHint())
 
         # Populate/restore the Annotations comboBox
-        self.eligible_annotations_fields = self.get_eligible_annotations_fields()
+        self.eligible_annotations_fields = self.get_eligible_custom_fields(eligible_types=['comments'])
         self.annotations_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_annotations_fields.keys(), key=lambda s: s.lower())
         self.annotations_field_comboBox.addItems(ecf)
@@ -123,7 +134,7 @@ class ConfigWidget(QWidget):
             self.annotations_field_comboBox.setCurrentIndex(idx)
 
         # Populate/restore the Collections comboBox
-        self.eligible_collection_fields = self.get_eligible_collection_fields()
+        self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'])
         self.collection_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_collection_fields.keys(), key=lambda s: s.lower())
         self.collection_field_comboBox.addItems(ecf)
@@ -133,7 +144,7 @@ class ConfigWidget(QWidget):
             self.collection_field_comboBox.setCurrentIndex(idx)
 
         # Populate/restore the Date read comboBox
-        self.eligible_date_read_fields = self.get_eligible_date_read_fields()
+        self.eligible_date_read_fields = self.get_eligible_custom_fields(['datetime'])
         self.date_read_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_date_read_fields.keys(), key=lambda s: s.lower())
         self.date_read_field_comboBox.addItems(ecf)
@@ -142,51 +153,33 @@ class ConfigWidget(QWidget):
         if idx > -1:
             self.date_read_field_comboBox.setCurrentIndex(idx)
 
+        # Populate/restore the Progress comboBox
+        self.eligible_progress_fields = self.get_eligible_custom_fields(['float'])
+        self.progress_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_progress_fields.keys(), key=lambda s: s.lower())
+        self.progress_field_comboBox.addItems(ecf)
+        cf = self.prefs.get('progress_field_comboBox', '')
+        idx = self.progress_field_comboBox.findText(cf)
+        if idx > -1:
+            self.progress_field_comboBox.setCurrentIndex(idx)
+
         # Restore general settings
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
 
-    def get_eligible_annotations_fields(self):
+    def get_eligible_custom_fields(self, eligible_types=[]):
         '''
-        Discover qualifying custom fields for annotations
+        Discover qualifying custom fields for reading progress
         '''
-        self._log_location()
-
-        eligible_annotations_fields = {}
-        for cf in self.gui.current_db.custom_field_keys():
-            cft = self.gui.current_db.metadata_for_field(cf)['datatype']
-            cfn = self.gui.current_db.metadata_for_field(cf)['name']
-            if cft in ['comments']:
-                eligible_annotations_fields[cfn] = cf
-        return eligible_annotations_fields
-
-    def get_eligible_collection_fields(self):
-        '''
-        Discover qualifying custom fields for collection assignments
-        '''
-        self._log_location()
-
-        eligible_custom_fields = {}
-        for cf in self.gui.current_db.custom_field_keys():
-            cft = self.gui.current_db.metadata_for_field(cf)['datatype']
-            cfn = self.gui.current_db.metadata_for_field(cf)['name']
-            if cft in ['enumeration', 'text']:
-                eligible_custom_fields[cfn] = cf
-        return eligible_custom_fields
-
-    def get_eligible_date_read_fields(self):
-        '''
-        Discover qualifying custom fields for Date read assignments
-        '''
-        self._log_location()
+        self._log_location(eligible_types)
 
         eligible_custom_fields = {}
         for cf in self.gui.current_db.custom_field_keys():
             cft = self.gui.current_db.metadata_for_field(cf)['datatype']
             cfn = self.gui.current_db.metadata_for_field(cf)['name']
             #self._log("cft: %s  cfn: %s" % (cft, cfn))
-            if cft in ['datetime']:
+            if cft in eligible_types:
                 eligible_custom_fields[cfn] = cf
         return eligible_custom_fields
 
@@ -216,6 +209,14 @@ class ConfigWidget(QWidget):
             self.prefs.set('date_read_field_lookup', self.eligible_date_read_fields[cf])
         else:
             self.prefs.set('date_read_field_lookup', '')
+
+        # Save Progress field
+        cf = str(self.progress_field_comboBox.currentText())
+        self.prefs.set('progress_field_comboBox', cf)
+        if cf:
+            self.prefs.set('progress_field_lookup', self.eligible_progress_fields[cf])
+        else:
+            self.prefs.set('progress_field_lookup', '')
 
         # Save general settings
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())

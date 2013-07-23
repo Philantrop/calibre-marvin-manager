@@ -11,7 +11,6 @@ __docformat__ = 'restructuredtext en'
 """
 import re, os, shutil, sys, tempfile, time, urlparse, zipfile
 from collections import defaultdict
-from time import sleep
 
 from calibre.constants import iswindows
 from calibre.ebooks.BeautifulSoup import BeautifulSoup
@@ -25,6 +24,7 @@ from calibre.utils.logging import Log
 import cStringIO, os, re, shutil, sys, tempfile, time
 
 from collections import defaultdict
+from time import sleep
 
 from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
