@@ -1503,8 +1503,8 @@ class BookStatusDialog(SizePersistedDialog):
                         ndo = datetime.strptime(new_date, "%Y-%m-%d")
                         um['#value#'] = ndo.replace(hour=12)
                         mi.set_user_metadata(lookup, um)
-                        db.set_metadata(cid, mi, set_title=False, set_authors=False)
-                        db.commit()
+                        db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                        commit=True)
                     else:
                         self._log("'%s' has no Last Opened date" % selected_books[row]['title'])
             #updateCalibreGUIView()
@@ -1514,6 +1514,7 @@ class BookStatusDialog(SizePersistedDialog):
     def _apply_progress(self):
         '''
         Fetch Progress, apply to custom field
+        Need to assert force_changes for db to allow custom field to be set to None.
         '''
         self._log_location()
         lookup = self.parent.prefs.get('progress_field_lookup', None)
@@ -1525,23 +1526,16 @@ class BookStatusDialog(SizePersistedDialog):
                     # Get the current value from the lookup field
                     db = self.opts.gui.current_db
                     mi = db.get_metadata(cid, index_is_id=True)
-                    um = mi.get_user_metadata(lookup, False)
-                    self._log("before: %s" % um)
+                    um = mi.metadata_for_field(lookup)
 
                     new_progress = self.tm.get_progress(row).sort_key
                     if new_progress is not None:
                         new_progress = new_progress * 100
-                    self._log("new_progess: %s" % repr(new_progress))
                     um['#value#'] = new_progress
 
                     mi.set_user_metadata(lookup, um)
-                    db.set_metadata(cid, mi, set_title=False, set_authors=False)
-                    db.commit()
-
-                    mi = db.get_metadata(cid, index_is_id=True)
-                    um = mi.metadata_for_field(lookup)
-                    self._log("after: %s" % um)
-
+                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                    commit=True, force_changes=True)
             updateCalibreGUIView()
         else:
             self._log("No progress_field_lookup specified")
@@ -2310,8 +2304,8 @@ class BookStatusDialog(SizePersistedDialog):
                         um = mi.metadata_for_field(lookup)
                         um['#value#'] = content
                         mi.set_user_metadata(lookup, um)
-                        db.set_metadata(cid, mi, set_title=False, set_authors=False)
-                        db.commit()
+                        db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                        commit=True)
 
                     else:
                         self._log("'%s' has no annotations" % book['title'])
@@ -3527,7 +3521,8 @@ class BookStatusDialog(SizePersistedDialog):
             um = mi.metadata_for_field(lookup)
             um['#value#'] = updated_calibre_collections
             mi.set_user_metadata(lookup, um)
-            db.set_metadata(cid, mi, set_title=False, set_authors=False)
+            db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                            commit=True)
             db.commit()
 
         # Update in-memory
@@ -3851,8 +3846,8 @@ class BookStatusDialog(SizePersistedDialog):
                             um = mi.metadata_for_field(lookup)
                             um['#value#'] = collections
                             mi.set_user_metadata(lookup, um)
-                            db.set_metadata(cid, mi, set_title=False, set_authors=False)
-                            db.commit()
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                            commit=True)
 
                             # Update in-memory if book exists in Marvin
                             book_id = self._find_cid_in_model(cid)
@@ -3877,8 +3872,8 @@ class BookStatusDialog(SizePersistedDialog):
                             um = mi.metadata_for_field(lookup)
                             um['#value#'] = collections
                             mi.set_user_metadata(lookup, um)
-                            db.set_metadata(cid, mi, set_title=False, set_authors=False)
-                            db.commit()
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                            commit=True)
 
                             # Update in-memory if book exists in Marvin
                             book_id = self._find_cid_in_model(cid)
