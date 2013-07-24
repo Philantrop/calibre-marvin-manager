@@ -62,7 +62,6 @@ class MyTableView(QTableView):
         menu = QMenu(self)
 
         if col == self.parent.ANNOTATIONS_COL:
-            # Test for calibre cids
             calibre_cids = False
             for row in selected_books:
                 if selected_books[row]['cid'] is not None:
@@ -250,11 +249,11 @@ class MyTableView(QTableView):
                     break
 
             # Test for active Progress
-            progress = False
-            for row in selected_books:
-                if selected_books[row]['progress'] > 0:
-                    progress = True
-                    break
+            progress = True
+#             for row in selected_books:
+#                 if selected_books[row]['progress'] > 0:
+#                     progress = True
+#                     break
 
             title = "No 'Progress' custom field selected"
             if progress_field:
@@ -594,6 +593,7 @@ class MarkupTableModel(QAbstractTableModel):
         return self.arraydata[row][self.parent.PROGRESS_COL]
     def set_progress(self, row, value):
         self.arraydata[row][self.parent.PROGRESS_COL] = value
+        #self.parent.repaint()
 
     def get_title(self, row):
         return self.arraydata[row][self.parent.TITLE_COL]
@@ -1337,10 +1337,13 @@ class BookStatusDialog(SizePersistedDialog):
                     if dlg.result() == dlg.Accepted:
                         if self.library_collections.isRunning():
                             self.library_collections.wait()
-                        self._log("original: %s" % current_collections)
-                        self._log("to_rename: %s" % dlg.to_rename)
-                        self._log("to_delete %s" % dlg.to_delete)
-                        self._log("ids: %s" % self.library_collections.ids)
+
+                        details = {'rename': dlg.to_rename,
+                                   'delete': dlg.to_delete,
+                                   'active_cids': self.library_collections.ids,
+                                   'locations': current_collections}
+
+                        self._update_global_collections(details)
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -1363,7 +1366,7 @@ class BookStatusDialog(SizePersistedDialog):
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
         else:
-            title = "Collection management"
+            title = "Manage collections"
             msg = "<p>No collections to manage.</p>"
             MessageBox(MessageBox.INFO, title, msg,
                    show_copy_button=False).exec_()
@@ -1531,14 +1534,24 @@ class BookStatusDialog(SizePersistedDialog):
                     # Get the current value from the lookup field
                     db = self.opts.gui.current_db
                     mi = db.get_metadata(cid, index_is_id=True)
-                    new_progress = self.tm.get_progress(row).sort_key * 100
-                    if new_progress:
-                        um = mi.metadata_for_field(lookup)
-                        um['#value#'] = new_progress
-                        mi.set_user_metadata(lookup, um)
-                        db.set_metadata(cid, mi, set_title=False, set_authors=False)
-                        db.commit()
-            #updateCalibreGUIView()
+                    um = mi.get_user_metadata(lookup, False)
+                    self._log("before: %s" % um)
+
+                    new_progress = self.tm.get_progress(row).sort_key
+                    if new_progress is not None:
+                        new_progress = new_progress * 100
+                    self._log("new_progess: %s" % repr(new_progress))
+                    um['#value#'] = new_progress
+
+                    mi.set_user_metadata(lookup, um)
+                    db.set_metadata(cid, mi, set_title=False, set_authors=False)
+                    db.commit()
+
+                    mi = db.get_metadata(cid, index_is_id=True)
+                    um = mi.metadata_for_field(lookup)
+                    self._log("after: %s" % um)
+
+            updateCalibreGUIView()
         else:
             self._log("No progress_field_lookup specified")
 
@@ -1822,6 +1835,9 @@ class BookStatusDialog(SizePersistedDialog):
                 # Update the spreadsheet
                 self.tm.set_flags(row, new_flags_widget)
 
+                # Update reading progress based upon flag values
+                self._update_reading_progress(self.installed_books[book_id], row)
+
                 # Update in-memory caches
                 _update_in_memory(book_id, path)
 
@@ -1841,6 +1857,8 @@ class BookStatusDialog(SizePersistedDialog):
 
                 # Update the model
                 self.tm.set_flags(row, new_flags_widget)
+
+                # Update reading progress based upon flag values
                 self._update_reading_progress(self.installed_books[book_id], row)
 
                 # Update in-memory caches
@@ -2455,8 +2473,6 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Given a book_id, find its row in the displayed model
         '''
-        self._log_location()
-
         for row, item in enumerate(self.tm.arraydata):
             #if self.tm.get_book_id(row) == book_id:
             if item[self.BOOK_ID_COL] == book_id:
@@ -2465,6 +2481,17 @@ class BookStatusDialog(SizePersistedDialog):
         else:
             row = None
         return row
+
+    def _find_cid_in_model(self, cid):
+        '''
+        Given a cid, return its book_id
+        '''
+        book_id = None
+        for book in self.tm.arraydata:
+            if book[self.CALIBRE_ID_COL] == cid:
+                book_id = book[self.BOOK_ID_COL]
+                break
+        return book_id
 
     def _find_fuzzy_matches(self, library_scanner, installed_books):
         '''
@@ -2649,27 +2676,34 @@ class BookStatusDialog(SizePersistedDialog):
               0% if book is marked NEW
             100% if book is marked Read
         '''
+        #self._log_location(book_data.title)
 
         percent_read = ''
         if self.opts.prefs.get('show_progress_as_percentage', False):
+            pct_progress = book_data.progress
             if  'NEW' in book.data.flags:
                 percent_read = ''
+                pct_progress = None
             elif 'READ' in book_data.flags:
                 percent_read = "100%   "
+                pct_progress = 1.0
             elif book_data.progress < 0.01:
                 percent_read = ''
             else:
                 # Pad the right side for visual comfort, since this col is
                 # right-aligned
                 percent_read = "{:3.0f}%   ".format(book_data.progress * 100)
-            progress = SortableTableWidgetItem(percent_read, book_data.progress)
+            progress = SortableTableWidgetItem(percent_read, pct_progress)
         else:
             #base_name = "progress000.png"
             base_name = "progress_none.png"
+            pct_progress = book_data.progress
             if 'NEW' in book_data.flags:
                 base_name = "progress_none.png"
+                pct_progress = None
             elif 'READ' in book_data.flags:
                 base_name = "progress100.png"
+                pct_progress = 1.0
             elif book_data.progress >= 0.01 and book_data.progress < 0.11:
                 base_name = "progress010.png"
             elif book_data.progress >= 0.11 and book_data.progress < 0.22:
@@ -2694,7 +2728,7 @@ class BookStatusDialog(SizePersistedDialog):
             progress = SortableImageWidgetItem(self,
                                         os.path.join(self.parent.opts.resources_path,
                                                      'icons', base_name),
-                                        book_data.progress,
+                                        pct_progress,
                                         self.PROGRESS_COL)
         return progress
 
@@ -3513,6 +3547,9 @@ class BookStatusDialog(SizePersistedDialog):
                 # Update self.installed_books flags list
                 self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
+                # Update reading progress based on flag values
+                self._update_reading_progress(self.installed_books[book_id], row)
+
                 # Update in-memory
                 _update_in_memory(book_id, path)
 
@@ -3847,6 +3884,161 @@ class BookStatusDialog(SizePersistedDialog):
             msg = ("<p>{0}: not implemented</p>".format(action))
             MessageBox(MessageBox.INFO, title, msg,
                            show_copy_button=False).exec_()
+
+    def _update_global_collections(self, details):
+        '''
+        details = {'rename': {'<old_name>': '<new_name>', ...}
+                   'delete': (['<collection_to_delete>', ...])
+                   'active_cids': [cid, cid, cid ...],
+                   'locations': {'calibre': [collection, collection, ...],
+                                 'Marvin': [collection, collection, ...]}
+                  }
+
+        Deletions:
+            - Calibre: if collection in locations['calibre']:
+                test each active_cid for removal
+                update self.installed_books[].calibre_collections
+            - Marvin: if collection in locations['Marvin']:
+                Delete collection from cached_books[].device_collections
+                Delete collection from self.installed_books[].device_collections
+                Delete collection from Device memory_view[].device_collections
+                Tell Marvin about the deletion(s)
+
+        Renaming:
+            - Calibre: if collection in locations['calibre']:
+                test each active_cid for renaming
+                update self.installed_books[].calibre_collections
+            - Marvin: if collection in locations['Marvin']:
+                Rename collection from cached_books[].device_collections
+                Rename collection from self.installed_books[].device_collections
+                Rename collection from Device memory_view[].device_collections
+                Tell Marvin about the renaming
+
+        '''
+        self._log_location(details)
+
+        # ~~~~~~ calibre ~~~~~~
+        lookup = self.parent.prefs.get('collection_field_lookup', None)
+        if lookup is not None and details['active_cids']:
+            for ctd in details['delete']:
+                if ctd in details['locations']['calibre']:
+                    for cid in details['active_cids']:
+                        # Get the current value from the lookup field
+                        db = self.opts.gui.current_db
+                        mi = db.get_metadata(cid, index_is_id=True)
+                        collections = mi.get_user_metadata(lookup, False)['#value#']
+                        self._log("%s: old collections value: %s" % (mi.title, repr(collections)))
+                        if ctd in collections:
+                            collections.remove(ctd)
+                            self._log("new collections value: %s" % (repr(collections)))
+                            um = mi.metadata_for_field(lookup)
+                            um['#value#'] = collections
+                            mi.set_user_metadata(lookup, um)
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False)
+                            db.commit()
+
+                            # Update in-memory if book exists in Marvin
+                            book_id = self._find_cid_in_model(cid)
+                            if book_id:
+                                self._log("old calibre_collections: %s" % self.installed_books[book_id].calibre_collections)
+                                self.installed_books[book_id].calibre_collections = collections
+
+            for ctr in details['rename']:
+                if ctr in details['locations']['calibre']:
+                    for cid in details['active_cids']:
+                        # Get the current value from the lookup field
+                        db = self.opts.gui.current_db
+                        mi = db.get_metadata(cid, index_is_id=True)
+                        collections = mi.get_user_metadata(lookup, False)['#value#']
+                        self._log("%s: old collections value: %s" % (mi.title, repr(collections)))
+                        if ctr in collections:
+                            collections.remove(ctr)
+                            replacement = details['rename'][ctr]
+                            collections.append(replacement)
+                            collections.sort(key=sort_key)
+                            self._log("new collections value: %s" % (repr(collections)))
+                            um = mi.metadata_for_field(lookup)
+                            um['#value#'] = collections
+                            mi.set_user_metadata(lookup, um)
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False)
+                            db.commit()
+
+                            # Update in-memory if book exists in Marvin
+                            book_id = self._find_cid_in_model(cid)
+                            if book_id:
+                                self._log("old calibre_collections: %s" % self.installed_books[book_id].calibre_collections)
+                                self.installed_books[book_id].calibre_collections = collections
+
+        # ~~~~~~ Marvin ~~~~~~
+        command_name = "command"
+        command_type = "UpdateGlobalCollections"
+        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+            command_type, time.mktime(time.localtime())))
+        parameters_tag = Tag(update_soup, 'parameters')
+        update_soup.command.insert(0, parameters_tag)
+
+        cached_books = self.parent.connected_device.cached_books
+        for ctd in details['delete']:
+            if ctd in details['locations']['Marvin']:
+                # update self.installed_books, Device model
+                for book_id, book in self.installed_books.items():
+                    if ctd in book.device_collections:
+                        self._log("%s: delete '%s'" % (book.title, book.device_collections))
+                        book.device_collections.remove(ctd)
+
+                        # Update Device model
+                        for row in self.opts.gui.memory_view.model().map:
+                            model_book = self.opts.gui.memory_view.model().db[row]
+                            if model_book.path == book.path:
+                                model_book.device_collections = book.device_collections
+                                break
+
+                        # Update driver
+                        cached_books[book.path]['device_collections'] = book.device_collections
+
+                        # Add a <parameter action="delete"> tag
+                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag['action'] = "delete"
+                        parameter_tag.insert(0, ctd)
+                        parameters_tag.insert(0, parameter_tag)
+
+        for ctr in details['rename']:
+            if ctr in details['locations']['Marvin']:
+                for book_id, book in self.installed_books.items():
+                    if ctr in book.device_collections:
+                        self._log("%s: rename '%s'" % (book.title, book.device_collections))
+                        book.device_collections.remove(ctr)
+                        replacement = details['rename'][ctr]
+                        book.device_collections.append(replacement)
+                        book.device_collections.sort(key=sort_key)
+
+                        # Update Device model
+                        for row in self.opts.gui.memory_view.model().map:
+                            model_book = self.opts.gui.memory_view.model().db[row]
+                            if model_book.path == book.path:
+                                model_book.device_collections = book.device_collections
+                                break
+
+                        # Update driver
+                        cached_books[book.path]['device_collections'] = book.device_collections
+
+                        # Add a <parameter action="rename"> tag
+                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag['action'] = "rename"
+                        parameter_tag['newname'] = replacement
+                        parameter_tag.insert(0, ctr)
+                        parameters_tag.insert(0, parameter_tag)
+
+        # Tell Marvin
+        if len(parameters_tag):
+            parameters_tag['count'] = str(len(parameters_tag))
+
+            # Copy command file to staging folder
+            self._stage_command_file(command_name, update_soup,
+                show_command=self.prefs.get('show_staged_commands', False))
+
+            # Wait for completion
+            self._wait_for_command_completion(command_name, update_local_db=True)
 
     def _update_marvin_collections(self, book_id, updated_marvin_collections):
         '''
