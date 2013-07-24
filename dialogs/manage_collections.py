@@ -45,7 +45,7 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
                                  'icons',
                                  'edit_collections.png')))
         self.setWindowTitle("Manage collections")
-        self.label.setText("All collections")
+        self.label.setText("Active collections")
 
         self.to_rename = {}
         self.to_delete = set([])

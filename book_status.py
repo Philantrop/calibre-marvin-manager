@@ -892,9 +892,12 @@ class BookStatusDialog(SizePersistedDialog):
         # ~~~~~~~~ Create the ButtonBox ~~~~~~~~
         self.dialogButtonBox = QDialogButtonBox(QDialogButtonBox.Help)
 
-        self.delete_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Discard)
-        self.delete_button.setText('Delete')
+        # Delete button
+        if False:
+            self.delete_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Discard)
+            self.delete_button.setText('Delete')
 
+        # Done button
         self.done_button = self.dialogButtonBox.addButton(self.dialogButtonBox.Ok)
         self.done_button.setText('Close')
 
@@ -924,18 +927,20 @@ class BookStatusDialog(SizePersistedDialog):
                                                        'deep_view.png')))
 
         # View metadata
-        self.vm_button = self.dialogButtonBox.addButton('View metadata', QDialogButtonBox.ActionRole)
-        self.vm_button.setObjectName('view_metadata_button')
-        self.vm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'update_metadata.png')))
+        if False:
+            self.vm_button = self.dialogButtonBox.addButton('View metadata', QDialogButtonBox.ActionRole)
+            self.vm_button.setObjectName('view_metadata_button')
+            self.vm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'update_metadata.png')))
 
         # View collections
-        self.vc_button = self.dialogButtonBox.addButton('View collection assignments', QDialogButtonBox.ActionRole)
-        self.vc_button.setObjectName('view_collections_button')
-        self.vc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'update_metadata.png')))
+        if False:
+            self.vc_button = self.dialogButtonBox.addButton('View collection assignments', QDialogButtonBox.ActionRole)
+            self.vc_button.setObjectName('view_collections_button')
+            self.vc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'update_metadata.png')))
 
         # Manage collections
         if True:
@@ -947,28 +952,27 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Refresh custom columns
         if True:
-            self.refresh_button = self.dialogButtonBox.addButton('Refresh', QDialogButtonBox.ActionRole)
-            self.refresh_button.setObjectName('refresh_custom_columns_button')
-            self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'from_marvin.png')))
-            # Disable button if no custom fields specified
+            # Get a list of the active custom columns
             enabled = []
             for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
                         'progress_field_comboBox']:
                 cfv = self.parent.prefs.get(cfn, None)
                 if cfv:
                     enabled.append(cfv)
-            if cfv:
-                tooltip = "Refresh custom columns %s" % ', '.join(sorted(enabled, key=sort_key))
-            else:
-                tooltip = "No custom columns specified in configuration"
-            self.refresh_button.setToolTip(tooltip)
-            self.refresh_button.setEnabled(bool(cfv))
+            if enabled:
+                button_title = 'Refresh %s' % ', '.join(sorted(enabled, key=sort_key))
+
+                self.refresh_button = self.dialogButtonBox.addButton(button_title, QDialogButtonBox.ActionRole)
+                self.refresh_button.setObjectName('refresh_custom_columns_button')
+                self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'from_marvin.png')))
+                tooltip = "Refresh custom columns %s in calibre" % ', '.join(sorted(enabled, key=sort_key))
+                self.refresh_button.setToolTip(tooltip)
 
         # View Global vocabulary
         if True:
-            self.gv_button = self.dialogButtonBox.addButton('View vocabulary', QDialogButtonBox.ActionRole)
+            self.gv_button = self.dialogButtonBox.addButton('View all vocabulary words', QDialogButtonBox.ActionRole)
             self.gv_button.setObjectName('view_global_vocabulary_button')
             self.gv_button.setIcon(QIcon(I('books_in_series.png')))
 
