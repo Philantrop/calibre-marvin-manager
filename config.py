@@ -11,8 +11,10 @@ from calibre.gui2 import show_restart_warning
 from calibre.gui2.ui import get_gui
 from calibre.utils.config import config_dir, JSONConfig
 
-from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QGridLayout, QGroupBox,
-                      QLabel, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget)
+from calibre_plugins.marvin_manager.book_status import dialog_resources_path
+
+from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox, QIcon,
+                      QLabel, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget)
 
 plugin_prefs = JSONConfig('plugins/Marvin Mangler')
 
@@ -38,11 +40,26 @@ class ConfigWidget(QWidget):
 
         # ~~~~~~~~ Create the Custom field options group box ~~~~~~~~
         self.cfg_custom_fields_gb = QGroupBox(self)
-        self.cfg_custom_fields_gb.setTitle('Custom fields')
+        self.cfg_custom_fields_gb.setTitle('Custom columns')
         self.l.addWidget(self.cfg_custom_fields_gb)
 
         self.cfg_custom_fields_qgl = QGridLayout(self.cfg_custom_fields_gb)
         current_row = 0
+
+        # Custom column Wizard
+        self.cfg_cc_wizard_button = QPushButton(QIcon(I('wizard.png')), 'Custom column wizard')
+        self.cfg_cc_wizard_button.clicked.connect(self.launch_cc_wizard)
+        # row, column, rowSpan, columnSpan
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_cc_wizard_button, current_row, 0, 1, 2)
+        current_row += 1
+
+        # Horizontal line
+        self.cfg_hl_1 = QFrame(self.cfg_custom_fields_gb)
+        self.cfg_hl_1.setFrameShape(QFrame.HLine)
+        self.cfg_hl_1.setFrameShadow(QFrame.Sunken)
+        self.cfg_hl_1.setObjectName("cfg_hl_1")
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_hl_1, current_row, 0, 1, 2)
+        current_row += 1
 
         # Collections
         self.cfg_collections_label = QLabel('Collections')
@@ -172,7 +189,7 @@ class ConfigWidget(QWidget):
         '''
         Discover qualifying custom fields for reading progress
         '''
-        self._log_location(eligible_types)
+        #self._log_location(eligible_types)
 
         eligible_custom_fields = {}
         for cf in self.gui.current_db.custom_field_keys():
@@ -182,6 +199,30 @@ class ConfigWidget(QWidget):
             if cft in eligible_types:
                 eligible_custom_fields[cfn] = cf
         return eligible_custom_fields
+
+    def launch_cc_wizard(self):
+        '''
+        '''
+        self._log_location()
+
+        klass = os.path.join(dialog_resources_path, 'cc_wizard.py')
+        if os.path.exists(klass):
+            #self._log("importing CC Wizard dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('cc_wizard')
+            sys.path.remove(dialog_resources_path)
+            dlg = this_dc.CustomColumnWizard(self, verbose=True)
+            dlg.exec_()
+
+            self._log("modified_columns: %s" % dlg.modified_columns)
+
+            if dlg.modified_columns:
+                do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
+                                                   parent=self.gui)
+                if do_restart:
+                    self.gui.quit(restart=True)
+        else:
+            self._log("ERROR: Can't import from '%s'" % klass)
 
     def save_settings(self):
         self._log_location()

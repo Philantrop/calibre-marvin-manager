@@ -91,6 +91,7 @@ class MyAbstractItemModel(QAbstractItemModel):
     def __init__(self, *args):
         QAbstractItemModel.__init__(self, *args)
 
+
 class Struct(dict):
     """
     Create an object with dot-referenced members or dictionary
