@@ -13,13 +13,13 @@ from functools import partial
 
 from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
-from calibre.gui2 import warning_dialog
+from calibre.gui2 import info_dialog, warning_dialog
 from calibre.library.custom_columns import CustomColumns
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
 from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
-                      QSize, QSizePolicy,
+                      QSize, QSizePolicy, QTableWidgetItem,
                       pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
@@ -43,7 +43,7 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
 
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
-    STEP_ONE = "1. Select metadata to be added to a custom column"
+    STEP_ONE = "1. Select Marvin item to be added to a custom column"
     STEP_TWO = "2. Specify a name for the custom column"
     STEP_THREE_APPLY = "3. Click Apply to create the custom column"
     STEP_THREE_RENAME = "3. Click Rename to rename the custom column"
@@ -74,6 +74,17 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
         self.marvin_source_comboBox.addItems([''])
         self.marvin_source_comboBox.addItems(sorted(self.FIELDS.keys()))
         self.marvin_source_comboBox.currentIndexChanged.connect(self.source_changed)
+
+        # Populate the QTableWidget
+        self.mappings.setRowCount(3)
+        self.mappings.setColumnCount(2)
+        self.mappings.setHorizontalHeaderLabels(['Marvin item', 'Custom column'])
+
+        foo = QTableWidgetItem("foo")
+        self.mappings.setItem(0, 0, foo)
+        bar = QTableWidgetItem("bar")
+        self.mappings.setItem(0, 1, bar)
+
 
         self.highlight_step(1)
         self.reset_action_button()
@@ -151,10 +162,25 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
                 profile['source'] = source
                 if button.objectName() == 'add_button':
                     self.custom_column_add(requested_name, profile)
+                    info_dialog(self.gui, "Custom column added",
+                                          "'%s' added as custom column for Marvin '%s'" %
+                                          (requested_name, source),
+                                          show=True,
+                                          show_copy_button=False)
+
                 elif button.objectName() == 'rename_button':
                     self.custom_column_rename(requested_name, profile)
+                    info_dialog(self.gui, "Custom column renamed",
+                                          "'%s' updated column name for Marvin '%s'" %
+                                          (requested_name, source),
+                                          show=True,
+                                          show_copy_button=False)
+
                 else:
                     self._log("ERROR: unrecognized button name")
+
+                # Reset initial conditions
+                self.marvin_source_comboBox.setCurrentIndex(0)
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
             self._log("RejectRole")
@@ -171,12 +197,10 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
         if step == 1:
             self.step_1.setText(self.YELLOW_BG.format(self.STEP_ONE))
             self.step_2.setText(self.STEP_TWO)
-            self.step_3.setText(self.STEP_THREE_APPLY)
 
         elif step == 2:
             self.step_1.setText(self.STEP_ONE)
             self.step_2.setText(self.YELLOW_BG.format(self.STEP_TWO))
-            self.step_3.setText(self.STEP_THREE_APPLY)
 
     def get_custom_column_names(self):
         '''
@@ -205,8 +229,8 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
         '''
         self._log_location(index)
         if index == 0:
+            self.calibre_destination_le.clear()
             self.highlight_step(1)
-
             self.reset_action_button()
 
         elif index > 0:
@@ -223,7 +247,7 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
                     existing = cfd['name']
                     break
 
-            # Does lookup already exist?
+            # Does label already exist?
             if existing:
                 self.calibre_destination_le.setText(existing)
                 self.reset_action_button(action="rename_button", enabled=True)
