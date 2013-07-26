@@ -221,7 +221,7 @@ class MyTableView(QTableView):
                     calibre_cids = True
                     break
 
-            # Test for active Last Opened dates
+            # Test for active last_opened dates
             last_opened = False
             for row in selected_books:
                 if selected_books[row]['last_opened'] > '':
@@ -635,7 +635,7 @@ class BookStatusDialog(SizePersistedDialog):
     # Column assignments
     if True:
         LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
-                          'Title', 'Author', 'Word Count', 'Progress', 'Last Opened',
+                          'Title', 'Author', 'Word Count', 'Progress', 'Last read',
                           'Collections', 'Flags',
                           'Annotations', 'Articles', 'Deep View', 'Vocabulary',
                           'Match Quality']
@@ -647,7 +647,7 @@ class BookStatusDialog(SizePersistedDialog):
         COLLECTIONS_COL = LIBRARY_HEADER.index('Collections')
         DEEP_VIEW_COL = LIBRARY_HEADER.index('Deep View')
         FLAGS_COL = LIBRARY_HEADER.index('Flags')
-        LAST_OPENED_COL = LIBRARY_HEADER.index('Last Opened')
+        LAST_OPENED_COL = LIBRARY_HEADER.index('Last read')
         MATCHED_COL = LIBRARY_HEADER.index('Match Quality')
         PATH_COL = LIBRARY_HEADER.index('path')
         PROGRESS_COL = LIBRARY_HEADER.index('Progress')
@@ -1500,7 +1500,7 @@ class BookStatusDialog(SizePersistedDialog):
                     old_date = mi.get_user_metadata(lookup, False)['#value#']
                     #self._log("Updating old date_read value: %s" % repr(old_date))
 
-                    # Build a new datetime object from Last Opened
+                    # Build a new datetime object from Last read
                     new_date = selected_books[row]['last_opened']
                     if new_date:
                         um = mi.metadata_for_field(lookup)
@@ -1510,7 +1510,7 @@ class BookStatusDialog(SizePersistedDialog):
                         db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                         commit=True)
                     else:
-                        self._log("'%s' has no Last Opened date" % selected_books[row]['title'])
+                        self._log("'%s' has no Last read date" % selected_books[row]['title'])
             #updateCalibreGUIView()
         else:
             self._log("No date_read_field_lookup specified")
@@ -2499,8 +2499,6 @@ class BookStatusDialog(SizePersistedDialog):
         If no custom collections field assigned, always return sort_value 0
         '''
         self._log_location()
-        self._log("calibre: %s" % repr(book_data.calibre_collections))
-        self._log("marvin: %s" % repr(book_data.device_collections))
 
         if (book_data.calibre_collections is None and
             book_data.device_collections == []):
@@ -2940,7 +2938,8 @@ class BookStatusDialog(SizePersistedDialog):
 
 
             else:
-                self._log("(no calibre metadata for %s)" % row[b'Title'])
+                #self._log("(no calibre metadata for %s)" % row[b'Title'])
+                pass
 
             return mismatches
 

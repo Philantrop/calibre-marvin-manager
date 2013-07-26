@@ -21,7 +21,7 @@ plugin_prefs = JSONConfig('plugins/Marvin Mangler')
 
 class ConfigWidget(QWidget):
     '''
-    Config dialog for iOS Reader Apps
+    Config dialog for Marvin Manager
     '''
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -32,14 +32,16 @@ class ConfigWidget(QWidget):
         self.parent = plugin_action
         self.prefs = plugin_prefs
         self.resources_path = plugin_action.resources_path
+        self.restart_required = False
         self.verbose = plugin_action.verbose
+
         self._log_location()
 
         QWidget.__init__(self)
         self.l = QVBoxLayout()
         self.setLayout(self.l)
 
-        # ~~~~~~~~ Create the Custom field options group box ~~~~~~~~
+        # ~~~~~~~~ Create the Custom fields options group box ~~~~~~~~
         self.cfg_custom_fields_gb = QGroupBox(self)
         self.cfg_custom_fields_gb.setTitle('Custom columns')
         self.l.addWidget(self.cfg_custom_fields_gb)
@@ -54,30 +56,30 @@ class ConfigWidget(QWidget):
 
         self.collection_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.collection_field_comboBox.setObjectName('collection_field_comboBox')
-        self.collection_field_comboBox.setToolTip('Custom field for Marvin collections')
+        self.collection_field_comboBox.setToolTip('Custom column for Marvin collections')
         self.cfg_custom_fields_qgl.addWidget(self.collection_field_comboBox, current_row, 1)
 
         self.cfg_collections_wizard = QToolButton()
         self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
         self.cfg_collections_wizard.setToolTip("Create a custom column for Collections")
-        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'collections'))
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Collections'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
         # Date read
-        self.cfg_date_read_label = QLabel("Date read")
+        self.cfg_date_read_label = QLabel("Last read")
         self.cfg_date_read_label.setAlignment(Qt.AlignLeft)
         self.cfg_custom_fields_qgl.addWidget(self.cfg_date_read_label, current_row, 0)
 
         self.date_read_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.date_read_field_comboBox.setObjectName('date_read_field_comboBox')
-        self.date_read_field_comboBox.setToolTip('Custom field for Date read')
+        self.date_read_field_comboBox.setToolTip('Custom column for Last read date')
         self.cfg_custom_fields_qgl.addWidget(self.date_read_field_comboBox, current_row, 1)
 
         self.cfg_collections_wizard = QToolButton()
         self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
-        self.cfg_collections_wizard.setToolTip("Create a custom column for Date read")
-        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Date read'))
+        self.cfg_collections_wizard.setToolTip("Create a custom column for Last read date")
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Last read'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
@@ -88,7 +90,7 @@ class ConfigWidget(QWidget):
 
         self.annotations_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.annotations_field_comboBox.setObjectName('annotations_field_comboBox')
-        self.annotations_field_comboBox.setToolTip('Custom field for Marvin annotations and highlights')
+        self.annotations_field_comboBox.setToolTip('Custom column for Marvin annotations and highlights')
         self.cfg_custom_fields_qgl.addWidget(self.annotations_field_comboBox, current_row, 1)
 
         self.cfg_collections_wizard = QToolButton()
@@ -105,7 +107,7 @@ class ConfigWidget(QWidget):
 
         self.progress_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.progress_field_comboBox.setObjectName('progress_field_comboBox')
-        self.progress_field_comboBox.setToolTip('Custom field for Marvin reading progress')
+        self.progress_field_comboBox.setToolTip('Custom column for Marvin reading progress')
         self.cfg_custom_fields_qgl.addWidget(self.progress_field_comboBox, current_row, 1)
 
         self.cfg_collections_wizard = QToolButton()
@@ -150,13 +152,6 @@ class ConfigWidget(QWidget):
         # ~~~~~~~~ End of construction zone ~~~~~~~~
         self.resize(self.sizeHint())
 
-        # Populate/restore the Annotations comboBox
-        self.populate_annotations()
-        cf = self.prefs.get('annotations_field_comboBox', '')
-        idx = self.annotations_field_comboBox.findText(cf)
-        if idx > -1:
-            self.annotations_field_comboBox.setCurrentIndex(idx)
-
         # Populate/restore the Collections comboBox
         self.populate_collections()
         cf = self.prefs.get('collection_field_comboBox', '')
@@ -164,7 +159,14 @@ class ConfigWidget(QWidget):
         if idx > -1:
             self.collection_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Date read comboBox
+        # Populate/restore the Highlights comboBox
+        self.populate_annotations()
+        cf = self.prefs.get('annotations_field_comboBox', '')
+        idx = self.annotations_field_comboBox.findText(cf)
+        if idx > -1:
+            self.annotations_field_comboBox.setCurrentIndex(idx)
+
+        # Populate/restore the Last read comboBox
         self.populate_date_read()
         cf = self.prefs.get('date_read_field_comboBox', '')
         idx = self.date_read_field_comboBox.findText(cf)
@@ -183,7 +185,7 @@ class ConfigWidget(QWidget):
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
 
-    def get_eligible_custom_fields(self, eligible_types=[]):
+    def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
         Discover qualifying custom fields for reading progress
         '''
@@ -193,16 +195,19 @@ class ConfigWidget(QWidget):
         for cf in self.gui.current_db.custom_field_keys():
             cft = self.gui.current_db.metadata_for_field(cf)['datatype']
             cfn = self.gui.current_db.metadata_for_field(cf)['name']
-            #self._log("cf: %s  cft: %s  cfn: %s" % (cf, cft, cfn))
+            cfim = self.gui.current_db.metadata_for_field(cf)['is_multiple']
+            #self._log("cf: %s  cft: %s  cfn: %s cfim: %s" % (cf, cft, cfn, cfim))
             if cft in eligible_types:
-                eligible_custom_fields[cfn] = cf
+                if is_multiple is not None:
+                    if bool(cfim) == is_multiple:
+                        eligible_custom_fields[cfn] = cf
+                else:
+                    eligible_custom_fields[cfn] = cf
         return eligible_custom_fields
 
     def launch_cc_wizard(self, column_type):
         '''
         '''
-        self._log_location(column_type)
-
         klass = os.path.join(dialog_resources_path, 'cc_wizard.py')
         if os.path.exists(klass):
             #self._log("importing CC Wizard dialog from '%s'" % klass)
@@ -215,41 +220,93 @@ class ConfigWidget(QWidget):
             if dlg.modified_column:
                 self._log("modified_column: %s" % dlg.modified_column)
 
+                self.restart_required = True
+
                 destination = dlg.modified_column['destination']
                 label = dlg.modified_column['label']
                 previous = dlg.modified_column['previous']
                 source = dlg.modified_column['source']
 
                 if source == 'Collections':
-                    pass
+                    all_items = [str(self.collection_field_comboBox.itemText(i))
+                                 for i in range(self.collection_field_comboBox.count())]
+                    if previous and previous in all_items:
+                        all_items.remove(previous)
+                    all_items.append(destination)
 
-                elif source == 'Date read':
-                    # Add the custom column to the comboBox, select it
+                    self.collection_field_comboBox.clear()
+                    self.collection_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
+                    idx = self.collection_field_comboBox.findText(destination)
+                    if idx > -1:
+                        self.collection_field_comboBox.setCurrentIndex(idx)
+
+                    # Add/update the new destination so save_settings() can find it
+                    self.eligible_collection_fields[destination] = label
+
+                    # Save Date read field manually in case user cancels
+                    self.prefs.set('collection_field_comboBox', destination)
+                    self.prefs.set('collection_field_lookup', label)
+
+                elif source == 'Last read':
                     all_items = [str(self.date_read_field_comboBox.itemText(i))
                                  for i in range(self.date_read_field_comboBox.count())]
                     if previous and previous in all_items:
                         all_items.remove(previous)
                     all_items.append(destination)
+
                     self.date_read_field_comboBox.clear()
                     self.date_read_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
                     idx = self.date_read_field_comboBox.findText(destination)
                     if idx > -1:
                         self.date_read_field_comboBox.setCurrentIndex(idx)
 
-                    # Add/update the new destination so we can save it
+                    # Add/update the new destination so save_settings() can find it
                     self.eligible_date_read_fields[destination] = label
 
+                    # Save Date read field manually in case user cancels
+                    self.prefs.set('date_read_field_comboBox', destination)
+                    self.prefs.set('date_read_field_lookup', label)
+
                 elif source == "Highlights":
-                    pass
+                    all_items = [str(self.annotations_field_comboBox.itemText(i))
+                                 for i in range(self.annotations_field_comboBox.count())]
+                    if previous and previous in all_items:
+                        all_items.remove(previous)
+                    all_items.append(destination)
+
+                    self.annotations_field_comboBox.clear()
+                    self.annotations_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
+                    idx = self.annotations_field_comboBox.findText(destination)
+                    if idx > -1:
+                        self.annotations_field_comboBox.setCurrentIndex(idx)
+
+                    # Add/update the new destination so save_settings() can find it
+                    self.eligible_annotations_fields[destination] = label
+
+                    # Save Date read field manually in case user cancels
+                    self.prefs.set('annotations_field_comboBox', destination)
+                    self.prefs.set('annotations_field_lookup', label)
 
                 elif source == "Progress":
-                    pass
+                    all_items = [str(self.progress_field_comboBox.itemText(i))
+                                 for i in range(self.progress_field_comboBox.count())]
+                    if previous and previous in all_items:
+                        all_items.remove(previous)
+                    all_items.append(destination)
 
-                do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
-                                                   parent=self.gui)
-                if do_restart:
-                    self.save_settings()
-                    self.gui.quit(restart=True)
+                    self.progress_field_comboBox.clear()
+                    self.progress_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
+                    idx = self.progress_field_comboBox.findText(destination)
+                    if idx > -1:
+                        self.progress_field_comboBox.setCurrentIndex(idx)
+
+                    # Add/update the new destination so save_settings() can find it
+                    self.eligible_progress_fields[destination] = label
+
+                    # Save Date read field manually in case user cancels
+                    self.prefs.set('progress_field_comboBox', destination)
+                    self.prefs.set('progress_field_lookup', label)
+
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -260,7 +317,8 @@ class ConfigWidget(QWidget):
         self.annotations_field_comboBox.addItems(ecf)
 
     def populate_collections(self):
-        self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'])
+        self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'],
+                                                                          is_multiple=True)
         self.collection_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_collection_fields.keys(), key=lambda s: s.lower())
         self.collection_field_comboBox.addItems(ecf)
@@ -316,6 +374,13 @@ class ConfigWidget(QWidget):
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
         self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice_checkbox.isChecked())
+
+        # If restart needed, inform user
+        if self.restart_required:
+            do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
+                                               parent=self.gui)
+            if do_restart:
+                self.gui.quit(restart=True)
 
     def _log(self, msg=None):
         '''

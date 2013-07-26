@@ -30,15 +30,30 @@ if True:
 
 class CustomColumnWizard(QDialog, Ui_Dialog):
     FIELDS = {
-              'Highlights': {'label': 'mm_highlights',
-                             'datatype': 'comments',
-                             'display': {}},
-              'Date read':  {'label': 'mm_date_read',
-                             'datatype': 'datetime',
-                             'display': {}},
-              'Progress':   {'label': 'mm_progress',
-                             'datatype': 'float',
-                             'display': {u'number_format': u'{0:.0f}%'}}
+              'Collections': {
+                              'label': 'mm_collections',
+                              'datatype': 'text',
+                              'display': {u'is_names': False},
+                              'is_multiple': True
+                              },
+              'Highlights':  {
+                              'label': 'mm_highlights',
+                              'datatype': 'comments',
+                              'display': {},
+                              'is_multiple': False
+                              },
+              'Last read':   {
+                              'label': 'mm_date_read',
+                              'datatype': 'datetime',
+                              'display': {},
+                              'is_multiple': False
+                             },
+              'Progress':    {
+                              'label': 'mm_progress',
+                              'datatype': 'float',
+                              'display': {u'number_format': u'{0:.0f}%'},
+                              'is_multiple': False
+                              }
              }
 
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -96,7 +111,7 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
         self.db.create_custom_column(profile['label'],
                                      requested_name,
                                      profile['datatype'],
-                                     False,
+                                     profile['is_multiple'],
                                      display=profile['display'])
         self.modified_column = {
                                 'destination': requested_name,
@@ -136,8 +151,6 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
         '''
         self._log_location()
         if self.bb.buttonRole(button) == QDialogButtonBox.AcceptRole:
-            self._log("AcceptRole")
-
             requested_name = str(self.calibre_destination_le.text())
 
             if requested_name in self.get_custom_column_names():
@@ -146,6 +159,10 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
                                "Already in use",
                                "<p>'%s' is an existing custom column.</p><p>Pick a different name.</p>" % requested_name,
                                show=True, show_copy_button=False)
+
+                self.calibre_destination_le.selectAll()
+                self.calibre_destination_le.setFocus()
+
             else:
                 source = self.column_type
                 profile = self.FIELDS[source]
@@ -158,8 +175,6 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
                 self.accept()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
-            self._log("RejectRole")
-
             self.close()
 
     def esc(self, *args):
