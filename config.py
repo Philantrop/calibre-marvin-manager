@@ -5,6 +5,7 @@ from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 import cStringIO, importlib, re, os, sys
+from functools import partial
 
 from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import show_restart_warning
@@ -14,7 +15,7 @@ from calibre.utils.config import config_dir, JSONConfig
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox, QIcon,
-                      QLabel, QPushButton, QSizePolicy, QSpacerItem, QVBoxLayout, QWidget)
+                      QLabel, QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout, QWidget)
 
 plugin_prefs = JSONConfig('plugins/Marvin Mangler')
 
@@ -46,21 +47,6 @@ class ConfigWidget(QWidget):
         self.cfg_custom_fields_qgl = QGridLayout(self.cfg_custom_fields_gb)
         current_row = 0
 
-        # Custom column Wizard
-        self.cfg_cc_wizard_button = QPushButton(QIcon(I('wizard.png')), 'Custom column wizard')
-        self.cfg_cc_wizard_button.clicked.connect(self.launch_cc_wizard)
-        # row, column, rowSpan, columnSpan
-        self.cfg_custom_fields_qgl.addWidget(self.cfg_cc_wizard_button, current_row, 0, 1, 2)
-        current_row += 1
-
-        # Horizontal line
-        self.cfg_hl_1 = QFrame(self.cfg_custom_fields_gb)
-        self.cfg_hl_1.setFrameShape(QFrame.HLine)
-        self.cfg_hl_1.setFrameShadow(QFrame.Sunken)
-        self.cfg_hl_1.setObjectName("cfg_hl_1")
-        self.cfg_custom_fields_qgl.addWidget(self.cfg_hl_1, current_row, 0, 1, 2)
-        current_row += 1
-
         # Collections
         self.cfg_collections_label = QLabel('Collections')
         self.cfg_collections_label.setAlignment(Qt.AlignLeft)
@@ -70,6 +56,12 @@ class ConfigWidget(QWidget):
         self.collection_field_comboBox.setObjectName('collection_field_comboBox')
         self.collection_field_comboBox.setToolTip('Custom field for Marvin collections')
         self.cfg_custom_fields_qgl.addWidget(self.collection_field_comboBox, current_row, 1)
+
+        self.cfg_collections_wizard = QToolButton()
+        self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_collections_wizard.setToolTip("Create a custom column for Collections")
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'collections'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
         # Date read
@@ -81,6 +73,12 @@ class ConfigWidget(QWidget):
         self.date_read_field_comboBox.setObjectName('date_read_field_comboBox')
         self.date_read_field_comboBox.setToolTip('Custom field for Date read')
         self.cfg_custom_fields_qgl.addWidget(self.date_read_field_comboBox, current_row, 1)
+
+        self.cfg_collections_wizard = QToolButton()
+        self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_collections_wizard.setToolTip("Create a custom column for Date read")
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Date read'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
         # Highlights
@@ -92,6 +90,12 @@ class ConfigWidget(QWidget):
         self.annotations_field_comboBox.setObjectName('annotations_field_comboBox')
         self.annotations_field_comboBox.setToolTip('Custom field for Marvin annotations and highlights')
         self.cfg_custom_fields_qgl.addWidget(self.annotations_field_comboBox, current_row, 1)
+
+        self.cfg_collections_wizard = QToolButton()
+        self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_collections_wizard.setToolTip("Create a custom column for Highlights")
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Highlights'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
         # Progress
@@ -103,6 +107,12 @@ class ConfigWidget(QWidget):
         self.progress_field_comboBox.setObjectName('progress_field_comboBox')
         self.progress_field_comboBox.setToolTip('Custom field for Marvin reading progress')
         self.cfg_custom_fields_qgl.addWidget(self.progress_field_comboBox, current_row, 1)
+
+        self.cfg_collections_wizard = QToolButton()
+        self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_collections_wizard.setToolTip("Create a custom column for Progress")
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Progress'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
         spacerItem1 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -141,40 +151,28 @@ class ConfigWidget(QWidget):
         self.resize(self.sizeHint())
 
         # Populate/restore the Annotations comboBox
-        self.eligible_annotations_fields = self.get_eligible_custom_fields(eligible_types=['comments'])
-        self.annotations_field_comboBox.addItems([''])
-        ecf = sorted(self.eligible_annotations_fields.keys(), key=lambda s: s.lower())
-        self.annotations_field_comboBox.addItems(ecf)
+        self.populate_annotations()
         cf = self.prefs.get('annotations_field_comboBox', '')
         idx = self.annotations_field_comboBox.findText(cf)
         if idx > -1:
             self.annotations_field_comboBox.setCurrentIndex(idx)
 
         # Populate/restore the Collections comboBox
-        self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'])
-        self.collection_field_comboBox.addItems([''])
-        ecf = sorted(self.eligible_collection_fields.keys(), key=lambda s: s.lower())
-        self.collection_field_comboBox.addItems(ecf)
+        self.populate_collections()
         cf = self.prefs.get('collection_field_comboBox', '')
         idx = self.collection_field_comboBox.findText(cf)
         if idx > -1:
             self.collection_field_comboBox.setCurrentIndex(idx)
 
         # Populate/restore the Date read comboBox
-        self.eligible_date_read_fields = self.get_eligible_custom_fields(['datetime'])
-        self.date_read_field_comboBox.addItems([''])
-        ecf = sorted(self.eligible_date_read_fields.keys(), key=lambda s: s.lower())
-        self.date_read_field_comboBox.addItems(ecf)
+        self.populate_date_read()
         cf = self.prefs.get('date_read_field_comboBox', '')
         idx = self.date_read_field_comboBox.findText(cf)
         if idx > -1:
             self.date_read_field_comboBox.setCurrentIndex(idx)
 
         # Populate/restore the Progress comboBox
-        self.eligible_progress_fields = self.get_eligible_custom_fields(['float'])
-        self.progress_field_comboBox.addItems([''])
-        ecf = sorted(self.eligible_progress_fields.keys(), key=lambda s: s.lower())
-        self.progress_field_comboBox.addItems(ecf)
+        self.populate_progress()
         cf = self.prefs.get('progress_field_comboBox', '')
         idx = self.progress_field_comboBox.findText(cf)
         if idx > -1:
@@ -195,15 +193,15 @@ class ConfigWidget(QWidget):
         for cf in self.gui.current_db.custom_field_keys():
             cft = self.gui.current_db.metadata_for_field(cf)['datatype']
             cfn = self.gui.current_db.metadata_for_field(cf)['name']
-            #self._log("cft: %s  cfn: %s" % (cft, cfn))
+            #self._log("cf: %s  cft: %s  cfn: %s" % (cf, cft, cfn))
             if cft in eligible_types:
                 eligible_custom_fields[cfn] = cf
         return eligible_custom_fields
 
-    def launch_cc_wizard(self):
+    def launch_cc_wizard(self, column_type):
         '''
         '''
-        self._log_location()
+        self._log_location(column_type)
 
         klass = os.path.join(dialog_resources_path, 'cc_wizard.py')
         if os.path.exists(klass):
@@ -211,18 +209,73 @@ class ConfigWidget(QWidget):
             sys.path.insert(0, dialog_resources_path)
             this_dc = importlib.import_module('cc_wizard')
             sys.path.remove(dialog_resources_path)
-            dlg = this_dc.CustomColumnWizard(self, verbose=True)
+            dlg = this_dc.CustomColumnWizard(self, column_type, verbose=True)
             dlg.exec_()
 
-            self._log("modified_columns: %s" % dlg.modified_columns)
+            if dlg.modified_column:
+                self._log("modified_column: %s" % dlg.modified_column)
 
-            if dlg.modified_columns:
+                destination = dlg.modified_column['destination']
+                label = dlg.modified_column['label']
+                previous = dlg.modified_column['previous']
+                source = dlg.modified_column['source']
+
+                if source == 'Collections':
+                    pass
+
+                elif source == 'Date read':
+                    # Add the custom column to the comboBox, select it
+                    all_items = [str(self.date_read_field_comboBox.itemText(i))
+                                 for i in range(self.date_read_field_comboBox.count())]
+                    if previous and previous in all_items:
+                        all_items.remove(previous)
+                    all_items.append(destination)
+                    self.date_read_field_comboBox.clear()
+                    self.date_read_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
+                    idx = self.date_read_field_comboBox.findText(destination)
+                    if idx > -1:
+                        self.date_read_field_comboBox.setCurrentIndex(idx)
+
+                    # Add/update the new destination so we can save it
+                    self.eligible_date_read_fields[destination] = label
+
+                elif source == "Highlights":
+                    pass
+
+                elif source == "Progress":
+                    pass
+
                 do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
                                                    parent=self.gui)
                 if do_restart:
+                    self.save_settings()
                     self.gui.quit(restart=True)
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
+
+    def populate_annotations(self):
+        self.eligible_annotations_fields = self.get_eligible_custom_fields(eligible_types=['comments'])
+        self.annotations_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_annotations_fields.keys(), key=lambda s: s.lower())
+        self.annotations_field_comboBox.addItems(ecf)
+
+    def populate_collections(self):
+        self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'])
+        self.collection_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_collection_fields.keys(), key=lambda s: s.lower())
+        self.collection_field_comboBox.addItems(ecf)
+
+    def populate_date_read(self):
+        self.eligible_date_read_fields = self.get_eligible_custom_fields(['datetime'])
+        self.date_read_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_date_read_fields.keys(), key=lambda s: s.lower())
+        self.date_read_field_comboBox.addItems(ecf)
+
+    def populate_progress(self):
+        self.eligible_progress_fields = self.get_eligible_custom_fields(['float'])
+        self.progress_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_progress_fields.keys(), key=lambda s: s.lower())
+        self.progress_field_comboBox.addItems(ecf)
 
     def save_settings(self):
         self._log_location()
