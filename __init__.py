@@ -9,15 +9,16 @@ __docformat__ = 'restructuredtext en'
 from calibre.customize import InterfaceActionBase
 from calibre.utils.config import JSONConfig
 
+
 class MarvinManagerPlugin(InterfaceActionBase):
-    name                = 'Marvin Mangler'
-    description         = 'Support functions for Marvin'
+    name = 'Marvin Mangler'
+    description = 'Support functions for Marvin'
     supported_platforms = ['linux', 'osx', 'windows']
-    author              = 'Greg Riker'
-    version             = (0, 0, 1)
+    author = 'Greg Riker'
+    version = (0, 0, 1)
     minimum_calibre_version = (0, 9, 34)
 
-    actual_plugin       = 'calibre_plugins.marvin_manager.action:MarvinManagerAction'
+    actual_plugin = 'calibre_plugins.marvin_manager.action:MarvinManagerAction'
     prefs = JSONConfig('plugins/Marvin Mangler')
 
     def is_customizable(self):
@@ -47,4 +48,3 @@ if __name__ == '__main__':
     from calibre.gui2.preferences import test_widget
     app = QApplication([])
     test_widget('Advanced', 'Plugins')
-

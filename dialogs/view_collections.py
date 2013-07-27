@@ -8,25 +8,19 @@ __license__ = 'GPL v3'
 __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import os, sqlite3, sys
-from functools import partial
+import os, sys
 
-from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
-from calibre.gui2 import Application
+from calibre.gui2 import error_dialog
 from calibre.gui2.dialogs.device_category_editor import ListWidgetItem
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.utils.icu import sort_key
-from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
-from calibre_plugins.marvin_manager.common_utils import (MyAbstractItemModel,
-    SizePersistedDialog)
+from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (Qt, QAbstractItemModel, QAbstractListModel, QColor,
-                      QDialog, QDialogButtonBox, QIcon, QMimeData,
-                      QModelIndex, QPalette, QPixmap, QSize, QSizePolicy, QVariant,
-                      pyqtSignal, SIGNAL)
+from PyQt4.Qt import (Qt, QDialogButtonBox, QIcon, QPalette,
+                      pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -35,6 +29,7 @@ if True:
     sys.path.remove(dialog_resources_path)
 
 RENAMING_ENABLED = False
+
 
 class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -49,9 +44,9 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.updated_calibre_collections = self._get_calibre_collections()
         self.updated_marvin_collections = self._get_marvin_collections()
         self.results = {
-                        'updated_calibre_collections': self.updated_calibre_collections,
-                        'updated_marvin_collections': self.updated_marvin_collections
-                       }
+            'updated_calibre_collections': self.updated_calibre_collections,
+            'updated_marvin_collections': self.updated_marvin_collections
+        }
 
         super(CollectionsViewerDialog, self).accept()
 
@@ -108,22 +103,22 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
 
         # ~~~~~~~~ Export to Marvin button ~~~~~~~~
         self.export_to_marvin_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
-                                                   'icons',
-                                                   'from_calibre.png')))
+                                               'icons',
+                                               'from_calibre.png')))
         self.export_to_marvin_tb.setToolTip("Export collection assignments to Marvin")
         self.export_to_marvin_tb.clicked.connect(self._export_to_marvin)
 
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
         self.import_from_marvin_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
-                                                   'icons',
-                                                   'from_marvin.png')))
+                                                 'icons',
+                                                 'from_marvin.png')))
         self.import_from_marvin_tb.setToolTip("Import collection assignments from Marvin")
         self.import_from_marvin_tb.clicked.connect(self._import_from_marvin)
 
         # ~~~~~~~~ Merge collections button ~~~~~~~~
         self.merge_collections_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
-                                                          'icons',
-                                                          'sync_collections.png')))
+                                                'icons',
+                                                'sync_collections.png')))
         self.merge_collections_tb.setToolTip("Merge collection assignments")
         self.merge_collections_tb.clicked.connect(self._merge_collections)
 
@@ -142,8 +137,8 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
 
         # ~~~~~~~~ Clear all collections button ~~~~~~~~
         self.remove_all_assignments_tb.setIcon(QIcon(os.path.join(self.opts.resources_path,
-                                                          'icons',
-                                                          'remove_all_collections.png')))
+                                                     'icons',
+                                                     'remove_all_collections.png')))
         self.remove_all_assignments_tb.setToolTip("Remove all collection assignments")
         self.remove_all_assignments_tb.clicked.connect(self._remove_all_assignments)
 
@@ -378,7 +373,6 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         Only one panel can have active selection
         '''
-        self._log_location()
         def _remove_assignments(deletes, list_widget):
             row = list_widget.row(deletes[0])
 
@@ -388,6 +382,8 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
                 row = list_widget.count() - 1
             if row >= 0:
                 list_widget.scrollToItem(list_widget.item(row))
+
+        self._log_location()
 
         if self.calibre_lw.selectedItems():
             deletes = self.calibre_lw.selectedItems()
@@ -453,4 +449,3 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         srs = self.marvin_lw.selectionModel().selectedRows()
         return [sr.row() for sr in srs]
-

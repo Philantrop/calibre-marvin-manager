@@ -8,18 +8,14 @@ __license__ = 'GPL v3'
 __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import os, sqlite3, sys
-from functools import partial
+import sys
 
-from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
-from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
-                      QSize, QSizePolicy,
+from PyQt4.Qt import (QDialogButtonBox, QPalette,
                       pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
@@ -27,6 +23,7 @@ if True:
     sys.path.insert(0, dialog_resources_path)
     from html_viewer_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
+
 
 class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -51,8 +48,6 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
             self._log("AcceptRole")
 
             # User wants to save content
-
-
             self.accept()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
@@ -163,4 +158,3 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
             cls=self.__class__.__name__,
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
-

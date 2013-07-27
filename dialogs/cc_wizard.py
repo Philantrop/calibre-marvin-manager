@@ -8,19 +8,15 @@ __license__ = 'GPL v3'
 __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import os, sqlite3, sys
-from functools import partial
+import sys
 
-from calibre import strftime
 from calibre.devices.usbms.driver import debug_print
-from calibre.gui2 import info_dialog, warning_dialog
-from calibre.library.custom_columns import CustomColumns
+from calibre.gui2 import warning_dialog
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
-from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
-                      QSize, QSizePolicy, QTableWidgetItem,
-                      pyqtSignal)
+from PyQt4.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap,
+                      QSize)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -28,33 +24,34 @@ if True:
     from cc_wizard_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
 
+
 class CustomColumnWizard(QDialog, Ui_Dialog):
     FIELDS = {
-              'Collections': {
-                              'label': 'mm_collections',
-                              'datatype': 'text',
-                              'display': {u'is_names': False},
-                              'is_multiple': True
-                              },
-              'Highlights':  {
-                              'label': 'mm_highlights',
-                              'datatype': 'comments',
-                              'display': {},
-                              'is_multiple': False
-                              },
-              'Last read':   {
-                              'label': 'mm_date_read',
-                              'datatype': 'datetime',
-                              'display': {},
-                              'is_multiple': False
-                             },
-              'Progress':    {
-                              'label': 'mm_progress',
-                              'datatype': 'float',
-                              'display': {u'number_format': u'{0:.0f}%'},
-                              'is_multiple': False
-                              }
-             }
+        'Collections': {
+            'label': 'mm_collections',
+            'datatype': 'text',
+            'display': {u'is_names': False},
+            'is_multiple': True
+        },
+        'Highlights': {
+            'label': 'mm_highlights',
+            'datatype': 'comments',
+            'display': {},
+            'is_multiple': False
+        },
+        'Last read': {
+            'label': 'mm_date_read',
+            'datatype': 'datetime',
+            'display': {},
+            'is_multiple': False
+        },
+        'Progress': {
+            'label': 'mm_progress',
+            'datatype': 'float',
+            'display': {u'number_format': u'{0:.0f}%'},
+            'is_multiple': False
+        }
+    }
 
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
@@ -114,11 +111,11 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
                                      profile['is_multiple'],
                                      display=profile['display'])
         self.modified_column = {
-                                'destination': requested_name,
-                                'label': "#%s" % profile['label'],
-                                'previous': self.previous_name,
-                                'source': profile['source']
-                               }
+            'destination': requested_name,
+            'label': "#%s" % profile['label'],
+            'previous': self.previous_name,
+            'source': profile['source']
+        }
 
     def custom_column_rename(self, requested_name, profile):
         '''
@@ -137,11 +134,11 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
                                                    label=mi['label'],
                                                    display=mi['display'])
                 self.modified_column = {
-                                        'destination': requested_name,
-                                        'label': "#%s" % profile['label'],
-                                        'previous': self.previous_name,
-                                        'source': profile['source']
-                                       }
+                    'destination': requested_name,
+                    'label': "#%s" % profile['label'],
+                    'previous': self.previous_name,
+                    'source': profile['source']
+                }
                 break
 
     def dispatch_button_click(self, button):
@@ -277,4 +274,3 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
             cls=self.__class__.__name__,
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
-

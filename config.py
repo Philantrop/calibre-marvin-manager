@@ -4,20 +4,21 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import cStringIO, importlib, re, os, sys
+import importlib, os, sys
 from functools import partial
 
 from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import show_restart_warning
 from calibre.gui2.ui import get_gui
-from calibre.utils.config import config_dir, JSONConfig
+from calibre.utils.config import JSONConfig
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
-from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFrame, QGridLayout, QGroupBox, QIcon,
+from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QGridLayout, QGroupBox, QIcon,
                       QLabel, QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout, QWidget)
 
 plugin_prefs = JSONConfig('plugins/Marvin Mangler')
+
 
 class ConfigWidget(QWidget):
     '''
@@ -378,7 +379,7 @@ class ConfigWidget(QWidget):
         # If restart needed, inform user
         if self.restart_required:
             do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
-                                               parent=self.gui)
+                                              parent=self.gui)
             if do_restart:
                 self.gui.quit(restart=True)
 
@@ -409,8 +410,8 @@ class ConfigWidget(QWidget):
             arg2 = args[1]
 
         debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))
+                    func=sys._getframe(1).f_code.co_name,
+                    arg1=arg1, arg2=arg2))
 
 
 # For testing ConfigWidget, run from command line:
@@ -422,4 +423,3 @@ if __name__ == '__main__':
     from calibre.gui2.preferences import test_widget
     app = QApplication([])
     test_widget('Advanced', 'Plugins')
-

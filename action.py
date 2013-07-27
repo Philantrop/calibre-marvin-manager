@@ -8,14 +8,13 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import os, sys, threading, time
+import os, sys, threading
 
 from zipfile import ZipFile
 
-from PyQt4.Qt import (pyqtSignal, QApplication, QCursor, QIcon, QMenu,
-                      QTimer, QToolButton, QUrl)
+from PyQt4.Qt import (pyqtSignal, QIcon, QMenu, QTimer, QUrl)
 
-from calibre.constants import DEBUG, isosx, iswindows
+from calibre.constants import DEBUG
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
 from calibre.gui2 import open_url
 from calibre.gui2.actions import InterfaceAction
@@ -34,6 +33,7 @@ import calibre_plugins.marvin_manager.config as cfg
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
 PLUGIN_ICONS = ['images/connected.png', 'images/disconnected.png']
+
 
 class MarvinManagerAction(InterfaceAction):
 
@@ -112,7 +112,7 @@ class MarvinManagerAction(InterfaceAction):
         self.inflate_icon_resources()
 
         # Compile .ui files as needed
-        cui = CompileUI(self)
+        CompileUI(self)
 
     def inflate_dialog_resources(self):
         '''
@@ -138,7 +138,7 @@ class MarvinManagerAction(InterfaceAction):
                 # If the file doesn't exist in the resources dir, add it
                 if not os.path.exists(os.path.dirname(fs)):
                     os.makedirs(os.path.dirname(fs))
-                with open (fs, 'wb') as f:
+                with open(fs, 'wb') as f:
                     f.write(dr[dialog])
             else:
                 # Is the .ui file current?
@@ -147,7 +147,7 @@ class MarvinManagerAction(InterfaceAction):
                     if f.read() != dr[dialog]:
                         update_needed = True
                 if update_needed:
-                    with open (fs, 'wb') as f:
+                    with open(fs, 'wb') as f:
                         f.write(dr[dialog])
 
     def inflate_help_resources(self):
@@ -191,7 +191,7 @@ class MarvinManagerAction(InterfaceAction):
             if not os.path.exists(fs):
                 if not os.path.exists(os.path.dirname(fs)):
                     os.makedirs(os.path.dirname(fs))
-                with open (fs, 'wb') as f:
+                with open(fs, 'wb') as f:
                     f.write(ir[icon])
 
     def init_options(self, disable_caching=False):
@@ -310,7 +310,7 @@ class MarvinManagerAction(InterfaceAction):
                 self.marvin_status_changed)
 
             if (hasattr(self.connected_device, 'ios_reader_app') and
-                self.connected_device.ios_reader_app == 'Marvin'):
+                    self.connected_device.ios_reader_app == 'Marvin'):
                 self.launch_library_scanner()
         else:
             self._log_location("device disconnected")
@@ -343,7 +343,7 @@ class MarvinManagerAction(InterfaceAction):
             # Add menu options for connected Marvin
             if self.connected_device:
                 if (self.connected_device.ios_reader_app == 'Marvin' and
-                    self.connected_device.ios_connection['connected'] is True):
+                        self.connected_device.ios_connection['connected'] is True):
                     self._log("Marvin connected")
                     ac = self.create_menu_item(m, 'Explore Marvin Library', image=I("dialog_information.png"))
                     ac.triggered.connect(self.show_installed_books)
@@ -404,10 +404,10 @@ class MarvinManagerAction(InterfaceAction):
         if self.connected_device.version < self.minimum_ios_driver_version:
             title = "Update required"
             msg = "<p>{0} requires v{1}.{2}.{3} (or later) of the iOS reader applications device driver.</p>".format(
-                    self.name,
-                    self.minimum_ios_driver_version[0],
-                    self.minimum_ios_driver_version[1],
-                    self.minimum_ios_driver_version[2])
+                self.name,
+                self.minimum_ios_driver_version[0],
+                self.minimum_ios_driver_version[1],
+                self.minimum_ios_driver_version[2])
             MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
         else:
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
@@ -450,6 +450,5 @@ class MarvinManagerAction(InterfaceAction):
             arg2 = str(args[1])
 
         debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))
-
+                    func=sys._getframe(1).f_code.co_name,
+                    arg1=arg1, arg2=arg2))

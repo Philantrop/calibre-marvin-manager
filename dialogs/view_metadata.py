@@ -18,7 +18,7 @@ from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
+from PyQt4.Qt import (Qt, QColor, QDialogButtonBox, QIcon, QPalette, QPixmap,
                       QPushButton, QSize, QSizePolicy,
                       pyqtSignal)
 
@@ -27,6 +27,7 @@ if True:
     sys.path.insert(0, dialog_resources_path)
     from view_metadata_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
+
 
 class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
     COVER_ICON_SIZE = 200
@@ -120,8 +121,8 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
 
         # ~~~~~~~~ Import from Marvin button ~~~~~~~~
         self.import_from_marvin_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                   'icons',
-                                                   'from_marvin.png')))
+                                                     'icons',
+                                                     'from_marvin.png')))
         self.import_from_marvin_button.clicked.connect(partial(self.store_command, 'import_metadata'))
         self.import_from_marvin_button.setEnabled(enable_metadata_updates)
 
@@ -264,11 +265,11 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                         pixmap = QPixmap()
                         if with_border:
                             bordered_thumb = add_borders_to_image(marvin_thumb[2],
-                                                              left=self.BORDER_LR,
-                                                              right=self.BORDER_LR,
-                                                              top=self.BORDER_TB,
-                                                              bottom=self.BORDER_TB,
-                                                              border_color=self.BORDER_COLOR)
+                                                                  left=self.BORDER_LR,
+                                                                  right=self.BORDER_LR,
+                                                                  top=self.BORDER_TB,
+                                                                  bottom=self.BORDER_TB,
+                                                                  border_color=self.BORDER_COLOR)
                             pixmap.loadFromData(bordered_thumb)
                         else:
                             pixmap.loadFromData(marvin_thumb[2])

@@ -21,7 +21,7 @@ from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
 from calibre.utils.logging import Log
 """
-import cStringIO, os, re, shutil, sys, tempfile, time
+import cStringIO, os, re
 
 from collections import defaultdict
 from time import sleep
@@ -34,14 +34,13 @@ from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
-from calibre.utils.logging import Log
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
-    QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox, QDoubleSpinBox, QFont, QIcon,
-    QKeySequence, QLabel, QLineEdit, QMenu, QPixmap, QProgressBar, QPlainTextEdit,
-    QRadioButton, QSize, QSizePolicy, QSlider, QSpinBox, QString, QThread, QTimer, QUrl,
-    QVBoxLayout,
-    SIGNAL, pyqtSignal)
+                      QCheckBox, QComboBox, QDial, QDialog, QDoubleSpinBox, QFont, QIcon,
+                      QKeySequence, QLabel, QLineEdit, QPixmap, QProgressBar,
+                      QRadioButton, QSizePolicy, QSlider, QSpinBox, QString, QThread, QTimer, QUrl,
+                      QVBoxLayout,
+                      SIGNAL)
 from PyQt4.QtWebKit import QWebView
 from PyQt4.uic import compileUi
 
@@ -49,15 +48,15 @@ from PyQt4.uic import compileUi
 # multiple set_methods are chained, i.e. the results of the first call are passed to the second
 # Currently a max of two chained CONTROL_SET methods are implemented, explicity for comboBox
 CONTROLS = [
-            (QCheckBox, 'checkBox_controls', 'isChecked', False, 'setChecked'),
-            (QComboBox, 'comboBox_controls', 'currentText', '', ('findText', 'setCurrentIndex')),
-            (QDial, 'dial_controls', 'value', 0, 'setValue'),
-            (QDoubleSpinBox, 'doubleSpinBox_controls', 'value', 0, 'setValue'),
-            (QLineEdit, 'lineEdit_controls', 'text', '', 'setText'),
-            (QRadioButton, 'radioButton_controls', 'isChecked', False, 'setChecked'),
-            (QSlider, 'slider_controls', 'value', 0, 'setValue'),
-            (QSpinBox, 'spinBox_controls', 'value', 0, 'setValue'),
-           ]
+    (QCheckBox, 'checkBox_controls', 'isChecked', False, 'setChecked'),
+    (QComboBox, 'comboBox_controls', 'currentText', '', ('findText', 'setCurrentIndex')),
+    (QDial, 'dial_controls', 'value', 0, 'setValue'),
+    (QDoubleSpinBox, 'doubleSpinBox_controls', 'value', 0, 'setValue'),
+    (QLineEdit, 'lineEdit_controls', 'text', '', 'setText'),
+    (QRadioButton, 'radioButton_controls', 'isChecked', False, 'setChecked'),
+    (QSlider, 'slider_controls', 'value', 0, 'setValue'),
+    (QSpinBox, 'spinBox_controls', 'value', 0, 'setValue'),
+]
 
 CONTROL_CLASSES = [control[0] for control in CONTROLS]
 CONTROL_TYPES = [control[1] for control in CONTROLS]
@@ -70,6 +69,7 @@ plugin_tmpdir = 'calibre_annotations_plugin'
 plugin_icon_resources = {}
 
 '''     Base classes    '''
+
 
 class Book(Metadata):
     '''
@@ -141,6 +141,7 @@ class SizePersistedDialog(QDialog):
 
 '''     Exceptions      '''
 
+
 class AbortRequestException(Exception):
     '''
     '''
@@ -153,6 +154,7 @@ class DeviceNotMountedException(Exception):
 
 
 '''     Dialogs         '''
+
 
 class HelpView(SizePersistedDialog):
     '''
@@ -221,7 +223,7 @@ class MyBlockingBusy(QDialog):
         return QDialog.accept(self)
 
     def reject(self):
-        pass # Cannot cancel this dialog
+        pass  # Cannot cancel this dialog
 
 
 class ProgressBar(QDialog):
@@ -272,6 +274,7 @@ class ProgressBar(QDialog):
 
 
 '''     Threads         '''
+
 
 class IndexLibrary(QThread):
     '''
@@ -328,12 +331,12 @@ class IndexLibrary(QThread):
                 'authors': record[authors].split(','),
                 'id': record[id],
                 'uuid': record[uuid],
-                }
+            }
         return by_title
 
     def index_by_uuid(self):
         authors = self.cdb.FIELD_MAP['authors']
-        formats = self.cdb.FIELD_MAP['formats']
+        #formats = self.cdb.FIELD_MAP['formats']
         id = self.cdb.FIELD_MAP['id']
         title = self.cdb.FIELD_MAP['title']
         uuid = self.cdb.FIELD_MAP['uuid']
@@ -347,7 +350,7 @@ class IndexLibrary(QThread):
                     'id': record[id],
                     'title': record[title],
                     'path': profile['fmt_epub']
-                    }
+                }
         return by_uuid
 
 
@@ -385,6 +388,7 @@ class InventoryCollections(QThread):
                                 self.heatmap[ca] = 1
                             else:
                                 self.heatmap[ca] += 1
+
 
 class RowFlasher(QThread):
     '''
@@ -427,6 +431,7 @@ class RowFlasher(QThread):
 
 '''     Helper Classes  '''
 
+
 class CompileUI():
     '''
     Compile Qt Creator .ui files at runtime
@@ -442,8 +447,9 @@ class CompileUI():
 
     def compile_ui(self):
         pat = re.compile(r'''(['"]):/images/([^'"]+)\1''')
+
         def sub(match):
-            ans = 'I(%s%s%s)'%(match.group(1), match.group(2), match.group(1))
+            ans = 'I(%s%s%s)' % (match.group(1), match.group(2), match.group(1))
             return ans
 
         # >>> Entry point
@@ -456,13 +462,13 @@ class CompileUI():
         for form in self.forms:
             with open(form) as form_file:
                 soup = BeautifulStoneSoup(form_file.read())
-                property = soup.find('property',attrs={'name' : 'windowTitle'})
+                property = soup.find('property', attrs={'name': 'windowTitle'})
                 string = property.find('string')
                 window_title = string.renderContents()
 
             compiled_form = self._form_to_compiled_form(form)
             if (not os.path.exists(compiled_form) or
-                os.stat(form).st_mtime > os.stat(compiled_form).st_mtime):
+                    os.stat(form).st_mtime > os.stat(compiled_form).st_mtime):
 
                 if not os.path.exists(compiled_form):
                     if self.verbose:
@@ -499,6 +505,8 @@ class CompileUI():
 
 
 '''     Helper functions   '''
+
+
 def get_icon(icon_name):
     '''
     Retrieve a QIcon for the named image from the zip file if it exists,
@@ -548,15 +556,6 @@ def get_pixmap(icon_name):
     return None
 
 
-def get_resource_files(path, folder=None):
-    namelist = []
-    with zipfile.ZipFile(path) as zf:
-        namelist = zf.namelist()
-    if folder and folder.endswith('/'):
-        namelist = [item for item in namelist if item.startswith(folder) and item > folder]
-    return namelist
-
-
 def inventory_controls(ui, dump_controls=False):
     '''
      Build an inventory of stateful controls
@@ -585,6 +584,16 @@ def inventory_controls(ui, dump_controls=False):
 
 
 def restore_state(ui, prefs, restore_position=False):
+    def _restore_ui_position(ui, owner):
+        parent_loc = ui.iap.gui.pos()
+        if True:
+            last_x = prefs.get('%s_last_x' % owner, parent_loc.x())
+            last_y = prefs.get('%s_last_y' % owner, parent_loc.y())
+        else:
+            last_x = parent_loc.x()
+            last_y = parent_loc.y()
+        ui.move(last_x, last_y)
+
     if restore_position:
         _restore_ui_position(ui, ui.controls['owner'])
 
@@ -616,18 +625,11 @@ def restore_state(ui, prefs, restore_position=False):
                     print("  maximum of two chained methods")
 
 
-def _restore_ui_position(ui, owner):
-    parent_loc = ui.iap.gui.pos()
-    if True:
-        last_x = prefs.get('%s_last_x' % owner, parent_loc.x())
-        last_y = prefs.get('%s_last_y' % owner, parent_loc.y())
-    else:
-        last_x = parent_loc.x()
-        last_y = parent_loc.y()
-    ui.move(last_x, last_y)
-
-
 def save_state(ui, prefs, save_position=False):
+    def _save_ui_position(ui, owner):
+        prefs.set('%s_last_x' % owner, ui.pos().x())
+        prefs.set('%s_last_y' % owner, ui.pos().y())
+
     if save_position:
         _save_ui_position(ui, ui.controls['owner'])
 
@@ -643,11 +645,6 @@ def save_state(ui, prefs, save_position=False):
             if type(qt_type) is QString:
                 qt_type = unicode(qt_type)
             prefs.set(control, qt_type)
-
-
-def _save_ui_position(ui, owner):
-    prefs.set('%s_last_x' % owner, ui.pos().x())
-    prefs.set('%s_last_y' % owner, ui.pos().y())
 
 
 def set_plugin_icon_resources(name, resources):

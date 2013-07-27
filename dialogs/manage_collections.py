@@ -14,10 +14,10 @@ from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import question_dialog, error_dialog
 from calibre.gui2.dialogs.device_category_editor import DeviceCategoryEditor, ListWidgetItem
 from calibre.gui2.dialogs.device_category_editor_ui import Ui_DeviceCategoryEditor
-from calibre.utils.icu import sort_key
 
 from PyQt4.Qt import (Qt, QDialog, QIcon,
                       pyqtSignal)
+
 
 class MyDeviceCategoryEditor(DeviceCategoryEditor):
     '''
@@ -39,8 +39,7 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
             self.marvin_status_changed)
 
         # Remove help icon on title bar
-        icon = self.windowIcon()
-        self.setWindowFlags(self.windowFlags()&(~Qt.WindowContextHelpButtonHint))
+        self.setWindowFlags(self.windowFlags() & (~Qt.WindowContextHelpButtonHint))
         self.setWindowIcon(QIcon(os.path.join(parent.opts.resources_path,
                                  'icons',
                                  'edit_collections.png')))
@@ -56,7 +55,7 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
         for tag in sorted(merged, key=key):
             item = ListWidgetItem(tag)
             item.setData(Qt.UserRole, tag)
-            item.setFlags (item.flags() | Qt.ItemIsEditable)
+            item.setFlags(item.flags() | Qt.ItemIsEditable)
             self.available_tags.addItem(item)
 
         self.delete_button.clicked.connect(self.delete_tags)
@@ -73,8 +72,8 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
             return
         ct = ', '.join([unicode(item.text()) for item in deletes])
         if not question_dialog(self, 'Are you sure?',
-            '<p>'+'Are you sure you want to delete the following collections?'+'<br>'+ct,
-            show_copy_button=False):
+                               '<p>'+'Are you sure you want to delete the following collections?'+'<br>'+ct,
+                               show_copy_button=False):
             return
         row = self.available_tags.row(deletes[0])
         for item in deletes:
@@ -148,4 +147,3 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
             cls=self.__class__.__name__,
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
-

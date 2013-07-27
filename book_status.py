@@ -14,26 +14,23 @@ from lxml import etree
 from threading import Timer
 from xml.sax.saxutils import escape
 
-from PyQt4 import QtCore, QtGui
+from PyQt4 import QtCore
 from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
-                      QCheckBox, QColor, QCursor, QDialog, QDialogButtonBox, QFont, QIcon,
+                      QColor, QCursor, QDialogButtonBox, QFont, QIcon,
                       QItemSelectionModel, QLabel, QMenu, QModelIndex, QPainter, QPixmap,
-                      QString,
                       QTableView, QTableWidgetItem, QTimer,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
-from PyQt4.QtWebKit import QWebView
 
-from calibre import prints, strftime
-from calibre.constants import cache_dir as _cache_dir, islinux, isosx, iswindows
+from calibre import strftime
+from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.errors import UserFeedback
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.gui2 import Application
 from calibre.gui2.dialogs.message_box import MessageBox
-from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.icu import sort_key
 from calibre.utils.magick.draw import thumbnail
@@ -41,8 +38,8 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, Book, HelpView, InventoryCollections, MyAbstractItemModel,
-    MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog, Struct,
+    AbortRequestException, Book, InventoryCollections,
+    MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
     updateCalibreGUIView)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_Mangler_resources', 'dialogs')
@@ -352,10 +349,10 @@ class SortableImageWidgetItem(QWidget):
         #cvp = self.parent_tv.columnViewportPosition(self.column)
         #painter = QPainter(self.parent_tv.viewport())
         painter = QPainter(self)
-        x_off = 0
-        col_width = self.parent_tv.columnWidth(self.column)
-        if col_width > self.width:
-            x_off = int((col_width - self.width) / 2)
+        #x_off = 0
+        #col_width = self.parent_tv.columnWidth(self.column)
+        #if col_width > self.width:
+        #    x_off = int((col_width - self.width) / 2)
         #print("x_off: %d" % x_off)
         #painter.drawPixmap(x_off, 0, self.picture)
         painter.drawPixmap(event.region().boundingRect(), self.picture)
@@ -497,7 +494,6 @@ class MarkupTableModel(QAbstractTableModel):
                 else:
                     return tip + '<br/>Right-click for more options</p>'
 
-
             elif col in [self.parent.FLAGS_COL]:
                 return tip + "<br/>Right-click for options</p>"
 
@@ -525,7 +521,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def refresh(self, show_match_colors):
         self.show_match_colors = show_match_colors
-        self.dataChanged.emit(self.createIndex(0,0),
+        self.dataChanged.emit(self.createIndex(0, 0),
                               self.createIndex(self.rowCount(0), self.columnCount(0)))
 
     def rowCount(self, parent):
@@ -564,6 +560,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def get_collections(self, row):
         return self.arraydata[row][self.parent.COLLECTIONS_COL]
+
     def set_collections(self, row, value):
         self.arraydata[row][self.parent.COLLECTIONS_COL] = value
         self.parent.repaint()
@@ -573,6 +570,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def get_flags(self, row):
         return self.arraydata[row][self.parent.FLAGS_COL]
+
     def set_flags(self, row, value):
         self.arraydata[row][self.parent.FLAGS_COL] = value
         #self.parent.repaint()
@@ -582,6 +580,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def get_match_quality(self, row):
         return self.arraydata[row][self.parent.MATCHED_COL]
+
     def set_match_quality(self, row, value):
         self.arraydata[row][self.parent.MATCHED_COL] = value
         #self.parent.repaint()
@@ -591,6 +590,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def get_progress(self, row):
         return self.arraydata[row][self.parent.PROGRESS_COL]
+
     def set_progress(self, row, value):
         self.arraydata[row][self.parent.PROGRESS_COL] = value
         #self.parent.repaint()
@@ -606,6 +606,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def get_word_count(self, row):
         return self.arraydata[row][self.parent.WORD_COUNT_COL]
+
     def set_word_count(self, row, value):
         self.arraydata[row][self.parent.WORD_COUNT_COL] = value
         #self.parent.repaint()
@@ -622,10 +623,10 @@ class BookStatusDialog(SizePersistedDialog):
     # Flag constants
     if True:
         FLAGS = {
-                'new': 'NEW',
-                'read': 'READ',
-                'reading_list': 'READING LIST'
-                }
+            'new': 'NEW',
+            'read': 'READ',
+            'reading_list': 'READING LIST'
+        }
 
         # Binary values for flag updates
         NEW_FLAG = 4
@@ -656,25 +657,25 @@ class BookStatusDialog(SizePersistedDialog):
         VOCABULARY_COL = LIBRARY_HEADER.index('Vocabulary')
         WORD_COUNT_COL = LIBRARY_HEADER.index('Word Count')
 
-        HIDDEN_COLUMNS =    [
-                             UUID_COL,
-                             CALIBRE_ID_COL,
-                             BOOK_ID_COL,
-                             PATH_COL,
-                             MATCHED_COL,
-                            ]
-        CENTERED_COLUMNS =  [
-                             ANNOTATIONS_COL,
-                             COLLECTIONS_COL,
-                             DEEP_VIEW_COL,
-                             ARTICLES_COL,
-                             LAST_OPENED_COL,
-                             VOCABULARY_COL,
-                             ]
+        HIDDEN_COLUMNS = [
+            UUID_COL,
+            CALIBRE_ID_COL,
+            BOOK_ID_COL,
+            PATH_COL,
+            MATCHED_COL,
+        ]
+        CENTERED_COLUMNS = [
+            ANNOTATIONS_COL,
+            COLLECTIONS_COL,
+            DEEP_VIEW_COL,
+            ARTICLES_COL,
+            LAST_OPENED_COL,
+            VOCABULARY_COL,
+        ]
         RIGHT_ALIGNED_COLUMNS = [
-                             PROGRESS_COL,
-                             WORD_COUNT_COL
-                             ]
+            PROGRESS_COL,
+            WORD_COUNT_COL
+        ]
 
     # Marvin XML command template
     if True:
@@ -737,7 +738,7 @@ class BookStatusDialog(SizePersistedDialog):
                     title = "View collections"
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
-                           show_copy_button=False).exec_()
+                               show_copy_button=False).exec_()
             elif button.objectName() == 'refresh_custom_columns_button':
                 self.refresh_custom_columns()
             elif button.objectName() == 'view_global_vocabulary_button':
@@ -750,7 +751,7 @@ class BookStatusDialog(SizePersistedDialog):
                     title = "View metadata"
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
-                           show_copy_button=False).exec_()
+                               show_copy_button=False).exec_()
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
             self._delete_books()
@@ -806,10 +807,10 @@ class BookStatusDialog(SizePersistedDialog):
 
             title = "Context menu event"
             msg = ("<p>{0}</p>".format(action) +
-                    "<p>Click <b>Show details</b> for affected books</p>")
+                   "<p>Click <b>Show details</b> for affected books</p>")
 
             MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
-                           show_copy_button=False).exec_()
+                       show_copy_button=False).exec_()
 
     def dispatch_double_click(self, index):
         '''
@@ -818,11 +819,11 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         asset_actions = {
-                        self.ANNOTATIONS_COL: 'show_highlights',
-                        self.ARTICLES_COL: 'show_articles',
-                        self.DEEP_VIEW_COL: 'show_deep_view',
-                        self.VOCABULARY_COL: 'show_vocabulary'
-                        }
+            self.ANNOTATIONS_COL: 'show_highlights',
+            self.ARTICLES_COL: 'show_articles',
+            self.DEEP_VIEW_COL: 'show_deep_view',
+            self.VOCABULARY_COL: 'show_vocabulary'
+        }
 
         column = index.column()
         row = index.row()
@@ -838,7 +839,7 @@ class BookStatusDialog(SizePersistedDialog):
             title = "Flag options"
             msg = "<p>Right-click in the Flags column for flag management options.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                   show_copy_button=False).exec_()
+                       show_copy_button=False).exec_()
         elif column == self.WORD_COUNT_COL:
             self._calculate_word_count()
         else:
@@ -863,7 +864,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.library_uuid_map = None
         self.local_cache_folder = self.parent.connected_device.temp_dir
         self.local_hash_cache = None
-        self.remote_cache_folder = '/'.join(['/Library','calibre.mm'])
+        self.remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
         self.remote_hash_cache = None
         self.show_match_colors = self.prefs.get('show_match_colors', False)
         self.updated_match_quality = None
@@ -915,8 +916,8 @@ class BookStatusDialog(SizePersistedDialog):
             self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
             self.wc_button.setObjectName('calculate_word_count_button')
             self.wc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'word_count.png')))
+                                                      'icons',
+                                                      'word_count.png')))
 
         # Generate DV content
         if False:
@@ -931,24 +932,24 @@ class BookStatusDialog(SizePersistedDialog):
             self.vm_button = self.dialogButtonBox.addButton('View metadata', QDialogButtonBox.ActionRole)
             self.vm_button.setObjectName('view_metadata_button')
             self.vm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'update_metadata.png')))
+                                                      'icons',
+                                                      'update_metadata.png')))
 
         # View collections
         if False:
             self.vc_button = self.dialogButtonBox.addButton('View collection assignments', QDialogButtonBox.ActionRole)
             self.vc_button.setObjectName('view_collections_button')
             self.vc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'update_metadata.png')))
+                                                      'icons',
+                                                      'update_metadata.png')))
 
         # Manage collections
         if True:
             self.mc_button = self.dialogButtonBox.addButton('Manage collections', QDialogButtonBox.ActionRole)
             self.mc_button.setObjectName('manage_collections_button')
             self.mc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'edit_collections.png')))
+                                                      'icons',
+                                                      'edit_collections.png')))
 
         # Refresh custom columns
         if True:
@@ -965,8 +966,8 @@ class BookStatusDialog(SizePersistedDialog):
                 self.refresh_button = self.dialogButtonBox.addButton(button_title, QDialogButtonBox.ActionRole)
                 self.refresh_button.setObjectName('refresh_custom_columns_button')
                 self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'from_marvin.png')))
+                                                               'icons',
+                                                               'from_marvin.png')))
                 tooltip = "Refresh custom columns %s in calibre" % ', '.join(sorted(enabled, key=sort_key))
                 self.refresh_button.setToolTip(tooltip)
 
@@ -1207,9 +1208,8 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 default_content = "<p>No highlights</p>"
             footer = (
-                        '<p>The <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
-                        'Annotations plugin</a> imports highlights and annotations from Marvin.</p>'
-                     )
+                '<p>The <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
+                'Annotations plugin</a> imports highlights and annotations from Marvin.</p>')
 
         elif action == 'show_vocabulary':
             command_name = "command"
@@ -1236,7 +1236,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Copy command file to staging folder
         self._stage_command_file(command_name, update_soup,
-            show_command=self.prefs.get('show_staged_commands', False))
+                                 show_command=self.prefs.get('show_staged_commands', False))
 
         # Wait for completion
         html_response = self._wait_for_command_completion(command_name,
@@ -1247,12 +1247,11 @@ class BookStatusDialog(SizePersistedDialog):
             content = default_content
 
         content_dict = {
-                        'footer': footer,
-                        'group_box_title': group_box_title,
-                        'header': header,
-                        'html_content': content,
-                        'title': title
-                       }
+            'footer': footer,
+            'group_box_title': group_box_title,
+            'header': header,
+            'html_content': content,
+            'title': title}
 
         klass = os.path.join(dialog_resources_path, 'html_viewer.py')
         if os.path.exists(klass):
@@ -1364,7 +1363,7 @@ class BookStatusDialog(SizePersistedDialog):
             title = "Manage collections"
             msg = "<p>No collections to manage.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                   show_copy_button=False).exec_()
+                       show_copy_button=False).exec_()
 
     def show_view_collections_dialog(self, row):
         '''
@@ -1405,7 +1404,7 @@ class BookStatusDialog(SizePersistedDialog):
                     updated_marvin_collections = dlg.results['updated_marvin_collections']
 
                     if (original_calibre_collections == updated_calibre_collections and
-                        original_marvin_collections == updated_marvin_collections):
+                            original_marvin_collections == updated_marvin_collections):
                         self._log("no collection changes detected")
                     else:
                         if updated_calibre_collections != original_calibre_collections:
@@ -1472,13 +1471,13 @@ class BookStatusDialog(SizePersistedDialog):
             self.tv.sortByColumn(self.LIBRARY_HEADER.index('Match Quality'), Qt.DescendingOrder)
             self.capture_sort_column(self.LIBRARY_HEADER.index('Match Quality'))
             self.show_match_colors_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'matches_hide.png')))
+                                                                     'icons',
+                                                                     'matches_hide.png')))
         else:
             self.show_match_colors_button.setText("Show Matches")
             self.show_match_colors_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'matches_show.png')))
+                                                                     'icons',
+                                                                     'matches_show.png')))
         self.tv.setAlternatingRowColors(not self.show_match_colors)
         self.tm.refresh(self.show_match_colors)
 
@@ -1497,7 +1496,7 @@ class BookStatusDialog(SizePersistedDialog):
                     # Get the current value from the lookup field
                     db = self.opts.gui.current_db
                     mi = db.get_metadata(cid, index_is_id=True)
-                    old_date = mi.get_user_metadata(lookup, False)['#value#']
+                    #old_date = mi.get_user_metadata(lookup, False)['#value#']
                     #self._log("Updating old date_read value: %s" % repr(old_date))
 
                     # Build a new datetime object from Last read
@@ -1575,7 +1574,7 @@ class BookStatusDialog(SizePersistedDialog):
             book_tag['series'] = escape(book.series)
         book_tag['seriesindex'] = ''
         if book.series_index:
-           book_tag['seriesindex'] = book.series_index
+            book_tag['seriesindex'] = book.series_index
         book_tag['title'] = escape(book.title)
         book_tag['titlesort'] = escape(book.title_sort)
         book_tag['uuid'] = book.uuid
@@ -1651,7 +1650,7 @@ class BookStatusDialog(SizePersistedDialog):
 
             body = RE_HTML_BODY.findall(data)
             if body:
-                return RE_STRIP_MARKUP.sub('', body[0]).replace('.','. ')
+                return RE_STRIP_MARKUP.sub('', body[0]).replace('.', '. ')
             return ''
 
         self._log_location()
@@ -1724,17 +1723,17 @@ class BookStatusDialog(SizePersistedDialog):
                 update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
                     command_element, time.mktime(time.localtime())))
                 book_tag = Tag(update_soup, 'book')
-                book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
 
-                book_tag['wordcount'] =  wordcount.words
+                book_tag['wordcount'] = wordcount.words
                 update_soup.manifest.insert(0, book_tag)
 
                 # Copy command file to staging folder
                 self._stage_command_file(command_name, update_soup,
-                    show_command=self.prefs.get('show_staged_commands', False))
+                                         show_command=self.prefs.get('show_staged_commands', False))
 
                 # Wait for completion
                 self._wait_for_command_completion(command_name, update_local_db=True)
@@ -1752,17 +1751,17 @@ class BookStatusDialog(SizePersistedDialog):
                 msg = ("<p>Calculated word count for {0} books.</p>".format(total_books) +
                        "<p>Click <b>Show details</b> for a summary.</p>")
                 dl = ["%s: %s" % (stat, locale.format("%d", stats[stat], grouping=True))
-                       for stat in stats]
+                      for stat in stats]
                 details = '\n'.join(dl)
                 MessageBox(MessageBox.INFO, title, msg, det_msg=details,
-                               show_copy_button=False).exec_()
+                           show_copy_button=False).exec_()
         else:
             self._log("No selected books")
             # Display a summary
             title = "Word count"
             msg = ("<p>Select one or more books to calculate word count.</p>")
             MessageBox(MessageBox.INFO, title, msg,
-                           show_copy_button=False).exec_()
+                       show_copy_button=False).exec_()
 
     def _clear_flags(self, action):
         '''
@@ -1814,9 +1813,9 @@ class BookStatusDialog(SizePersistedDialog):
                 flagbits = 0
                 basename = "flags0.png"
                 new_flags_widget = SortableImageWidgetItem(self,
-                                                       os.path.join(self.parent.opts.resources_path,
-                                                         'icons', basename),
-                                                       flagbits, self.FLAGS_COL)
+                                                           os.path.join(self.parent.opts.resources_path,
+                                                           'icons', basename),
+                                                           flagbits, self.FLAGS_COL)
                 # Update self.installed_books flags list
                 flags = []
                 self.installed_books[book_id].flags = flags
@@ -1838,9 +1837,9 @@ class BookStatusDialog(SizePersistedDialog):
                 flagbits = flagbits ^ mask
                 basename = "flags%d.png" % flagbits
                 new_flags_widget = SortableImageWidgetItem(self,
-                                                       os.path.join(self.parent.opts.resources_path,
-                                                         'icons', basename),
-                                                       flagbits, self.FLAGS_COL)
+                                                           os.path.join(self.parent.opts.resources_path,
+                                                           'icons', basename),
+                                                           flagbits, self.FLAGS_COL)
                 # Update self.installed_books flags list
                 self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
@@ -1886,7 +1885,7 @@ class BookStatusDialog(SizePersistedDialog):
             for item in manifest.iterchildren():
                 #self._log(etree.tostring(item, pretty_print=True))
                 mt = item.get('media-type')
-                if item.get('media-type') in ['application/xhtml+xml', 'text/css']:
+                if mt in ['application/xhtml+xml', 'text/css']:
                     text_hrefs.append(item.get('href').split('/')[-1])
             zf.close()
         except:
@@ -1972,17 +1971,17 @@ class BookStatusDialog(SizePersistedDialog):
 
             if self.opts.prefs.get('development_mode', False):
                 self._log("%s uuid: %s matches: %s on_device: %s hash: %s" %
-                            (book_data.title,
-                             repr(book_data.uuid),
-                             repr(book_data.matches),
-                             repr(book_data.on_device),
-                             repr(book_data.hash)))
+                          (book_data.title,
+                           repr(book_data.uuid),
+                           repr(book_data.matches),
+                           repr(book_data.on_device),
+                           repr(book_data.hash)))
                 self._log("metadata_mismatches: %s" % repr(book_data.metadata_mismatches))
             match_quality = self.WHITE
 
             if (book_data.uuid > '' and
-                [book_data.uuid] == book_data.matches and
-                not book_data.metadata_mismatches):
+                    [book_data.uuid] == book_data.matches and
+                    not book_data.metadata_mismatches):
                 # GREEN: Hard match - uuid match, metadata match
                 match_quality = self.GREEN
 
@@ -2053,8 +2052,7 @@ class BookStatusDialog(SizePersistedDialog):
                 article_count if article_count else '',
                 self.CHECKMARK if book_data.deep_view_prepared else '',
                 len(book_data.vocabulary) if len(book_data.vocabulary) else '',
-                match_quality
-                ]
+                match_quality]
             tabledata.append(this_book)
         return tabledata
 
@@ -2136,7 +2134,7 @@ class BookStatusDialog(SizePersistedDialog):
         if books_to_delete:
             ''' Under the skirts approach '''
             title = "Delete %s" % ("%d books?" % len(books_to_delete)
-                                    if len(books_to_delete) > 1 else "1 book?")
+                                   if len(books_to_delete) > 1 else "1 book?")
             msg = ("<p>Click <b>Show details</b> for a list of books that will be deleted " +
                    "from your Marvin library.</p>" +
                    '<p><b><font style="color:#FF0000; ">{0}</font></b></p>'.format(title))
@@ -2190,7 +2188,7 @@ class BookStatusDialog(SizePersistedDialog):
                     else:
                         # The book is not in booklists, how/when removed?
                         self.parent.connected_device.remove_books_from_metadata(paths_to_delete,
-                            self.parent.gui.booklists())
+                                                                                self.parent.gui.booklists())
 
                     # Update the visible Device model
                     model.paths_deleted(paths_to_delete)
@@ -2221,8 +2219,8 @@ class BookStatusDialog(SizePersistedDialog):
                                 old = self.tm.get_match_quality(row)
                                 self.tm.set_match_quality(row, new)
                                 self.updated_match_quality[row] = {'book_id': book_id,
-                                                                       'old': old,
-                                                                       'new': new}
+                                                                   'old': old,
+                                                                   'new': new}
 
                 # Launch row flasher
                 self._flash_affected_rows()
@@ -2235,7 +2233,7 @@ class BookStatusDialog(SizePersistedDialog):
             title = "No selected books"
             msg = "<p>Select one or more books to delete.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                   show_copy_button=False).exec_()
+                       show_copy_button=False).exec_()
 
     def _fetch_annotations(self):
         '''
@@ -2289,7 +2287,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                         # Copy command file to staging folder
                         self._stage_command_file(command_name, update_soup,
-                            show_command=self.prefs.get('show_staged_commands', False))
+                                                 show_command=self.prefs.get('show_staged_commands', False))
 
                         # Wait for completion
                         html_response = self._wait_for_command_completion(command_name,
@@ -2302,7 +2300,7 @@ class BookStatusDialog(SizePersistedDialog):
                         # Get the current value from the lookup field
                         db = self.opts.gui.current_db
                         mi = db.get_metadata(cid, index_is_id=True)
-                        old_value = mi.get_user_metadata(lookup, False)['#value#']
+                        #old_value = mi.get_user_metadata(lookup, False)['#value#']
                         #self._log("Updating old value: %s" % repr(old_value))
 
                         um = mi.metadata_for_field(lookup)
@@ -2501,11 +2499,11 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         if (book_data.calibre_collections is None and
-            book_data.device_collections == []):
+                book_data.device_collections == []):
             base_name = 'collections_empty.png'
             sort_value = 0
         elif (book_data.calibre_collections is None and
-            book_data.device_collections > []):
+                book_data.device_collections > []):
             base_name = 'collections_info.png'
             sort_value = 0
         elif (book_data.device_collections == [] and
@@ -2541,7 +2539,7 @@ class BookStatusDialog(SizePersistedDialog):
             for row in sorted(selected_books.keys(), reverse=True):
                 book_id = selected_books[row]['book_id']
                 book_tag = Tag(update_soup, 'book')
-                book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
@@ -2550,7 +2548,7 @@ class BookStatusDialog(SizePersistedDialog):
 
             # Copy command file to staging folder
             self._stage_command_file(command_name, update_soup,
-                show_command=self.prefs.get('show_staged_commands', False))
+                                     show_command=self.prefs.get('show_staged_commands', False))
 
             # Wait for completion
             self._wait_for_command_completion(command_name, update_local_db=True)
@@ -2571,7 +2569,7 @@ class BookStatusDialog(SizePersistedDialog):
         hash_map = {}
         for book_id in installed_books:
             hash = installed_books[book_id].hash
-            title = installed_books[book_id].title
+            #title = installed_books[book_id].title
 #             self._log("%s: %s" % (title, hash))
             if hash in hash_map:
                 hash_map[hash].append(book_id)
@@ -2594,7 +2592,7 @@ class BookStatusDialog(SizePersistedDialog):
         percent_read = ''
         if self.opts.prefs.get('show_progress_as_percentage', False):
             pct_progress = book_data.progress
-            if  'NEW' in book.data.flags:
+            if 'NEW' in book_data.flags:
                 percent_read = ''
                 pct_progress = None
             elif 'READ' in book_data.flags:
@@ -2639,10 +2637,10 @@ class BookStatusDialog(SizePersistedDialog):
                 base_name = "progress100.png"
 
             progress = SortableImageWidgetItem(self,
-                                        os.path.join(self.parent.opts.resources_path,
-                                                     'icons', base_name),
-                                        pct_progress,
-                                        self.PROGRESS_COL)
+                                               os.path.join(self.parent.opts.resources_path,
+                                               'icons', base_name),
+                                               pct_progress,
+                                               self.PROGRESS_COL)
         return progress
 
     def _get_calibre_collections(self, cid):
@@ -2838,7 +2836,7 @@ class BookStatusDialog(SizePersistedDialog):
                 ach = self.archived_cover_hashes.get(str(this_book.cid), {})
                 cover_last_modified = self.opts.gui.current_db.cover_last_modified(this_book.cid, index_is_id=True)
                 if ('cover_last_modified' in ach and
-                    ach['cover_last_modified'] == cover_last_modified):
+                        ach['cover_last_modified'] == cover_last_modified):
                     return ach['cover_hash']
 
                 # Generate calibre cover hash (same process used by driver when sending books)
@@ -2851,7 +2849,8 @@ class BookStatusDialog(SizePersistedDialog):
                     cover_hash = hashlib.md5(sized_thumb[2]).hexdigest()
                     cover_last_modified = self.opts.gui.current_db.cover_last_modified(this_book.cid, index_is_id=True)
                     self.archived_cover_hashes.set(str(this_book.cid),
-                        {'cover_hash': cover_hash, 'cover_last_modified': cover_last_modified})
+                                                   {'cover_hash': cover_hash,
+                                                    'cover_last_modified': cover_last_modified})
                 except:
                     self._log("error calculating cover_hash for cid %d (%s)" % (this_book.cid, this_book.title))
                 return cover_hash
@@ -2872,7 +2871,7 @@ class BookStatusDialog(SizePersistedDialog):
                 # ~~~~~~~~ cover_hash ~~~~~~~~
                 cover_hash = _get_cover_hash(mi, this_book)
                 if cover_hash != row[b'CalibreCoverHash']:
-                    mismatches['cover_hash'] = {'calibre':cover_hash,
+                    mismatches['cover_hash'] = {'calibre': cover_hash,
                                                 'Marvin': row[b'CalibreCoverHash']}
 
                 # ~~~~~~~~ pubdate ~~~~~~~~
@@ -2935,7 +2934,6 @@ class BookStatusDialog(SizePersistedDialog):
                 if mi.uuid != row[b'UUID']:
                     mismatches['uuid'] = {'calibre': mi.uuid,
                                           'Marvin': row[b'UUID']}
-
 
             else:
                 #self._log("(no calibre metadata for %s)" % row[b'Title'])
@@ -3124,7 +3122,7 @@ class BookStatusDialog(SizePersistedDialog):
         update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
             command_element, time.mktime(time.localtime())))
         book_tag = Tag(update_soup, 'book')
-        book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+        book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
         book_tag['filename'] = self.installed_books[book_id].path
         book_tag['title'] = self.installed_books[book_id].title
         book_tag['uuid'] = self.installed_books[book_id].uuid
@@ -3144,7 +3142,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Copy command file to staging folder
         self._stage_command_file(command_name, update_soup,
-            show_command=self.prefs.get('show_staged_commands', False))
+                                 show_command=self.prefs.get('show_staged_commands', False))
 
         # Wait for completion
         self._wait_for_command_completion(command_name, update_local_db=True)
@@ -3231,8 +3229,8 @@ class BookStatusDialog(SizePersistedDialog):
             arg2 = str(args[1])
 
         debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))
+                    func=sys._getframe(1).f_code.co_name,
+                    arg1=arg1, arg2=arg2))
 
     def _purge_cached_orphans(self, cached_books):
         '''
@@ -3371,19 +3369,18 @@ class BookStatusDialog(SizePersistedDialog):
             title = str(self.tm.get_title(row).text())
             uuid = self.tm.get_uuid(row)
             selected_books[row] = {
-                                   'author': author,
-                                   'book_id': book_id,
-                                   'cid': cid,
-                                   'has_annotations': has_annotations,
-                                   'has_articles': has_articles,
-                                   'has_dv_content': has_dv_content,
-                                   'has_vocabulary': has_vocabulary,
-                                   'last_opened': last_opened,
-                                   'path': path,
-                                   'progress': progress,
-                                   'title': title,
-                                   'uuid': uuid
-                                  }
+                'author': author,
+                'book_id': book_id,
+                'cid': cid,
+                'has_annotations': has_annotations,
+                'has_articles': has_articles,
+                'has_dv_content': has_dv_content,
+                'has_vocabulary': has_vocabulary,
+                'last_opened': last_opened,
+                'path': path,
+                'progress': progress,
+                'title': title,
+                'uuid': uuid}
 
         return selected_books
 
@@ -3452,9 +3449,9 @@ class BookStatusDialog(SizePersistedDialog):
                 flagbits = flagbits & inhibit
                 basename = "flags%d.png" % flagbits
                 new_flags_widget = SortableImageWidgetItem(self,
-                                                       os.path.join(self.parent.opts.resources_path,
-                                                         'icons', basename),
-                                                       flagbits, self.FLAGS_COL)
+                                                           os.path.join(self.parent.opts.resources_path,
+                                                           'icons', basename),
+                                                           flagbits, self.FLAGS_COL)
                 # Update the spreadsheet
                 self.tm.set_flags(row, new_flags_widget)
 
@@ -3599,7 +3596,7 @@ class BookStatusDialog(SizePersistedDialog):
                     update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
                         command_element, time.mktime(time.localtime())))
                     book_tag = Tag(update_soup, 'book')
-                    book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                    book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                     book_tag['filename'] = self.installed_books[book_id].path
                     book_tag['title'] = self.installed_books[book_id].title
                     book_tag['uuid'] = mismatches[key]['Marvin']
@@ -3614,7 +3611,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                     # Copy command file to staging folder
                     self._stage_command_file(command_name, update_soup,
-                        show_command=self.prefs.get('show_staged_commands', False))
+                                             show_command=self.prefs.get('show_staged_commands', False))
 
                     # Wait for completion
                     self._wait_for_command_completion(command_name, update_local_db=True)
@@ -3671,17 +3668,17 @@ class BookStatusDialog(SizePersistedDialog):
                 update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
                     command_element, time.mktime(time.localtime())))
                 book_tag = Tag(update_soup, 'book')
-                book_tag['author'] =  escape(', '.join(self.installed_books[book_id].authors))
+                book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = mismatches[key]['Marvin']
 
-                book_tag['newuuid'] =  mismatches[key]['calibre']
+                book_tag['newuuid'] = mismatches[key]['calibre']
                 update_soup.manifest.insert(0, book_tag)
 
                 # Copy command file to staging folder
                 self._stage_command_file(command_name, update_soup,
-                    show_command=self.prefs.get('show_staged_commands', False))
+                                         show_command=self.prefs.get('show_staged_commands', False))
 
                 # Wait for completion
                 self._wait_for_command_completion(command_name, update_local_db=True)
@@ -3757,7 +3754,7 @@ class BookStatusDialog(SizePersistedDialog):
                 title = "Update collections"
                 msg = ("<p>{0}: not implemented</p>".format(action))
                 MessageBox(MessageBox.INFO, title, msg,
-                               show_copy_button=False).exec_()
+                           show_copy_button=False).exec_()
 
     def _update_device_flags(self, book_id, path, updated_flags):
         '''
@@ -3787,7 +3784,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         if action in ['clear_new_flag', 'clear_reading_list_flag',
-                        'clear_read_flag', 'clear_all_flags']:
+                      'clear_read_flag', 'clear_all_flags']:
             self._clear_flags(action)
 
         elif action in ['set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
@@ -3798,7 +3795,7 @@ class BookStatusDialog(SizePersistedDialog):
             title = "Update flags"
             msg = ("<p>{0}: not implemented</p>".format(action))
             MessageBox(MessageBox.INFO, title, msg,
-                           show_copy_button=False).exec_()
+                       show_copy_button=False).exec_()
 
     def _update_global_collections(self, details):
         '''
@@ -3950,7 +3947,7 @@ class BookStatusDialog(SizePersistedDialog):
 
             # Copy command file to staging folder
             self._stage_command_file(command_name, update_soup,
-                show_command=self.prefs.get('show_staged_commands', False))
+                                     show_command=self.prefs.get('show_staged_commands', False))
 
             # Wait for completion
             self._wait_for_command_completion(command_name, update_local_db=True)
@@ -4005,7 +4002,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Copy the command file to the staging folder
         self._stage_command_file("update_metadata", update_soup,
-            show_command=self.prefs.get('show_staged_commands', False))
+                                 show_command=self.prefs.get('show_staged_commands', False))
 
         # Show partial progress
         pb.increment()
@@ -4206,8 +4203,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         if self.prefs.get('execute_marvin_commands', True):
             self._log("%s: waiting for '%s'" %
-                                         (datetime.now().strftime('%H:%M:%S.%f'),
-                                         self.parent.connected_device.status_fs))
+                      (datetime.now().strftime('%H:%M:%S.%f'),
+                      self.parent.connected_device.status_fs))
 
             # Set initial watchdog timer for ACK
             WATCHDOG_TIMEOUT = 10.0
@@ -4221,15 +4218,15 @@ class BookStatusDialog(SizePersistedDialog):
                     if self.operation_timed_out:
                         self.ios.remove(self.parent.connected_device.status_fs)
                         raise UserFeedback("Marvin operation timed out.",
-                                            details=None, level=UserFeedback.WARN)
+                                           details=None, level=UserFeedback.WARN)
                     time.sleep(0.10)
 
                 else:
                     watchdog.cancel()
 
                     self._log("%s: monitoring progress of %s" %
-                                         (datetime.now().strftime('%H:%M:%S.%f'),
-                                          command_name))
+                              (datetime.now().strftime('%H:%M:%S.%f'),
+                              command_name))
 
                     # Start a new watchdog timer per iteration
                     watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
@@ -4243,7 +4240,7 @@ class BookStatusDialog(SizePersistedDialog):
                             if self.operation_timed_out:
                                 self.ios.remove(self.parent.connected_device.status_fs)
                                 raise UserFeedback("Marvin operation timed out.",
-                                                    details=None, level=UserFeedback.WARN)
+                                                   details=None, level=UserFeedback.WARN)
 
                             status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                             code = status.get('code')
@@ -4253,9 +4250,9 @@ class BookStatusDialog(SizePersistedDialog):
                                 d = datetime.now()
                                 progress = float(status.find('progress').text)
                                 self._log("{0}: {1:>2} {2:>3}%".format(
-                                                     d.strftime('%H:%M:%S.%f'),
-                                                     code,
-                                                     "%3.0f" % (progress * 100)))
+                                          d.strftime('%H:%M:%S.%f'),
+                                          code,
+                                          "%3.0f" % (progress * 100)))
                                 """
                                 # Report progress
                                 if self.report_progress is not None:
@@ -4278,7 +4275,7 @@ class BookStatusDialog(SizePersistedDialog):
                     final_code = status.get('code')
                     if final_code != '0':
                         if final_code == '-1':
-                            final_status= "in progress"
+                            final_status = "in progress"
                         elif final_code == '1':
                             final_status = "warnings"
                         elif final_code == '2':
@@ -4292,7 +4289,7 @@ class BookStatusDialog(SizePersistedDialog):
                         details += '\n'.join(msgs)
                         self._log(details)
                         raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
-                                            % (final_status),
+                                           % (final_status),
                                            details=details, level=UserFeedback.WARN)
 
                     # Get the response file from the staging folder
@@ -4307,8 +4304,8 @@ class BookStatusDialog(SizePersistedDialog):
                     self.ios.remove(self.parent.connected_device.status_fs)
 
                     self._log("%s: '%s' complete" %
-                                         (datetime.now().strftime('%H:%M:%S.%f'),
-                                          command_name))
+                              (datetime.now().strftime('%H:%M:%S.%f'),
+                              command_name))
                     break
 
             # Update local copy of Marvin db
@@ -4326,4 +4323,3 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
         self.operation_timed_out = True
-
