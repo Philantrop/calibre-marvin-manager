@@ -27,6 +27,34 @@ class ConfigWidget(QWidget):
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
+    WIZARD_PROFILES = {
+        'Collections': {
+            'label': 'mm_collections',
+            'datatype': 'text',
+            'display': {u'is_names': False},
+            'is_multiple': True
+        },
+        'Highlights': {
+            'label': 'mm_highlights',
+            'datatype': 'comments',
+            'display': {},
+            'is_multiple': False
+        },
+        'Last read': {
+            'label': 'mm_date_read',
+            'datatype': 'datetime',
+            'display': {},
+            'is_multiple': False
+        },
+        'Progress': {
+            'label': 'mm_progress',
+            'datatype': 'float',
+            'display': {u'number_format': u'{0:.0f}%'},
+            'is_multiple': False
+        }
+    }
+
+
     def __init__(self, plugin_action):
         self.gui = get_gui()
         self.icon = plugin_action.icon
@@ -209,13 +237,33 @@ class ConfigWidget(QWidget):
     def launch_cc_wizard(self, column_type):
         '''
         '''
+        def _update_combo_box(comboBox, destination, previous):
+            '''
+            '''
+            cb = getattr(self, comboBox)
+
+            all_items = [str(cb.itemText(i))
+                         for i in range(cb.count())]
+            if previous and previous in all_items:
+                all_items.remove(previous)
+            all_items.append(destination)
+
+            cb.clear()
+            cb.addItems(sorted(all_items, key=lambda s: s.lower()))
+            idx = cb.findText(destination)
+            if idx > -1:
+                cb.setCurrentIndex(idx)
+
         klass = os.path.join(dialog_resources_path, 'cc_wizard.py')
         if os.path.exists(klass):
             #self._log("importing CC Wizard dialog from '%s'" % klass)
             sys.path.insert(0, dialog_resources_path)
             this_dc = importlib.import_module('cc_wizard')
             sys.path.remove(dialog_resources_path)
-            dlg = this_dc.CustomColumnWizard(self, column_type, verbose=True)
+            dlg = this_dc.CustomColumnWizard(self,
+                                             column_type,
+                                             self.WIZARD_PROFILES[column_type],
+                                             verbose=True)
             dlg.exec_()
 
             if dlg.modified_column:
@@ -229,17 +277,7 @@ class ConfigWidget(QWidget):
                 source = dlg.modified_column['source']
 
                 if source == 'Collections':
-                    all_items = [str(self.collection_field_comboBox.itemText(i))
-                                 for i in range(self.collection_field_comboBox.count())]
-                    if previous and previous in all_items:
-                        all_items.remove(previous)
-                    all_items.append(destination)
-
-                    self.collection_field_comboBox.clear()
-                    self.collection_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
-                    idx = self.collection_field_comboBox.findText(destination)
-                    if idx > -1:
-                        self.collection_field_comboBox.setCurrentIndex(idx)
+                    _update_combo_box("collection_field_comboBox", destination, previous)
 
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_collection_fields[destination] = label
@@ -249,17 +287,7 @@ class ConfigWidget(QWidget):
                     self.prefs.set('collection_field_lookup', label)
 
                 elif source == 'Last read':
-                    all_items = [str(self.date_read_field_comboBox.itemText(i))
-                                 for i in range(self.date_read_field_comboBox.count())]
-                    if previous and previous in all_items:
-                        all_items.remove(previous)
-                    all_items.append(destination)
-
-                    self.date_read_field_comboBox.clear()
-                    self.date_read_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
-                    idx = self.date_read_field_comboBox.findText(destination)
-                    if idx > -1:
-                        self.date_read_field_comboBox.setCurrentIndex(idx)
+                    _update_combo_box("date_read_field_comboBox", destination, previous)
 
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_date_read_fields[destination] = label
@@ -269,17 +297,7 @@ class ConfigWidget(QWidget):
                     self.prefs.set('date_read_field_lookup', label)
 
                 elif source == "Highlights":
-                    all_items = [str(self.annotations_field_comboBox.itemText(i))
-                                 for i in range(self.annotations_field_comboBox.count())]
-                    if previous and previous in all_items:
-                        all_items.remove(previous)
-                    all_items.append(destination)
-
-                    self.annotations_field_comboBox.clear()
-                    self.annotations_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
-                    idx = self.annotations_field_comboBox.findText(destination)
-                    if idx > -1:
-                        self.annotations_field_comboBox.setCurrentIndex(idx)
+                    _update_combo_box("annotations_field_comboBox", destination, previous)
 
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_annotations_fields[destination] = label
@@ -289,17 +307,7 @@ class ConfigWidget(QWidget):
                     self.prefs.set('annotations_field_lookup', label)
 
                 elif source == "Progress":
-                    all_items = [str(self.progress_field_comboBox.itemText(i))
-                                 for i in range(self.progress_field_comboBox.count())]
-                    if previous and previous in all_items:
-                        all_items.remove(previous)
-                    all_items.append(destination)
-
-                    self.progress_field_comboBox.clear()
-                    self.progress_field_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
-                    idx = self.progress_field_comboBox.findText(destination)
-                    if idx > -1:
-                        self.progress_field_comboBox.setCurrentIndex(idx)
+                    _update_combo_box("aprogress_field_comboBox", destination, previous)
 
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_progress_fields[destination] = label

@@ -8,14 +8,14 @@ __license__ = 'GPL v3'
 __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import sys
+import os, sys
 
 from calibre.devices.usbms.driver import debug_print
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (QDialogButtonBox, QPalette,
+from PyQt4.Qt import (QDialogButtonBox, QIcon, QPalette,
                       pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
@@ -45,15 +45,18 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         self._log_location()
         if self.bb.buttonRole(button) == QDialogButtonBox.AcceptRole:
+            # Save content
             self._log("AcceptRole")
-
-            # User wants to save content
             self.accept()
 
-        elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
-            # User cancelled
-            self._log("RejectRole")
+        elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
+            # Refresh custom column
+            self._log("Action role")
+            self.refresh_custom_column()
 
+        elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
+            # Cancelled
+            self._log("RejectRole")
             self.close()
 
     def esc(self, *args):
@@ -103,6 +106,15 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         else:
             self.footer.setVisible(False)
 
+        # Add Refresh button if enabled
+        if content['refresh']:
+            self.refresh_method = content['refresh']['method']
+            self.refresh_button = self.bb.addButton("Refresh '%s'" % content['refresh']['name'],
+                                                    self.bb.ActionRole)
+            self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                              'icons',
+                                              'from_marvin.png')))
+
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)
 
@@ -120,6 +132,16 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         if command in ['disconnected', 'yanked']:
             self._log("closing dialog: %s" % command)
             self.close()
+
+    def refresh_custom_column(self):
+        '''
+        '''
+
+        func = getattr(self.parent, self.refresh_method, None)
+        if func is not None:
+            func()
+        else:
+            self._log_location("ERROR: Can't execute '%s'" % self.refresh_method)
 
     def store_command(self, command):
         '''

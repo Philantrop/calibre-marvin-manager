@@ -7,7 +7,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import base64, hashlib, importlib, locale, operator, os, re, sqlite3, sys, time
+import base64, hashlib, importlib, inspect, locale, operator, os, re, sqlite3, sys, time
 from datetime import datetime
 from functools import partial
 from lxml import etree
@@ -177,7 +177,7 @@ class MyTableView(QTableView):
             if len(selected_books) > 1 or no_dv_content:
                 ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View names with annotations")
+            ac = menu.addAction("Deep View names with notes and flags first")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                          "show_deep_view_by_annotations", row))
@@ -726,10 +726,10 @@ class BookStatusDialog(SizePersistedDialog):
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.ActionRole:
             if button.objectName() == 'match_colors_button':
                 self.toggle_match_colors()
-#             elif button.objectName() == 'calculate_word_count_button':
-#                 self._calculate_word_count()
+
             elif button.objectName() == 'manage_collections_button':
                 self.show_manage_collections_dialog()
+
             elif button.objectName() == 'view_collections_button':
                 selected_rows = self._selected_rows()
                 if selected_rows:
@@ -739,10 +739,13 @@ class BookStatusDialog(SizePersistedDialog):
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
                                show_copy_button=False).exec_()
+
             elif button.objectName() == 'refresh_custom_columns_button':
                 self.refresh_custom_columns()
+
             elif button.objectName() == 'view_global_vocabulary_button':
                 self.show_assets_dialog('show_global_vocabulary', 0)
+
             elif button.objectName() == 'view_metadata_button':
                 selected_rows = self._selected_rows()
                 if selected_rows:
@@ -773,32 +776,32 @@ class BookStatusDialog(SizePersistedDialog):
             self._apply_progress()
         elif action == 'calculate_word_count':
             self._calculate_word_count()
+        elif action in ['clear_all_collections', 'export_collections',
+                        'import_collections', 'synchronize_collections']:
+            self._update_collections(action)
         elif action in ['clear_new_flag', 'clear_reading_list_flag',
                         'clear_read_flag', 'clear_all_flags',
                         'set_new_flag', 'set_reading_list_flag', 'set_read_flag']:
             self._update_flags(action)
+        elif action in ['export_metadata', 'import_metadata']:
+            self._update_metadata(action)
         elif action == 'fetch_annotations':
             self._fetch_annotations()
         elif action == 'generate_deep_view':
             self._generate_deep_view()
+        elif action == 'manage_collections':
+            self.show_manage_collections_dialog()
         elif action in ['show_articles', 'show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
                         'show_highlights', 'show_vocabulary']:
             self.show_assets_dialog(action, row)
-        elif action == 'manage_collections':
-            self.show_manage_collections_dialog()
         elif action == 'show_collections':
             self.show_view_collections_dialog(row)
         elif action == 'show_global_vocabulary':
             self.show_assets_dialog('show_global_vocabulary', row)
-        elif action in ['clear_all_collections', 'export_collections',
-                        'import_collections', 'synchronize_collections']:
-            self._update_collections(action)
         elif action == 'show_metadata':
             self.show_view_metadata_dialog(row)
-        elif action in ['export_metadata', 'import_metadata']:
-            self._update_metadata(action)
         else:
             selected_books = self._selected_books()
             det_msg = ''
@@ -1079,43 +1082,18 @@ class BookStatusDialog(SizePersistedDialog):
                    'content': <default content>,
                    'footer': <footer text>}
         '''
-        def _build_parameters(book, update_soup):
-            parameters_tag = Tag(update_soup, 'parameters')
-            parameters_tag['count'] = "4"
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "filename"
-            parameter_tag.insert(0, book.path)
-            parameters_tag.insert(0, parameter_tag)
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "uuid"
-            parameter_tag.insert(0, book.uuid)
-            parameters_tag.insert(0, parameter_tag)
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "author"
-            parameter_tag.insert(0, escape(', '.join(book.authors)))
-            parameters_tag.insert(0, parameter_tag)
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "title"
-            parameter_tag.insert(0, book.title)
-            parameters_tag.insert(0, parameter_tag)
-
-            return parameters_tag
-
         self._log_location(action)
 
         book_id = self._selected_book_id(row)
         title = self.installed_books[book_id].title
+        refresh = None
 
         if action == 'show_articles':
             command_name = "command"
             command_type = "GetArticlesHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                 command_type, time.mktime(time.localtime())))
-            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
             update_soup.command.insert(0, parameters_tag)
 
             header = None
@@ -1138,7 +1116,7 @@ class BookStatusDialog(SizePersistedDialog):
             command_type = "GetDeepViewArticlesHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                 command_type, time.mktime(time.localtime())))
-            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
             update_soup.command.insert(0, parameters_tag)
 
             header = None
@@ -1152,7 +1130,7 @@ class BookStatusDialog(SizePersistedDialog):
             command_type = "GetDeepViewNamesHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                 command_type, time.mktime(time.localtime())))
-            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
 
             # <parameter> for order
             parameter_tag = Tag(update_soup, 'parameter')
@@ -1172,7 +1150,7 @@ class BookStatusDialog(SizePersistedDialog):
                 parameter_tag.insert(0, "appearance")
 
             elif action == 'show_deep_view_by_annotations':
-                group_box_title = "Deep View names with annotations"
+                group_box_title = "Deep View names with notes and flags first"
                 parameter_tag.insert(0, "annotated")
 
             parameters_tag.insert(0, parameter_tag)
@@ -1198,7 +1176,7 @@ class BookStatusDialog(SizePersistedDialog):
             command_type = "GetAnnotationsHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                 command_type, time.mktime(time.localtime())))
-            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
             update_soup.command.insert(0, parameters_tag)
 
             header = None
@@ -1210,13 +1188,19 @@ class BookStatusDialog(SizePersistedDialog):
             footer = (
                 '<p>The <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
                 'Annotations plugin</a> imports highlights and annotations from Marvin.</p>')
+            afn = self.parent.prefs.get('annotations_field_comboBox', None)
+            if afn:
+                refresh = {
+                    'name': afn,
+                    'method': "_fetch_annotations"
+                    }
 
         elif action == 'show_vocabulary':
             command_name = "command"
             command_type = "GetLocalVocabularyHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                 command_type, time.mktime(time.localtime())))
-            parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
             update_soup.command.insert(0, parameters_tag)
 
             header = None
@@ -1251,7 +1235,9 @@ class BookStatusDialog(SizePersistedDialog):
             'group_box_title': group_box_title,
             'header': header,
             'html_content': content,
-            'title': title}
+            'title': title,
+            'refresh': refresh
+            }
 
         klass = os.path.join(dialog_resources_path, 'html_viewer.py')
         if os.path.exists(klass):
@@ -1635,6 +1621,31 @@ class BookStatusDialog(SizePersistedDialog):
         update_soup.manifest.insert(0, book_tag)
 
         return update_soup
+
+    def _build_parameters(self, book, update_soup):
+        parameters_tag = Tag(update_soup, 'parameters')
+
+        parameter_tag = Tag(update_soup, 'parameter')
+        parameter_tag['name'] = "filename"
+        parameter_tag.insert(0, book.path)
+        parameters_tag.insert(0, parameter_tag)
+
+        parameter_tag = Tag(update_soup, 'parameter')
+        parameter_tag['name'] = "uuid"
+        parameter_tag.insert(0, book.uuid)
+        parameters_tag.insert(0, parameter_tag)
+
+        parameter_tag = Tag(update_soup, 'parameter')
+        parameter_tag['name'] = "author"
+        parameter_tag.insert(0, escape(', '.join(book.authors)))
+        parameters_tag.insert(0, parameter_tag)
+
+        parameter_tag = Tag(update_soup, 'parameter')
+        parameter_tag['name'] = "title"
+        parameter_tag.insert(0, book.title)
+        parameters_tag.insert(0, parameter_tag)
+
+        return parameters_tag
 
     def _calculate_word_count(self):
         '''
@@ -2240,32 +2251,6 @@ class BookStatusDialog(SizePersistedDialog):
         A lightweight version of fetch annotations
         Request HTML annotations from Marvin, add to custom column specified in config
         '''
-        def _build_parameters(book, update_soup):
-            parameters_tag = Tag(update_soup, 'parameters')
-            parameters_tag['count'] = "4"
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "filename"
-            parameter_tag.insert(0, book.path)
-            parameters_tag.insert(0, parameter_tag)
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "uuid"
-            parameter_tag.insert(0, book.uuid)
-            parameters_tag.insert(0, parameter_tag)
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "author"
-            parameter_tag.insert(0, escape(', '.join(book.authors)))
-            parameters_tag.insert(0, parameter_tag)
-
-            parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "title"
-            parameter_tag.insert(0, book.title)
-            parameters_tag.insert(0, parameter_tag)
-
-            return parameters_tag
-
         self._log_location()
 
         lookup = self.parent.prefs.get('annotations_field_lookup', None)
@@ -2282,7 +2267,7 @@ class BookStatusDialog(SizePersistedDialog):
                         command_type = "GetAnnotationsHTML"
                         update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                             command_type, time.mktime(time.localtime())))
-                        parameters_tag = _build_parameters(self.installed_books[book_id], update_soup)
+                        parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
                         update_soup.command.insert(0, parameters_tag)
 
                         # Copy command file to staging folder
@@ -3943,7 +3928,6 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Tell Marvin
         if len(parameters_tag):
-            parameters_tag['count'] = str(len(parameters_tag))
 
             # Copy command file to staging folder
             self._stage_command_file(command_name, update_soup,
