@@ -27,7 +27,7 @@ from calibre import strftime
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.errors import UserFeedback
 from calibre.devices.usbms.driver import debug_print
-from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
+from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag, UnicodeDammit
 from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.gui2 import Application, Dispatcher, error_dialog, warning_dialog
 from calibre.gui2.dialogs.message_box import MessageBox
@@ -1242,7 +1242,13 @@ class BookStatusDialog(SizePersistedDialog):
                                                     update_local_db=False,
                                                     get_response="html_response.html")
 
-        if not content:
+        if content:
+            # Strip the UTF-8 BOM
+            BOM = '\xef\xbb\xbf'
+            content = re.sub(BOM, '', content)
+            content = UnicodeDammit(content).unicode
+            self._log(repr(content))
+        else:
             content = default_content
 
         content_dict = {
@@ -2658,12 +2664,7 @@ class BookStatusDialog(SizePersistedDialog):
             # Wait for completion
             self._wait_for_command_completion(command_name, update_local_db=True)
 
-        """
-        title = "Generate Deep View"
-        msg = ("<p>Not implemented</p>")
-        MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
-        """
+            self._log("Deep View generated")
 
     def _generate_marvin_hash_map(self, installed_books):
         '''
@@ -4320,8 +4321,9 @@ class BookStatusDialog(SizePersistedDialog):
                       self.parent.connected_device.status_fs))
 
             # Set initial watchdog timer for ACK
-            WATCHDOG_TIMEOUT = 10.0
-            watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+            INITIAL_WATCHDOG_TIMEOUT = 10.0
+            WATCHDOG_TIMEOUT = 60.0
+            watchdog = Timer(INITIAL_WATCHDOG_TIMEOUT, self._watchdog_timed_out)
             self.operation_timed_out = False
             watchdog.start()
 
@@ -4332,6 +4334,7 @@ class BookStatusDialog(SizePersistedDialog):
                         self.ios.remove(self.parent.connected_device.status_fs)
                         raise UserFeedback("Marvin operation timed out.",
                                            details=None, level=UserFeedback.WARN)
+                        break
                     time.sleep(0.10)
 
                 else:

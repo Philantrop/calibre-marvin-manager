@@ -94,11 +94,12 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         # Initialize the contents of the TextBrowser
         self.html_tb.setText(content['html_content'])
 
-        # Set the bg color of the content to the dialog bg color
-        bgcolor = self.palette().color(QPalette.Background)
-        palette = QPalette()
-        palette.setColor(QPalette.Base, bgcolor)
-        self.html_tb.setPalette(palette)
+        if False:
+            # Set the bg color of the content to the dialog bg color
+            bgcolor = self.palette().color(QPalette.Background)
+            palette = QPalette()
+            palette.setColor(QPalette.Base, bgcolor)
+            self.html_tb.setPalette(palette)
 
         # Set or hide the footer
         if content['footer']:

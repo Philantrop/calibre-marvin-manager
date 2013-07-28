@@ -350,9 +350,11 @@ class MarvinManagerAction(InterfaceAction):
 
                     ac = self.create_menu_item(m, 'Backup or Restore Library', image=I("swap.png"))
                     ac.triggered.connect(self.backup_restore)
+                    ac.setEnabled(False)
 
                     ac = self.create_menu_item(m, 'Reset Marvin Library', image=I("trash.png"))
                     ac.triggered.connect(self.reset_marvin_library)
+                    ac.setEnabled(False)
 
                 else:
                     self._log("Marvin not connected")
