@@ -18,10 +18,10 @@ cached_books[path]
 * 'title_sort'
 * 'uuid'
 
-Device - self.opts.gui.memory_view.model().db[row] is a Metadata object
+Device - self.opts.gui.memory_view.model().db[row] is a Metadata object created by calibre
 .standard_field_keys():
 -----------------------
-.application_id
+.application_id (cid)
 .author_link_map
 .author_sort
 .author_sort_map

@@ -29,8 +29,9 @@ from calibre.devices.errors import UserFeedback
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.ebooks.oeb.iterator import EbookIterator
-from calibre.gui2 import Application
+from calibre.gui2 import Application, Dispatcher, error_dialog, warning_dialog
 from calibre.gui2.dialogs.message_box import MessageBox
+from calibre.gui2.dialogs.progress import ProgressDialog
 from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.icu import sort_key
 from calibre.utils.magick.draw import thumbnail
@@ -141,13 +142,14 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "manage_collections", row))
 
         elif col == self.parent.DEEP_VIEW_COL:
+            no_dv_content = not selected_books[row]['has_dv_content']
+
             ac = menu.addAction("Generate Deep View content")
             ac.setIcon(QIcon(I('exec.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "generate_deep_view", row))
+            ac.setEnabled(no_dv_content)
 
             menu.addSeparator()
-
-            no_dv_content = not selected_books[row]['has_dv_content']
 
             ac = menu.addAction("Deep View articles")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
@@ -285,7 +287,19 @@ class MyTableView(QTableView):
             ac.setEnabled(enable_metadata_updates)
 
             menu.addSeparator()
+            # Test for calibre cids
+            in_library = True
+            for row in selected_books:
+                if selected_books[row]['cid'] is None:
+                    in_library = False
+                    break
 
+            ac = menu.addAction("Add to library")
+            ac.setIcon(QIcon(I('plus.png')))
+            ac.triggered.connect(self.parent._add_books_to_library)
+            ac.setEnabled(not in_library)
+
+            menu.addSeparator()
             ac = menu.addAction("Delete")
             ac.setIcon(QIcon(I('trash.png')))
             ac.triggered.connect(self.parent._delete_books)
@@ -857,6 +871,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     def initialize(self, parent):
         self.archived_cover_hashes = JSONConfig('plugins/Marvin_Mangler_resources/cover_hashes')
+        self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = 'content_hashes.zip'
         self.ios = parent.ios
         self.opts = parent.opts
@@ -1090,7 +1105,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         if action == 'show_articles':
             command_name = "command"
-            command_type = "GetArticlesHTML"
+            command_type = "GetDeepViewArticlesHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                 command_type, time.mktime(time.localtime())))
             parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
@@ -1223,11 +1238,11 @@ class BookStatusDialog(SizePersistedDialog):
                                  show_command=self.prefs.get('show_staged_commands', False))
 
         # Wait for completion
-        html_response = self._wait_for_command_completion(command_name,
-                                                          update_local_db=False,
-                                                          get_response="html_response.html")
+        content = self._wait_for_command_completion(command_name,
+                                                    update_local_db=False,
+                                                    get_response="html_response.html")
 
-        if not html_response:
+        if not content:
             content = default_content
 
         content_dict = {
@@ -2131,6 +2146,113 @@ class BookStatusDialog(SizePersistedDialog):
                                          Qt.DescendingOrder)
         self.tv.sortByColumn(sort_column, sort_order)
 
+    def _add_books_to_library(self):
+        '''
+        Filter out books already in calibre
+        Hook into gui.iactions['Add Books'].add_books_from_device()
+        gui2.actions.add #406
+        '''
+        self._log_location("not fully implemented")
+
+        # Save the selection region for restoration
+        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+        self.updated_match_quality = {}
+
+        # Isolate the books to add, confirming no cid
+        bta = self._selected_books()
+        paths_to_add = []
+        for b in bta:
+            if bta[b]['cid'] is None:
+                paths_to_add.append(bta[b]['path'])
+
+        # Build map of added books from the model so we know which items to monitor for completion
+        if paths_to_add:
+            # Find the books in the model so we can monitor the in_library field
+            model = self.parent.gui.memory_view.model()
+            added = {}
+            for item in model.sorted_map:
+                book = model.db[item]
+                if book.path in paths_to_add:
+                    added[item] = {'path': book.path}
+
+            # Tell calibre to add the paths
+            self.opts.gui.iactions['Add Books'].add_books_from_device(self.parent.gui.memory_view,
+                                                                      paths=paths_to_add)
+
+            # Wait for added books to be updated in model.db
+            # in_library property will be set to AUTHOR (or, less likely, UUID)
+            incomplete = True
+            while incomplete:
+                Application.processEvents()
+                for item in added:
+                    if model.db[item].in_library is None:
+                        break
+                else:
+                    incomplete = False
+
+            # Update in-memory with newly minted cid, populate added
+            for item in added:
+                #self._log(model.db[item].all_field_keys())
+                cid = model.db[item].application_id
+
+                # Add book_id, cid to item dict, update installed_books with cid
+                for book in self.installed_books.values():
+                    if book.path == added[item]['path']:
+                        added[item]['cid'] = cid
+                        added[item]['book_id'] = book.mid
+                        book.cid = cid
+                        break
+
+                # Add model_row
+                for model_row in bta:
+                    if bta[model_row]['book_id'] == added[item]['book_id']:
+                        added[item]['model_row'] = model_row
+
+            pb = ProgressBar(parent=self.opts.gui, window_title="Updating calibre metadata",
+                             on_top=True)
+            total_books = len(added)
+            # Show progress in dispatched method - 2 times
+            pb.set_maximum(total_books * 2)
+            pb.set_value(0)
+            pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
+            pb.show()
+
+            db = self.opts.gui.current_db
+            cached_books = self.parent.connected_device.cached_books
+
+            # Update calibre metadata from Marvin metadata, bind uuid
+            for item in added:
+                mismatches = {}
+                this_book = cached_books[added[item]['path']]
+                mismatches['authors'] = {'Marvin': this_book['authors']}
+                mismatches['author_sort'] = {'Marvin': this_book['author_sort']}
+                mismatches['cover_hash'] = {'Marvin': this_book['cover_hash']}
+                mismatches['comments'] = {'Marvin': this_book['description']}
+                mismatches['pubdate'] = {'Marvin': this_book['pubdate']}
+                mismatches['publisher'] = {'Marvin': this_book['publisher']}
+                if this_book['series']:
+                    mismatches['series'] = {'Marvin': this_book['series']}
+                    mismatches['series_index'] = {'Marvin': this_book['series_index']}
+                mismatches['tags'] = {'Marvin': this_book['tags']}
+                mismatches['title'] = {'Marvin': this_book['title']}
+                mismatches['title_sort'] = {'Marvin': this_book['title_sort']}
+
+                # Get the newly minted calibre uuid
+                mi = db.get_metadata(added[item]['cid'], index_is_id=True)
+                mismatches['uuid'] = {'calibre': mi.uuid,
+                                      'Marvin': this_book['uuid']}
+
+                # Do the magic
+                self._update_calibre_metadata(added[item]['book_id'],
+                                              added[item]['cid'],
+                                              mismatches,
+                                              added[item]['model_row'],
+                                              pb)
+            pb.hide()
+
+            # Launch row flasher
+            self._flash_affected_rows()
+
     def _delete_books(self):
         '''
         '''
@@ -2481,8 +2603,6 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         If no custom collections field assigned, always return sort_value 0
         '''
-        self._log_location()
-
         if (book_data.calibre_collections is None and
                 book_data.device_collections == []):
             base_name = 'collections_empty.png'
@@ -2720,20 +2840,24 @@ class BookStatusDialog(SizePersistedDialog):
             cid = None
             mi = None
             db = self.opts.gui.current_db
-            if uuid in self.library_uuid_map:
-                cid = self.library_uuid_map[uuid]['id']
-                mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
-                if self.opts.prefs.get('development_mode', False):
-                    self._log("UUID match")
-            elif title in self.library_title_map:
-                _cid = self.library_title_map[title]['id']
-                _mi = db.get_metadata(_cid, index_is_id=True, get_cover=True, cover_as_data=True)
-                authors = author.split(', ')
-                if authors == _mi.authors:
-                    cid = _cid
-                    mi = _mi
+            try:
+                if uuid in self.library_uuid_map:
+                    cid = self.library_uuid_map[uuid]['id']
+                    mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
                     if self.opts.prefs.get('development_mode', False):
-                        self._log("TITLE/AUTHOR match")
+                        self._log("UUID match")
+                elif title in self.library_title_map:
+                    _cid = self.library_title_map[title]['id']
+                    _mi = db.get_metadata(_cid, index_is_id=True, get_cover=True, cover_as_data=True)
+                    authors = author.split(', ')
+                    if authors == _mi.authors:
+                        cid = _cid
+                        mi = _mi
+                        if self.opts.prefs.get('development_mode', False):
+                            self._log("TITLE/AUTHOR match")
+            except:
+                # Book deleted since scan
+                pass
             return cid, mi
 
         def _get_collections(cur, book_id):
@@ -3265,12 +3389,17 @@ class BookStatusDialog(SizePersistedDialog):
         db = self.opts.gui.current_db
         close_requested = False
         for i, uuid in enumerate(uuid_map):
-            pb.set_label('{:^100}'.format("%d of %d" % (i+1, total_books)))
+            try:
+                pb.set_label('{:^100}'.format("%d of %d" % (i+1, total_books)))
 
-            path = db.format(uuid_map[uuid]['id'], 'epub', index_is_id=True,
-                             as_path=True, preserve_filename=True)
-            uuid_map[uuid]['hash'] = self._compute_epub_hash(path)
-            os.remove(path)
+                path = db.format(uuid_map[uuid]['id'], 'epub', index_is_id=True,
+                                 as_path=True, preserve_filename=True)
+                uuid_map[uuid]['hash'] = self._compute_epub_hash(path)
+                os.remove(path)
+            except:
+                # Book deleted since scan
+                pass
+
             pb.increment()
 
             if pb.close_requested:
@@ -4225,6 +4354,7 @@ class BookStatusDialog(SizePersistedDialog):
                                 self.ios.remove(self.parent.connected_device.status_fs)
                                 raise UserFeedback("Marvin operation timed out.",
                                                    details=None, level=UserFeedback.WARN)
+                                break
 
                             status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                             code = status.get('code')
@@ -4284,6 +4414,7 @@ class BookStatusDialog(SizePersistedDialog):
                             response = "%s not found" % rf
                         else:
                             response = self.ios.read(rf)
+                            self.ios.remove(rf)
 
                     self.ios.remove(self.parent.connected_device.status_fs)
 

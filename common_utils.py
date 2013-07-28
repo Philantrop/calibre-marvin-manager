@@ -312,10 +312,14 @@ class IndexLibrary(QThread):
         '''
         hash_map = {}
         for uuid, v in self.uuid_map.items():
-            if v['hash'] not in hash_map:
-                hash_map[v['hash']] = [uuid]
-            else:
-                hash_map[v['hash']].append(uuid)
+            try:
+                if v['hash'] not in hash_map:
+                    hash_map[v['hash']] = [uuid]
+                else:
+                    hash_map[v['hash']].append(uuid)
+            except:
+                # Book deleted since scan
+                pass
         self.hash_map = hash_map
         return hash_map
 
