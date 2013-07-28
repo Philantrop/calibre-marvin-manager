@@ -2655,8 +2655,20 @@ class BookStatusDialog(SizePersistedDialog):
                 manifest_tag.insert(0, book_tag)
             update_soup.command.insert(0, manifest_tag)
 
+            self.busy_window = MyBlockingBusy(self, "Generating Deep View content…", size=60,
+                                              show_cancel=True)
+            QTimer.singleShot(0, self._start_busy_window)
+
+            # Wait for the window to show up
+            while not self.busy_window.is_running:
+                Application.processEvents()
+
             self._issue_command(command_name, update_soup,
                                 ignore_timeouts=True)
+
+            self.busy_window.stop()
+            self.busy_window.accept()
+
             """
             # Copy command file to staging folder
             self._stage_command_file(command_name, update_soup,
@@ -3301,7 +3313,6 @@ class BookStatusDialog(SizePersistedDialog):
         if get_response:
             return response
 
-
     def _localize_marvin_database(self):
         '''
         Copy remote_db_path from iOS to local storage using device pointers
@@ -3666,6 +3677,13 @@ class BookStatusDialog(SizePersistedDialog):
 
         else:
             self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
+
+    def _start_busy_window(self):
+        '''
+        '''
+        self._log_location()
+        self.busy_window.start()
+        self.busy_window.show()
 
     def _update_calibre_collections(self, book_id, cid, updated_calibre_collections):
         '''
@@ -4395,7 +4413,8 @@ class BookStatusDialog(SizePersistedDialog):
                         raise UserFeedback("Marvin operation timed out.",
                                            details=None, level=UserFeedback.WARN)
                         break
-                    time.sleep(0.10)
+                    #time.sleep(0.10)
+                    Application.processEvents()
 
                 else:
                     self.watchdog.cancel()
@@ -4419,6 +4438,10 @@ class BookStatusDialog(SizePersistedDialog):
                                                    details=None, level=UserFeedback.WARN)
                                 break
 
+                            if False and self.busy_window.cancel_requested:
+                                self._log("cancel_requested")
+                                # Now what?
+
                             status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                             code = status.get('code')
                             timestamp = float(status.get('timestamp'))
@@ -4440,10 +4463,12 @@ class BookStatusDialog(SizePersistedDialog):
                                 self.watchdog.cancel()
                                 self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
                                 self.watchdog.start()
-                            time.sleep(0.01)
+                            #time.sleep(0.01)
+                            Application.processEvents()
 
                         except:
-                            time.sleep(0.01)
+                            #time.sleep(0.01)
+                            Application.processEvents()
                             self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
 
                     # Command completed
@@ -4500,6 +4525,7 @@ class BookStatusDialog(SizePersistedDialog):
         Set flag if I/O operation times out
         '''
         self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
+
         if self.ignore_timeouts:
             # Start a new watchdog timer per iteration
             self._log("timeouts ignored, resetting timer")

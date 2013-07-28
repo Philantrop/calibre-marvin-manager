@@ -36,7 +36,8 @@ from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
-                      QCheckBox, QComboBox, QDial, QDialog, QDoubleSpinBox, QFont, QIcon,
+                      QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox,
+                      QDoubleSpinBox, QFont, QIcon,
                       QKeySequence, QLabel, QLineEdit, QPixmap, QProgressBar,
                       QRadioButton, QSizePolicy, QSlider, QSpinBox, QString, QThread, QTimer, QUrl,
                       QVBoxLayout,
@@ -194,7 +195,7 @@ class HelpView(SizePersistedDialog):
 
 class MyBlockingBusy(QDialog):
 
-    def __init__(self, gui, msg, size=100, window_title='Working'):
+    def __init__(self, gui, msg, size=100, window_title='Working', show_cancel=False):
         QDialog.__init__(self, gui, Qt.WindowStaysOnTopHint)
 
         self._layout = QVBoxLayout()
@@ -203,27 +204,43 @@ class MyBlockingBusy(QDialog):
         #self.msg.setWordWrap(True)
         self.font = QFont()
         self.font.setPointSize(self.font.pointSize() + 4)
+        self.cancel_requested = False
+        self.is_running = False
         self.msg.setFont(self.font)
         self.pi = ProgressIndicator(self)
         self.pi.setDisplaySize(size)
+        self._layout.addSpacing(15)
         self._layout.addWidget(self.pi, 0, Qt.AlignHCenter)
         self._layout.addSpacing(15)
         self._layout.addWidget(self.msg, 0, Qt.AlignHCenter)
-        self.setWindowTitle(window_title)
+        self._layout.addSpacing(15)
+
+        if show_cancel:
+            self.bb = QDialogButtonBox(QDialogButtonBox.Cancel)
+            self.bb.clicked.connect(self.button_handler)
+            self._layout.addWidget(self.bb)
+
+        #self.setWindowTitle(window_title)
         self.resize(self.sizeHint())
-
-    def start(self):
-        self.pi.startAnimation()
-
-    def stop(self):
-        self.pi.stopAnimation()
 
     def accept(self):
         self.stop()
         return QDialog.accept(self)
 
+    def button_handler(self, button):
+        if self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
+            self.cancel_requested = True
+
     def reject(self):
         pass  # Cannot cancel this dialog
+
+    def start(self):
+        self.is_running = True
+        self.pi.startAnimation()
+
+    def stop(self):
+        self.is_running = False
+        self.pi.stopAnimation()
 
 
 class ProgressBar(QDialog):
