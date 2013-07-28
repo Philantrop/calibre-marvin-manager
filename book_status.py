@@ -19,7 +19,7 @@ from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
                       QColor, QCursor, QDialogButtonBox, QFont, QIcon,
                       QItemSelectionModel, QLabel, QMenu, QModelIndex, QPainter, QPixmap,
-                      QTableView, QTableWidgetItem, QTimer,
+                      QProgressDialog, QTableView, QTableWidgetItem, QTimer,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
 
@@ -582,6 +582,10 @@ class MarkupTableModel(QAbstractTableModel):
     def get_deep_view(self, row):
         return self.arraydata[row][self.parent.DEEP_VIEW_COL]
 
+    def set_deep_view(self, row, value):
+        self.arraydata[row][self.parent.DEEP_VIEW_COL] = value
+        self.parent.repaint()
+
     def get_flags(self, row):
         return self.arraydata[row][self.parent.FLAGS_COL]
 
@@ -629,10 +633,12 @@ class MarkupTableModel(QAbstractTableModel):
 class BookStatusDialog(SizePersistedDialog):
     '''
     '''
+    CHECKMARK = u"\u2713"
+
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
-    CHECKMARK = u"\u2713"
+    WATCHDOG_TIMEOUT = 10.0
 
     # Flag constants
     if True:
@@ -837,8 +843,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         asset_actions = {
             self.ANNOTATIONS_COL: 'show_highlights',
-            self.ARTICLES_COL: 'show_articles',
-            self.DEEP_VIEW_COL: 'show_deep_view',
+            self.ARTICLES_COL: 'show_deep_view_articles',
+            self.DEEP_VIEW_COL: 'show_deep_view_articles',
             self.VOCABULARY_COL: 'show_vocabulary'
         }
 
@@ -1103,30 +1109,7 @@ class BookStatusDialog(SizePersistedDialog):
         title = self.installed_books[book_id].title
         refresh = None
 
-        if action == 'show_articles':
-            command_name = "command"
-            command_type = "GetDeepViewArticlesHTML"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
-            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
-            update_soup.command.insert(0, parameters_tag)
-
-            header = None
-            group_box_title = 'Articles'
-            articles = self.installed_books[book_id].articles
-            if articles:
-                default_content = ''
-                if 'Pinned' in articles:
-                    default_content += "<p><b>Pinned:</b><br/>"
-                    default_content += '<br/>'.join(articles['Pinned'].keys()) + "</p>"
-                if 'Wiki' in articles:
-                    default_content += "<p><b>Wiki</b><br/>"
-                    default_content += '<br/>'.join(articles['Wiki'].keys()) + "</p>"
-            else:
-                default_content = ("<p>No articles</p>")
-            footer = None
-
-        elif action == 'show_deep_view_articles':
+        if action == 'show_deep_view_articles':
             command_name = "command"
             command_type = "GetDeepViewArticlesHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
@@ -1233,6 +1216,12 @@ class BookStatusDialog(SizePersistedDialog):
             default_content = "Default content"
             footer = None
 
+        response = self._issue_command(command_name, update_soup,
+                                       get_response="html_response.html",
+                                       update_local_db=False)
+        """
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
         # Copy command file to staging folder
         self._stage_command_file(command_name, update_soup,
                                  show_command=self.prefs.get('show_staged_commands', False))
@@ -1241,21 +1230,22 @@ class BookStatusDialog(SizePersistedDialog):
         content = self._wait_for_command_completion(command_name,
                                                     update_local_db=False,
                                                     get_response="html_response.html")
+        QApplication.restoreOverrideCursor()
+        """
 
-        if content:
+        if response:
             # Strip the UTF-8 BOM
             BOM = '\xef\xbb\xbf'
-            content = re.sub(BOM, '', content)
-            content = UnicodeDammit(content).unicode
-            self._log(repr(content))
+            response = re.sub(BOM, '', response)
+            response = UnicodeDammit(response).unicode
         else:
-            content = default_content
+            response = default_content
 
         content_dict = {
             'footer': footer,
             'group_box_title': group_box_title,
             'header': header,
-            'html_content': content,
+            'html_content': response,
             'title': title,
             'refresh': refresh
             }
@@ -1763,12 +1753,15 @@ class BookStatusDialog(SizePersistedDialog):
                 book_tag['wordcount'] = wordcount.words
                 update_soup.manifest.insert(0, book_tag)
 
+                self._issue_command(command_name, update_soup)
+                """
                 # Copy command file to staging folder
                 self._stage_command_file(command_name, update_soup,
                                          show_command=self.prefs.get('show_staged_commands', False))
 
                 # Wait for completion
                 self._wait_for_command_completion(command_name, update_local_db=True)
+                """
 
                 pb.increment()
 
@@ -2398,6 +2391,10 @@ class BookStatusDialog(SizePersistedDialog):
                         parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
                         update_soup.command.insert(0, parameters_tag)
 
+                        response = self._issue_command(command_name, update_soup,
+                                                       get_response="html_response.html",
+                                                       update_local_db=False)
+                        """
                         # Copy command file to staging folder
                         self._stage_command_file(command_name, update_soup,
                                                  show_command=self.prefs.get('show_staged_commands', False))
@@ -2406,8 +2403,9 @@ class BookStatusDialog(SizePersistedDialog):
                         html_response = self._wait_for_command_completion(command_name,
                                                                           update_local_db=False,
                                                                           get_response="html_response.html")
-                        if not html_response:
-                            content = '\n'.join(self.installed_books[book_id].highlights)
+                        """
+                        if not response:
+                            response = '\n'.join(self.installed_books[book_id].highlights)
 
                         # Apply to custom column
                         # Get the current value from the lookup field
@@ -2417,7 +2415,7 @@ class BookStatusDialog(SizePersistedDialog):
                         #self._log("Updating old value: %s" % repr(old_value))
 
                         um = mi.metadata_for_field(lookup)
-                        um['#value#'] = content
+                        um['#value#'] = response
                         mi.set_user_metadata(lookup, um)
                         db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                         commit=True)
@@ -2657,14 +2655,23 @@ class BookStatusDialog(SizePersistedDialog):
                 manifest_tag.insert(0, book_tag)
             update_soup.command.insert(0, manifest_tag)
 
+            self._issue_command(command_name, update_soup,
+                                ignore_timeouts=True)
+            """
             # Copy command file to staging folder
             self._stage_command_file(command_name, update_soup,
                                      show_command=self.prefs.get('show_staged_commands', False))
 
             # Wait for completion
-            self._wait_for_command_completion(command_name, update_local_db=True)
+            self._wait_for_command_completion(command_name, update_local_db=True,
+                                              ignore_timeouts=True)
+            """
 
-            self._log("Deep View generated")
+            # Update visible model, self.installed_books
+            for row in sorted(selected_books.keys(), reverse=True):
+                book_id = selected_books[row]['book_id']
+                self.installed_books[book_id].deep_view_prepared = 1
+                self.tm.set_deep_view(row, self.CHECKMARK)
 
     def _generate_marvin_hash_map(self, installed_books):
         '''
@@ -3250,12 +3257,50 @@ class BookStatusDialog(SizePersistedDialog):
 
         update_soup.manifest.insert(0, book_tag)
 
+        self._issue_command(command_name, update_soup)
+        """
         # Copy command file to staging folder
         self._stage_command_file(command_name, update_soup,
                                  show_command=self.prefs.get('show_staged_commands', False))
 
         # Wait for completion
         self._wait_for_command_completion(command_name, update_local_db=True)
+        """
+
+    def _issue_command(self, command_name, update_soup,
+                       get_response=None,
+                       ignore_timeouts=False,
+                       update_local_db=True):
+        '''
+        Consolidated command handler
+        '''
+        self._log_location()
+
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        # Wait for the driver to be silent
+        while self.parent.connected_device.get_busy_flag():
+            Application.processEvents()
+        self.parent.connected_device.set_busy_flag(True)
+
+        # Copy command file to staging folder
+        self._stage_command_file(command_name, update_soup,
+                                 show_command=self.prefs.get('show_staged_commands', False))
+
+        # Wait for completion
+        response = self._wait_for_command_completion(command_name,
+                                                     ignore_timeouts=ignore_timeouts,
+                                                     get_response=get_response,
+                                                     update_local_db=update_local_db)
+
+        self.parent.connected_device.set_busy_flag(False)
+
+        QApplication.restoreOverrideCursor()
+
+        if get_response:
+            return response
+
 
     def _localize_marvin_database(self):
         '''
@@ -3613,10 +3658,12 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log(command_soup.prettify())
 
         if self.prefs.get('execute_marvin_commands', True):
+
             self.ios.write(command_soup.renderContents(),
                            b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]))
             self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
                             b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
+
         else:
             self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
 
@@ -3724,12 +3771,15 @@ class BookStatusDialog(SizePersistedDialog):
 
                     update_soup.manifest.insert(0, book_tag)
 
+                    self._issue_command(command_name, update_soup)
+                    """
                     # Copy command file to staging folder
                     self._stage_command_file(command_name, update_soup,
                                              show_command=self.prefs.get('show_staged_commands', False))
 
                     # Wait for completion
                     self._wait_for_command_completion(command_name, update_local_db=True)
+                    """
 
                     # Update cached_books
                     cached_books[path]['cover_hash'] = cover_hash
@@ -3791,12 +3841,15 @@ class BookStatusDialog(SizePersistedDialog):
                 book_tag['newuuid'] = mismatches[key]['calibre']
                 update_soup.manifest.insert(0, book_tag)
 
+                self._issue_command(command_name, update_soup)
+                """
                 # Copy command file to staging folder
                 self._stage_command_file(command_name, update_soup,
                                          show_command=self.prefs.get('show_staged_commands', False))
 
                 # Wait for completion
                 self._wait_for_command_completion(command_name, update_local_db=True)
+                """
 
             self._clear_selected_rows()
 
@@ -4059,12 +4112,15 @@ class BookStatusDialog(SizePersistedDialog):
         # Tell Marvin
         if len(parameters_tag):
 
+            self._issue_command(command_name, update_soup)
+            """
             # Copy command file to staging folder
             self._stage_command_file(command_name, update_soup,
                                      show_command=self.prefs.get('show_staged_commands', False))
 
             # Wait for completion
             self._wait_for_command_completion(command_name, update_local_db=True)
+            """
 
     def _update_marvin_collections(self, book_id, updated_marvin_collections):
         '''
@@ -4112,18 +4168,20 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location(mi.title)
         self._log("mismatches:\n%s" % mismatches)
 
+        command_name = "update_metadata"
         update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
-
+        self._issue_command(command_name, update_soup)
+        """
         # Copy the command file to the staging folder
         self._stage_command_file("update_metadata", update_soup,
                                  show_command=self.prefs.get('show_staged_commands', False))
 
-        # Show partial progress
-        pb.increment()
-
         # Wait for completion
         self._wait_for_command_completion("update_metadata", update_local_db=True)
+        """
 
+        # 2x progress on purpose
+        pb.increment()
         pb.increment()
 
         # Update in-memory caches
@@ -4305,7 +4363,8 @@ class BookStatusDialog(SizePersistedDialog):
             # Copy local cache to iDevice
             self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
 
-    def _wait_for_command_completion(self, command_name, update_local_db=True, get_response=None):
+    def _wait_for_command_completion(self, command_name, update_local_db=True,
+            get_response=None, ignore_timeouts=False):
         '''
         Wait for Marvin to issue progress reports via status.xml
         Marvin creates status.xml upon receiving command, increments <progress>
@@ -4321,11 +4380,12 @@ class BookStatusDialog(SizePersistedDialog):
                       self.parent.connected_device.status_fs))
 
             # Set initial watchdog timer for ACK
-            INITIAL_WATCHDOG_TIMEOUT = 10.0
-            WATCHDOG_TIMEOUT = 60.0
-            watchdog = Timer(INITIAL_WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+
+            self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
             self.operation_timed_out = False
-            watchdog.start()
+            self.ignore_timeouts = ignore_timeouts
+
+            self.watchdog.start()
 
             while True:
                 if not self.ios.exists(self.parent.connected_device.status_fs):
@@ -4338,16 +4398,16 @@ class BookStatusDialog(SizePersistedDialog):
                     time.sleep(0.10)
 
                 else:
-                    watchdog.cancel()
+                    self.watchdog.cancel()
 
                     self._log("%s: monitoring progress of %s" %
                               (datetime.now().strftime('%H:%M:%S.%f'),
                               command_name))
 
                     # Start a new watchdog timer per iteration
-                    watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                    self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
                     self.operation_timed_out = False
-                    watchdog.start()
+                    self.watchdog.start()
 
                     code = '-1'
                     current_timestamp = 0.0
@@ -4377,9 +4437,9 @@ class BookStatusDialog(SizePersistedDialog):
                                 """
 
                                 # Reset watchdog timer
-                                watchdog.cancel()
-                                watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                                watchdog.start()
+                                self.watchdog.cancel()
+                                self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                                self.watchdog.start()
                             time.sleep(0.01)
 
                         except:
@@ -4387,7 +4447,7 @@ class BookStatusDialog(SizePersistedDialog):
                             self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
 
                     # Command completed
-                    watchdog.cancel()
+                    self.watchdog.cancel()
 
                     final_code = status.get('code')
                     if final_code != '0':
@@ -4440,4 +4500,11 @@ class BookStatusDialog(SizePersistedDialog):
         Set flag if I/O operation times out
         '''
         self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
-        self.operation_timed_out = True
+        if self.ignore_timeouts:
+            # Start a new watchdog timer per iteration
+            self._log("timeouts ignored, resetting timer")
+            self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+            self.operation_timed_out = False
+            self.watchdog.start()
+        else:
+            self.operation_timed_out = True

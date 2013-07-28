@@ -244,6 +244,8 @@ class ProgressBar(QDialog):
 
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0, max_items)
+        self.progressBar.setMinimum(0)
+        self.progressBar.setMaximum(0)
         self.progressBar.setValue(0)
         self.l.addWidget(self.progressBar)
 

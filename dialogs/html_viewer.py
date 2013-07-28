@@ -10,6 +10,7 @@ __docformat__ = 'restructuredtext en'
 
 import os, sys
 
+from calibre.gui2 import open_url
 from calibre.devices.usbms.driver import debug_print
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
@@ -17,6 +18,7 @@ from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
 from PyQt4.Qt import (QDialogButtonBox, QIcon, QPalette,
                       pyqtSignal)
+from PyQt4.QtWebKit import QWebPage, QWebView
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -91,15 +93,26 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.setWindowTitle(content['title'])
         self.html_gb.setTitle(content['group_box_title'])
 
-        # Initialize the contents of the TextBrowser
-        self.html_tb.setText(content['html_content'])
+        # Set the bg color of the content to the dialog bg color
+        bgcolor = self.palette().color(QPalette.Background)
+        palette = QPalette()
+        palette.setColor(QPalette.Base, bgcolor)
 
-        if False:
-            # Set the bg color of the content to the dialog bg color
-            bgcolor = self.palette().color(QPalette.Background)
-            palette = QPalette()
-            palette.setColor(QPalette.Base, bgcolor)
-            self.html_tb.setPalette(palette)
+        # Initialize the window content
+        if True:
+            # Add a QWebView to layout
+            self.html_wv = QWebView()
+            self.html_wv.setHtml(content['html_content'])
+            self.html_wv.page().setLinkDelegationPolicy(QWebPage.DelegateAllLinks)
+            self.html_wv.linkClicked.connect(self.link_clicked)
+            #self.html_wv.setPalette(palette)
+
+            self.html_gb_vl.addWidget(self.html_wv)
+            self.html_tb.setVisible(False)
+        else:
+            # Initialize the contents of the TextBrowser
+            self.html_tb.setText(content['html_content'])
+            #self.html_tb.setPalette(palette)
 
         # Set or hide the footer
         if content['footer']:
@@ -122,6 +135,12 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         # Restore position
         self.resize_dialog()
 
+    def link_clicked(self, url):
+        '''
+        Open clicked link in regular browser
+        '''
+        open_url(url)
+
     def marvin_status_changed(self, command):
         '''
 
@@ -136,8 +155,8 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
 
     def refresh_custom_column(self):
         '''
+        If enabled, pass window content to custom column
         '''
-
         func = getattr(self.parent, self.refresh_method, None)
         if func is not None:
             func()
