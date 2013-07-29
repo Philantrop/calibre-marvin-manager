@@ -16,7 +16,8 @@ from calibre.devices.usbms.driver import debug_print
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (QDialogButtonBox, QIcon, QPalette,
+from PyQt4.Qt import (QAction, QApplication, QDialogButtonBox, QIcon, QKeySequence,
+                      QPalette,
                       pyqtSignal)
 from PyQt4.QtWebKit import QWebPage, QWebView
 
@@ -40,6 +41,18 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self._log_location()
         super(HTMLViewerDialog, self).close()
 
+    def copy_to_clipboard(self, *args):
+        '''
+        Store window contents to system clipboard
+        '''
+        plain_text = self.html_wv.page().currentFrame().toPlainText()
+        #html = self.html_wv.page().currentFrame().toHtml()
+        QApplication.clipboard().setText(unicode(plain_text))
+
+        if hasattr(self, 'ctc_button'):
+            self.ctc_button.setText('Copied')
+            self.ctc_button.setIcon(QIcon(I('ok.png')))
+
     def dispatch_button_click(self, button):
         '''
         BUTTON_ROLES = ['AcceptRole', 'RejectRole', 'DestructiveRole', 'ActionRole',
@@ -48,17 +61,16 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self._log_location()
         if self.bb.buttonRole(button) == QDialogButtonBox.AcceptRole:
             # Save content
-            self._log("AcceptRole")
             self.accept()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.ActionRole:
-            # Refresh custom column
-            self._log("Action role")
-            self.refresh_custom_column()
+            if button.objectName() == 'refresh_button':
+                self.refresh_custom_column()
+            elif button.objectName() == 'copy_to_clipboard_button':
+                self.copy_to_clipboard()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
             # Cancelled
-            self._log("RejectRole")
             self.close()
 
     def esc(self, *args):
@@ -128,6 +140,19 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                               'icons',
                                               'from_marvin.png')))
+            self.refresh_button.setObjectName('refresh_button')
+
+        # Add Copy to Clipboard button
+        self.ctc_button = self.bb.addButton('&Copy to clipboard',
+                                            self.bb.ActionRole)
+        self.ctc_button.clicked.connect(self.copy_to_clipboard)
+        self.ctc_button.setIcon(QIcon(I('edit-copy.png')))
+        self.ctc_button.setObjectName('copy_to_clipboard_button')
+
+        self.copy_action = QAction(self)
+        self.addAction(self.copy_action)
+        self.copy_action.setShortcuts(QKeySequence.Copy)
+        self.copy_action.triggered.connect(self.copy_to_clipboard)
 
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)

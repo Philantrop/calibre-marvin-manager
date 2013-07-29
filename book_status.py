@@ -1244,12 +1244,8 @@ class BookStatusDialog(SizePersistedDialog):
         """
 
         if response:
-            # Convert to unicode
+            # Convert Marvin's UTF-8 to unicode
             response = UnicodeDammit(response).unicode
-
-            # Strip the UTF-8 BOM
-            BOM = '\xef\xbb\xbf'
-            response = re.sub(BOM, '', response)
         else:
             response = default_content
 
