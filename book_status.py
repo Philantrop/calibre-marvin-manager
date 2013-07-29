@@ -98,7 +98,7 @@ class MyTableView(QTableView):
             no_articles = not selected_books[row]['has_articles']
             ac = menu.addAction("View articles")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_articles", row))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view_articles", row))
             if len(selected_books) > 1 or no_articles:
                 ac.setEnabled(False)
 
@@ -572,6 +572,9 @@ class MarkupTableModel(QAbstractTableModel):
     def get_calibre_id(self, row):
         return self.arraydata[row][self.parent.CALIBRE_ID_COL]
 
+    def set_calibre_id(self, row, value):
+        self.arraydata[row][self.parent.CALIBRE_ID_COL] = value
+
     def get_collections(self, row):
         return self.arraydata[row][self.parent.COLLECTIONS_COL]
 
@@ -811,7 +814,7 @@ class BookStatusDialog(SizePersistedDialog):
             self._generate_deep_view()
         elif action == 'manage_collections':
             self.show_manage_collections_dialog()
-        elif action in ['show_articles', 'show_deep_view_articles',
+        elif action in ['show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
                         'show_highlights', 'show_vocabulary']:
@@ -1212,10 +1215,8 @@ class BookStatusDialog(SizePersistedDialog):
             footer = None
 
         else:
-            header = None
-            group_box_title = action
-            default_content = "Default content"
-            footer = None
+            self._log("ERROR: unsupported action '%s'" % action)
+            return
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
         self.busy_window = MyBlockingBusy(self, "Retrieving %s…" % group_box_title, size=60)
@@ -1492,6 +1493,115 @@ class BookStatusDialog(SizePersistedDialog):
         self.tm.refresh(self.show_match_colors)
 
     # Helpers
+    def _add_books_to_library(self):
+        '''
+        Filter out books already in calibre
+        Hook into gui.iactions['Add Books'].add_books_from_device()
+        gui2.actions.add #406
+        '''
+        self._log_location("not fully implemented")
+
+        # Save the selection region for restoration
+        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+        self.updated_match_quality = {}
+
+        # Isolate the books to add, confirming no cid
+        bta = self._selected_books()
+        paths_to_add = []
+        for b in bta:
+            if bta[b]['cid'] is None:
+                paths_to_add.append(bta[b]['path'])
+
+        # Build map of added books from the model so we know which items to monitor for completion
+        if paths_to_add:
+            # Find the books in the model so we can monitor the in_library field
+            model = self.parent.gui.memory_view.model()
+            added = {}
+            for item in model.sorted_map:
+                book = model.db[item]
+                if book.path in paths_to_add:
+                    added[item] = {'path': book.path}
+
+            # Tell calibre to add the paths
+            self.opts.gui.iactions['Add Books'].add_books_from_device(self.parent.gui.memory_view,
+                                                                      paths=paths_to_add)
+
+            # Wait for added books to be updated in model.db
+            # in_library property will be set to AUTHOR (or, less likely, UUID)
+            incomplete = True
+            while incomplete:
+                Application.processEvents()
+                for item in added:
+                    if model.db[item].in_library is None:
+                        break
+                else:
+                    incomplete = False
+
+            # Update in-memory with newly minted cid, populate added
+            for item in added:
+                #self._log(model.db[item].all_field_keys())
+                cid = model.db[item].application_id
+
+                # Add book_id, cid to item dict, update installed_books with cid
+                for book in self.installed_books.values():
+                    if book.path == added[item]['path']:
+                        added[item]['cid'] = cid
+                        added[item]['book_id'] = book.mid
+                        book.cid = cid
+                        break
+
+                # Add model_row, update cid in spreadsheet
+                for model_row in bta:
+                    if bta[model_row]['book_id'] == added[item]['book_id']:
+                        added[item]['model_row'] = model_row
+                        self.tm.set_calibre_id(model_row, cid)
+
+            pb = ProgressBar(parent=self.opts.gui, window_title="Updating calibre metadata",
+                             on_top=True)
+            total_books = len(added)
+            # Show progress in dispatched method - 2 times
+            pb.set_maximum(total_books * 2)
+            pb.set_value(0)
+            pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
+            pb.show()
+
+            db = self.opts.gui.current_db
+            cached_books = self.parent.connected_device.cached_books
+
+            # Update calibre metadata from Marvin metadata, bind uuid
+            for item in added:
+                mismatches = {}
+                this_book = cached_books[added[item]['path']]
+                mismatches['authors'] = {'Marvin': this_book['authors']}
+                mismatches['author_sort'] = {'Marvin': this_book['author_sort']}
+                mismatches['cover_hash'] = {'Marvin': this_book['cover_hash']}
+                mismatches['comments'] = {'Marvin': this_book['description']}
+                mismatches['pubdate'] = {'Marvin': this_book['pubdate']}
+                mismatches['publisher'] = {'Marvin': this_book['publisher']}
+                if this_book['series']:
+                    mismatches['series'] = {'Marvin': this_book['series']}
+                    mismatches['series_index'] = {'Marvin': this_book['series_index']}
+                mismatches['tags'] = {'Marvin': this_book['tags']}
+                mismatches['title'] = {'Marvin': this_book['title']}
+                mismatches['title_sort'] = {'Marvin': this_book['title_sort']}
+
+                # Get the newly minted calibre uuid
+                mi = db.get_metadata(added[item]['cid'], index_is_id=True)
+                mismatches['uuid'] = {'calibre': mi.uuid,
+                                      'Marvin': this_book['uuid']}
+
+                # Do the magic
+                self._update_calibre_metadata(added[item]['book_id'],
+                                              added[item]['cid'],
+                                              mismatches,
+                                              added[item]['model_row'],
+                                              pb)
+
+            pb.hide()
+
+            # Launch row flasher
+            self._flash_affected_rows()
+
     def _apply_date_read(self):
         '''
         Fetch the LAST_OPENED date, convert to datetime, apply to custom field
@@ -2139,7 +2249,7 @@ class BookStatusDialog(SizePersistedDialog):
             self.tv.hideColumn(index)
 
         # Set horizontal self.header props
-        self.tv.horizontalHeader().setStretchLastSection(True)
+        #self.tv.horizontalHeader().setStretchLastSection(True)
 
         # Set column width to fit contents
         self.tv.resizeColumnsToContents()
@@ -2157,113 +2267,6 @@ class BookStatusDialog(SizePersistedDialog):
         sort_order = self.opts.prefs.get('marvin_library_sort_order',
                                          Qt.DescendingOrder)
         self.tv.sortByColumn(sort_column, sort_order)
-
-    def _add_books_to_library(self):
-        '''
-        Filter out books already in calibre
-        Hook into gui.iactions['Add Books'].add_books_from_device()
-        gui2.actions.add #406
-        '''
-        self._log_location("not fully implemented")
-
-        # Save the selection region for restoration
-        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
-        self.updated_match_quality = {}
-
-        # Isolate the books to add, confirming no cid
-        bta = self._selected_books()
-        paths_to_add = []
-        for b in bta:
-            if bta[b]['cid'] is None:
-                paths_to_add.append(bta[b]['path'])
-
-        # Build map of added books from the model so we know which items to monitor for completion
-        if paths_to_add:
-            # Find the books in the model so we can monitor the in_library field
-            model = self.parent.gui.memory_view.model()
-            added = {}
-            for item in model.sorted_map:
-                book = model.db[item]
-                if book.path in paths_to_add:
-                    added[item] = {'path': book.path}
-
-            # Tell calibre to add the paths
-            self.opts.gui.iactions['Add Books'].add_books_from_device(self.parent.gui.memory_view,
-                                                                      paths=paths_to_add)
-
-            # Wait for added books to be updated in model.db
-            # in_library property will be set to AUTHOR (or, less likely, UUID)
-            incomplete = True
-            while incomplete:
-                Application.processEvents()
-                for item in added:
-                    if model.db[item].in_library is None:
-                        break
-                else:
-                    incomplete = False
-
-            # Update in-memory with newly minted cid, populate added
-            for item in added:
-                #self._log(model.db[item].all_field_keys())
-                cid = model.db[item].application_id
-
-                # Add book_id, cid to item dict, update installed_books with cid
-                for book in self.installed_books.values():
-                    if book.path == added[item]['path']:
-                        added[item]['cid'] = cid
-                        added[item]['book_id'] = book.mid
-                        book.cid = cid
-                        break
-
-                # Add model_row
-                for model_row in bta:
-                    if bta[model_row]['book_id'] == added[item]['book_id']:
-                        added[item]['model_row'] = model_row
-
-            pb = ProgressBar(parent=self.opts.gui, window_title="Updating calibre metadata",
-                             on_top=True)
-            total_books = len(added)
-            # Show progress in dispatched method - 2 times
-            pb.set_maximum(total_books * 2)
-            pb.set_value(0)
-            pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
-            pb.show()
-
-            db = self.opts.gui.current_db
-            cached_books = self.parent.connected_device.cached_books
-
-            # Update calibre metadata from Marvin metadata, bind uuid
-            for item in added:
-                mismatches = {}
-                this_book = cached_books[added[item]['path']]
-                mismatches['authors'] = {'Marvin': this_book['authors']}
-                mismatches['author_sort'] = {'Marvin': this_book['author_sort']}
-                mismatches['cover_hash'] = {'Marvin': this_book['cover_hash']}
-                mismatches['comments'] = {'Marvin': this_book['description']}
-                mismatches['pubdate'] = {'Marvin': this_book['pubdate']}
-                mismatches['publisher'] = {'Marvin': this_book['publisher']}
-                if this_book['series']:
-                    mismatches['series'] = {'Marvin': this_book['series']}
-                    mismatches['series_index'] = {'Marvin': this_book['series_index']}
-                mismatches['tags'] = {'Marvin': this_book['tags']}
-                mismatches['title'] = {'Marvin': this_book['title']}
-                mismatches['title_sort'] = {'Marvin': this_book['title_sort']}
-
-                # Get the newly minted calibre uuid
-                mi = db.get_metadata(added[item]['cid'], index_is_id=True)
-                mismatches['uuid'] = {'calibre': mi.uuid,
-                                      'Marvin': this_book['uuid']}
-
-                # Do the magic
-                self._update_calibre_metadata(added[item]['book_id'],
-                                              added[item]['cid'],
-                                              mismatches,
-                                              added[item]['model_row'],
-                                              pb)
-            pb.hide()
-
-            # Launch row flasher
-            self._flash_affected_rows()
 
     def _delete_books(self):
         '''
@@ -2681,7 +2684,8 @@ class BookStatusDialog(SizePersistedDialog):
                 Application.processEvents()
 
             self._issue_command(command_name, update_soup,
-                                ignore_timeouts=True)
+                                ignore_timeouts=True,
+                                update_local_db=True)
 
             self.busy_window.stop()
             self.busy_window.accept()
@@ -2696,6 +2700,10 @@ class BookStatusDialog(SizePersistedDialog):
             self._wait_for_command_completion(command_name, update_local_db=True,
                                               ignore_timeouts=True)
             """
+
+            # NO NO NO
+            # Need to test for incomplete results. If incomplete, need to get results from db
+            # OR - always get results from db.
 
             # Update visible model, self.installed_books
             for row in sorted(selected_books.keys(), reverse=True):
@@ -2741,16 +2749,14 @@ class BookStatusDialog(SizePersistedDialog):
             elif 'READ' in book_data.flags:
                 percent_read = "100%   "
                 pct_progress = 1.0
-            elif book_data.progress < 0.01:
-                percent_read = ''
             else:
                 # Pad the right side for visual comfort, since this col is
                 # right-aligned
                 percent_read = "{:3.0f}%   ".format(book_data.progress * 100)
             progress = SortableTableWidgetItem(percent_read, pct_progress)
         else:
-            #base_name = "progress000.png"
-            base_name = "progress_none.png"
+            base_name = "progress000.png"
+            #base_name = "progress_none.png"
             pct_progress = book_data.progress
             if 'NEW' in book_data.flags:
                 base_name = "progress_none.png"
@@ -3099,7 +3105,12 @@ class BookStatusDialog(SizePersistedDialog):
             if cid:
                 db = self.opts.gui.current_db
                 mi = db.get_metadata(cid, index_is_id=True)
-                ans = mi.ondevice_col
+                try:
+                    ans = mi._proxy_metadata.ondevice_col
+                except:
+                    self._log_location("ERROR: ondevice_col not available for '%s'" % mi.title)
+                    #self._log(mi.all_field_keys())
+                    ans = None
             return ans
 
         def _get_pubdate(row):
@@ -4415,13 +4426,12 @@ class BookStatusDialog(SizePersistedDialog):
                       (datetime.now().strftime('%H:%M:%S.%f'),
                       self.parent.connected_device.status_fs))
 
-            # Set initial watchdog timer for ACK
-
-            self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-            self.operation_timed_out = False
             self.ignore_timeouts = ignore_timeouts
-
-            self.watchdog.start()
+            self.operation_timed_out = False
+            if not ignore_timeouts:
+                # Set initial watchdog timer for ACK
+                self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                self.watchdog.start()
 
             while True:
                 if not self.ios.exists(self.parent.connected_device.status_fs):
@@ -4431,20 +4441,20 @@ class BookStatusDialog(SizePersistedDialog):
                         raise UserFeedback("Marvin operation timed out.",
                                            details=None, level=UserFeedback.WARN)
                         break
-                    #time.sleep(0.10)
                     Application.processEvents()
+                    time.sleep(0.10)
 
                 else:
-                    self.watchdog.cancel()
+                    # Start a new watchdog timer per iteration
+                    if not ignore_timeouts:
+                        self.watchdog.cancel()
+                        self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                        self.operation_timed_out = False
+                        self.watchdog.start()
 
                     self._log("%s: monitoring progress of %s" %
                               (datetime.now().strftime('%H:%M:%S.%f'),
                               command_name))
-
-                    # Start a new watchdog timer per iteration
-                    self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                    self.operation_timed_out = False
-                    self.watchdog.start()
 
                     code = '-1'
                     current_timestamp = 0.0
@@ -4491,22 +4501,25 @@ class BookStatusDialog(SizePersistedDialog):
                                     self.report_progress(0.5 + progress/2, '')
                                 """
 
-                                # Reset watchdog timer
-                                self.watchdog.cancel()
-                                self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                                self.watchdog.start()
-                            #time.sleep(0.01)
+                                if not ignore_timeouts:
+                                    # Reset watchdog timer
+                                    self.watchdog.cancel()
+                                    self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                                    self.watchdog.start()
+
                             Application.processEvents()
+                            time.sleep(0.10)
 
                         except:
-                            #import traceback
-                            #self._log(traceback.format_exc())
-                            #time.sleep(1.0)
+                            import traceback
+                            self._log(traceback.format_exc())
                             Application.processEvents()
+                            time.sleep(0.10)
                             self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
 
                     # Command completed
-                    self.watchdog.cancel()
+                    if not ignore_timeouts:
+                        self.watchdog.cancel()
 
                     final_code = status.get('code')
                     if final_code == '-1':

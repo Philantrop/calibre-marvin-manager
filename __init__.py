@@ -16,7 +16,7 @@ class MarvinManagerPlugin(InterfaceActionBase):
     supported_platforms = ['linux', 'osx', 'windows']
     author = 'Greg Riker'
     version = (0, 0, 1)
-    minimum_calibre_version = (0, 9, 34)
+    minimum_calibre_version = (0, 9, 41)
 
     actual_plugin = 'calibre_plugins.marvin_manager.action:MarvinManagerAction'
     prefs = JSONConfig('plugins/Marvin Mangler')
