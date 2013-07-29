@@ -38,8 +38,10 @@ from calibre.utils.ipc import RC
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
                       QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox,
                       QDoubleSpinBox, QFont, QIcon,
-                      QKeySequence, QLabel, QLineEdit, QPixmap, QProgressBar,
-                      QRadioButton, QSizePolicy, QSlider, QSpinBox, QString, QThread, QTimer, QUrl,
+                      QKeySequence, QLabel, QLineEdit,
+                      QPixmap, QProgressBar, QPushButton,
+                      QRadioButton, QSizePolicy, QSlider, QSpinBox, QString,
+                      QThread, QTimer, QUrl,
                       QVBoxLayout,
                       SIGNAL)
 from PyQt4.QtWebKit import QWebView
@@ -195,6 +197,10 @@ class HelpView(SizePersistedDialog):
 
 class MyBlockingBusy(QDialog):
 
+    NORMAL = 0
+    REQUESTED = 1
+    ACKNOWLEDGED = 2
+
     def __init__(self, gui, msg, size=100, window_title='Working', show_cancel=False):
         QDialog.__init__(self, gui, Qt.WindowStaysOnTopHint)
 
@@ -204,7 +210,7 @@ class MyBlockingBusy(QDialog):
         #self.msg.setWordWrap(True)
         self.font = QFont()
         self.font.setPointSize(self.font.pointSize() + 4)
-        self.cancel_requested = False
+        self.cancel_status = 0
         self.is_running = False
         self.msg.setFont(self.font)
         self.pi = ProgressIndicator(self)
@@ -216,7 +222,9 @@ class MyBlockingBusy(QDialog):
         self._layout.addSpacing(15)
 
         if show_cancel:
-            self.bb = QDialogButtonBox(QDialogButtonBox.Cancel)
+            self.bb = QDialogButtonBox()
+            self.cancel_button = QPushButton(QIcon(I('window-close.png')), 'Cancel')
+            self.bb.addButton(self.cancel_button, self.bb.RejectRole)
             self.bb.clicked.connect(self.button_handler)
             self._layout.addWidget(self.bb)
 
@@ -228,11 +236,22 @@ class MyBlockingBusy(QDialog):
         return QDialog.accept(self)
 
     def button_handler(self, button):
+        '''
+        Only change cancel_status from NORMAL to REQUESTED
+        '''
         if self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
-            self.cancel_requested = True
+            if self.cancel_status == self.NORMAL:
+                self.cancel_status = self.REQUESTED
+                self.cancel_button.setEnabled(False)
 
     def reject(self):
-        pass  # Cannot cancel this dialog
+        '''
+        Cannot cancel this dialog manually
+        '''
+        pass
+
+    def set_text(self, text):
+        self.msg.setText(text)
 
     def start(self):
         self.is_running = True

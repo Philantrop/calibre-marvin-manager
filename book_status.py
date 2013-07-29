@@ -2655,7 +2655,11 @@ class BookStatusDialog(SizePersistedDialog):
                 manifest_tag.insert(0, book_tag)
             update_soup.command.insert(0, manifest_tag)
 
-            self.busy_window = MyBlockingBusy(self, "Generating Deep View content…", size=60,
+            self.busy_window = MyBlockingBusy(self,
+                                              "Generating Deep View for %s" %
+                                               ("1 book…" if len(selected_books) == 1 else
+                                                "%d books…" % len(selected_books)),
+                                              size=60,
                                               show_cancel=True)
             QTimer.singleShot(0, self._start_busy_window)
 
@@ -4438,9 +4442,22 @@ class BookStatusDialog(SizePersistedDialog):
                                                    details=None, level=UserFeedback.WARN)
                                 break
 
-                            if False and self.busy_window.cancel_requested:
-                                self._log("cancel_requested")
-                                # Now what?
+                            # Cancel requested?
+                            if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                                self._log("user requested cancel")
+
+                                # Create "cancel.command" in staging folder
+                                ft = (b'/'.join([self.parent.connected_device.staging_folder,
+                                                 b'cancel.tmp']))
+                                fs = (b'/'.join([self.parent.connected_device.staging_folder,
+                                                 b'cancel.command']))
+                                self.ios.write("please stop", ft)
+                                self.ios.rename(ft, fs)
+
+                                # Change dialog text
+                                self.busy_window.set_text("Completing current book…")
+
+                                self.busy_window.cancel_status = self.busy_window.ACKNOWLEDGED
 
                             status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                             code = status.get('code')
@@ -4475,7 +4492,18 @@ class BookStatusDialog(SizePersistedDialog):
                     self.watchdog.cancel()
 
                     final_code = status.get('code')
-                    if final_code != '0':
+                    if final_code == '-1':
+                        final_status = "incomplete"
+                    elif final_code == '0':
+                        final_status = "completed successfully"
+                    elif final_code == '1':
+                        final_status = "completed with warnings"
+                    elif final_code == '2':
+                        final_status = "completed with errors"
+                    elif final_code == '3':
+                        final_status = "cancelled by user"
+
+                    if final_code not in ['0', '3']:
                         if final_code == '-1':
                             final_status = "in progress"
                         elif final_code == '1':
@@ -4487,10 +4515,17 @@ class BookStatusDialog(SizePersistedDialog):
 
                         messages = status.find('messages')
                         msgs = [msg.text for msg in messages]
-                        details = "code: %s\n" % final_code
+                        details = '\n'.join(["code: %s" % final_code, "status: %s" % final_status])
                         details += '\n'.join(msgs)
                         self._log(details)
-                        raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
+
+                        self.ios.remove(self.parent.connected_device.status_fs)
+
+                        self._log("%s: '%s' complete with errors" %
+                                  (datetime.now().strftime('%H:%M:%S.%f'),
+                                  command_name))
+
+                        raise UserFeedback("Operation %s.\nClick 'Show details' for more information."
                                            % (final_status),
                                            details=details, level=UserFeedback.WARN)
 
