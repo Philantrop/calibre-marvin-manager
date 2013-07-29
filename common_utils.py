@@ -206,19 +206,30 @@ class MyBlockingBusy(QDialog):
 
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
-        self.msg = QLabel(msg)
-        #self.msg.setWordWrap(True)
-        self.font = QFont()
-        self.font.setPointSize(self.font.pointSize() + 4)
         self.cancel_status = 0
         self.is_running = False
-        self.msg.setFont(self.font)
+
+        # Add the spinner
         self.pi = ProgressIndicator(self)
         self.pi.setDisplaySize(size)
         self._layout.addSpacing(15)
         self._layout.addWidget(self.pi, 0, Qt.AlignHCenter)
         self._layout.addSpacing(15)
+
+        # Fiddle with the message
+        self.msg = QLabel(msg)
+        #self.msg.setWordWrap(True)
+        self.font = QFont()
+        self.font.setPointSize(self.font.pointSize() + 2)
+        self.msg.setFont(self.font)
         self._layout.addWidget(self.msg, 0, Qt.AlignHCenter)
+        sp = QSizePolicy()
+        sp.setHorizontalStretch(True)
+        sp.setVerticalStretch(False)
+        sp.setHeightForWidth(False)
+        self.msg.setSizePolicy(sp)
+        self.msg.setMinimumHeight(self.font.pointSize() + 8)
+
         self._layout.addSpacing(15)
 
         if show_cancel:

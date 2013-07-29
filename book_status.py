@@ -877,6 +877,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     def initialize(self, parent):
         self.archived_cover_hashes = JSONConfig('plugins/Marvin_Mangler_resources/cover_hashes')
+        self.busy_window = None
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = 'content_hashes.zip'
         self.ios = parent.ios
@@ -1216,6 +1217,15 @@ class BookStatusDialog(SizePersistedDialog):
             default_content = "Default content"
             footer = None
 
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self.busy_window = MyBlockingBusy(self, "Retrieving %s…" % group_box_title, size=60)
+        self.busy_window.start()
+        self.busy_window.show()
+
+        response = self._issue_command(command_name, update_soup,
+                                       get_response="html_response.html",
+                                       update_local_db=False)
+
         response = self._issue_command(command_name, update_soup,
                                        get_response="html_response.html",
                                        update_local_db=False)
@@ -1234,10 +1244,12 @@ class BookStatusDialog(SizePersistedDialog):
         """
 
         if response:
+            # Convert to unicode
+            response = UnicodeDammit(response).unicode
+
             # Strip the UTF-8 BOM
             BOM = '\xef\xbb\xbf'
             response = re.sub(BOM, '', response)
-            response = UnicodeDammit(response).unicode
         else:
             response = default_content
 
@@ -1249,6 +1261,11 @@ class BookStatusDialog(SizePersistedDialog):
             'title': title,
             'refresh': refresh
             }
+
+        self.busy_window.stop()
+        self.busy_window.accept()
+        self.busy_window = None
+        QApplication.restoreOverrideCursor()
 
         klass = os.path.join(dialog_resources_path, 'html_viewer.py')
         if os.path.exists(klass):
@@ -2672,6 +2689,7 @@ class BookStatusDialog(SizePersistedDialog):
 
             self.busy_window.stop()
             self.busy_window.accept()
+            self.busy_window = None
 
             """
             # Copy command file to staging folder
@@ -4443,21 +4461,22 @@ class BookStatusDialog(SizePersistedDialog):
                                 break
 
                             # Cancel requested?
-                            if self.busy_window.cancel_status == self.busy_window.REQUESTED:
-                                self._log("user requested cancel")
+                            if self.busy_window is not None:
+                                if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                                    self._log("user requested cancel")
 
-                                # Create "cancel.command" in staging folder
-                                ft = (b'/'.join([self.parent.connected_device.staging_folder,
-                                                 b'cancel.tmp']))
-                                fs = (b'/'.join([self.parent.connected_device.staging_folder,
-                                                 b'cancel.command']))
-                                self.ios.write("please stop", ft)
-                                self.ios.rename(ft, fs)
+                                    # Create "cancel.command" in staging folder
+                                    ft = (b'/'.join([self.parent.connected_device.staging_folder,
+                                                     b'cancel.tmp']))
+                                    fs = (b'/'.join([self.parent.connected_device.staging_folder,
+                                                     b'cancel.command']))
+                                    self.ios.write("please stop", ft)
+                                    self.ios.rename(ft, fs)
 
-                                # Change dialog text
-                                self.busy_window.set_text("Completing current book…")
+                                    # Change dialog text
+                                    self.busy_window.set_text("Completing current book…")
 
-                                self.busy_window.cancel_status = self.busy_window.ACKNOWLEDGED
+                                    self.busy_window.cancel_status = self.busy_window.ACKNOWLEDGED
 
                             status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                             code = status.get('code')
@@ -4484,7 +4503,9 @@ class BookStatusDialog(SizePersistedDialog):
                             Application.processEvents()
 
                         except:
-                            #time.sleep(0.01)
+                            #import traceback
+                            #self._log(traceback.format_exc())
+                            #time.sleep(1.0)
                             Application.processEvents()
                             self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
 
