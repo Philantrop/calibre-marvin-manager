@@ -27,7 +27,7 @@ from calibre import strftime
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.errors import UserFeedback
 from calibre.devices.usbms.driver import debug_print
-from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag, UnicodeDammit
+from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup, Tag, UnicodeDammit
 from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.gui2 import Application, Dispatcher, error_dialog, warning_dialog
 from calibre.gui2.dialogs.message_box import MessageBox
@@ -630,7 +630,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def set_word_count(self, row, value):
         self.arraydata[row][self.parent.WORD_COUNT_COL] = value
-        #self.parent.repaint()
+        self.parent.repaint()
 
 
 class BookStatusDialog(SizePersistedDialog):
@@ -767,7 +767,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self.refresh_custom_columns()
 
             elif button.objectName() == 'view_global_vocabulary_button':
-                self.show_assets_dialog('show_global_vocabulary', 0)
+                self.show_html_dialog('show_global_vocabulary', 0)
 
             elif button.objectName() == 'view_metadata_button':
                 selected_rows = self._selected_rows()
@@ -818,11 +818,11 @@ class BookStatusDialog(SizePersistedDialog):
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
                         'show_highlights', 'show_vocabulary']:
-            self.show_assets_dialog(action, row)
+            self.show_html_dialog(action, row)
         elif action == 'show_collections':
             self.show_view_collections_dialog(row)
         elif action == 'show_global_vocabulary':
-            self.show_assets_dialog('show_global_vocabulary', row)
+            self.show_html_dialog('show_global_vocabulary', row)
         elif action == 'show_metadata':
             self.show_view_metadata_dialog(row)
         else:
@@ -858,7 +858,7 @@ class BookStatusDialog(SizePersistedDialog):
             self.show_view_metadata_dialog(row)
         elif column in [self.ANNOTATIONS_COL, self.DEEP_VIEW_COL,
                         self.ARTICLES_COL, self.VOCABULARY_COL]:
-            self.show_assets_dialog(asset_actions[column], row)
+            self.show_html_dialog(asset_actions[column], row)
         elif column == self.COLLECTIONS_COL:
             self.show_view_collections_dialog(row)
         elif column in [self.FLAGS_COL]:
@@ -1097,7 +1097,13 @@ class BookStatusDialog(SizePersistedDialog):
         pb.hide()
         updateCalibreGUIView()
 
-    def show_assets_dialog(self, action, row):
+    def show_help(self):
+        '''
+        Display help file
+        '''
+        self.parent.show_help()
+
+    def show_html_dialog(self, action, row):
         '''
         Display assets associated with book
         Articles, Annotations, Deep View, Vocabulary
@@ -1226,10 +1232,6 @@ class BookStatusDialog(SizePersistedDialog):
         response = self._issue_command(command_name, update_soup,
                                        get_response="html_response.html",
                                        update_local_db=False)
-
-        response = self._issue_command(command_name, update_soup,
-                                       get_response="html_response.html",
-                                       update_local_db=False)
         """
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
@@ -1247,6 +1249,17 @@ class BookStatusDialog(SizePersistedDialog):
         if response:
             # Convert Marvin's UTF-8 to unicode
             response = UnicodeDammit(response).unicode
+
+            # Inject CSS
+            response_soup = BeautifulSoup(response)
+            head = response_soup.find("head")
+            style_tag = Tag(response_soup, 'style')
+            style_tag['type'] = "text/css"
+            style_tag.insert(0, "h1 {font-size: 1.25em;} h2 {font-size: 1.125em;} h3 {font-size: 1em;}")
+            head.insert(0, style_tag)
+            response = response_soup.renderContents()
+            self._log(response)
+
         else:
             response = default_content
 
@@ -1281,12 +1294,6 @@ class BookStatusDialog(SizePersistedDialog):
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
-    def show_help(self):
-        '''
-        Display help file
-        '''
-        self.parent.show_help()
-
     def show_manage_collections_dialog(self):
         '''
         Present all active collection names, allow edit/deletion
@@ -1313,6 +1320,7 @@ class BookStatusDialog(SizePersistedDialog):
                                     ''')
             rows = collections_cur.fetchall()
             collections_cur.close()
+
         marvin_collection_list = []
         if len(rows):
             marvin_collection_list = [row[b'Name'] for row in rows]
@@ -1348,7 +1356,18 @@ class BookStatusDialog(SizePersistedDialog):
                                    'active_cids': self.library_collections.ids,
                                    'locations': current_collections}
 
+                        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+                        self.busy_window = MyBlockingBusy(self, "Updating collections…", size=60)
+                        self.busy_window.start()
+                        self.busy_window.show()
+
                         self._update_global_collections(details)
+
+                        self.busy_window.stop()
+                        self.busy_window.accept()
+                        self.busy_window = None
+                        QApplication.restoreOverrideCursor()
+
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -1781,10 +1800,12 @@ class BookStatusDialog(SizePersistedDialog):
 
         return parameters_tag
 
-    def _calculate_word_count(self):
+    def _calculate_word_count(self, silent=False):
         '''
         Calculate word count for each selected book
         selected_books: {row: {'book_id':, 'cid':, 'path':, 'title':}...}
+        return stats {book_id: word_count}
+        silent switch used when another method needs word count (Generate DV)
         '''
         def _extract_body_text(data):
             '''
@@ -1800,25 +1821,37 @@ class BookStatusDialog(SizePersistedDialog):
 
         self._log_location()
 
+        stats = {}
+
         selected_books = self._selected_books()
         if selected_books:
-            stats = {}
+            if not silent:
+                pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word count",
+                                 on_top=True)
+                total_books = len(selected_books)
+                pb.set_maximum(total_books)
+                pb.set_value(0)
+                pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
+                pb.show()
 
-            pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word count",
-                             on_top=True)
-            total_books = len(selected_books)
-            pb.set_maximum(total_books)
-            pb.set_value(0)
-            pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
-            pb.show()
+            # Save the selection region for restoration
+            self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
-            close_requested = False
-            for i, row in enumerate(selected_books):
-                if pb.close_requested:
-                    close_requested = True
-                    break
+            for row in sorted(selected_books.keys()):
+                # Do we already know the word count?
+                try:
+                    cwc = locale.atoi(self.tm.get_word_count(row))
+                    if cwc:
+                        stats[selected_books[row]['book_id']] = cwc
+                        continue
+                except:
+                    pass
 
-                pb.set_label('{:^100}'.format(selected_books[row]['title']))
+                # Highlight book we're working on
+                self.tv.selectRow(row)
+
+                if not silent:
+                    pb.set_label('{:^100}'.format(selected_books[row]['title']))
 
                 # Copy the remote epub to local storage
                 path = selected_books[row]['path']
@@ -1846,7 +1879,7 @@ class BookStatusDialog(SizePersistedDialog):
                 wordcount = get_wordcount_obj(book_text)
 
                 self._log("%s: %d words" % (selected_books[row]['title'], wordcount.words))
-                stats[selected_books[row]['title']] = wordcount.words
+                stats[selected_books[row]['book_id']] = wordcount.words
 
                 # Delete the local copy
                 os.remove(lbp)
@@ -1854,9 +1887,6 @@ class BookStatusDialog(SizePersistedDialog):
                 # Update the model
                 wc = locale.format("%d", wordcount.words, grouping=True)
                 self.tm.set_word_count(row, "{0} ".format(wc))
-
-                # Update the spreadsheet for those watching at home
-                self.repaint()
 
                 # Update self.installed_books
                 book_id = selected_books[row]['book_id']
@@ -1886,12 +1916,17 @@ class BookStatusDialog(SizePersistedDialog):
                 self._wait_for_command_completion(command_name, update_local_db=True)
                 """
 
-                pb.increment()
+                if not silent:
+                    pb.increment()
 
-            pb.hide()
+            if not silent:
+                pb.hide()
 
-            if close_requested:
-                self._log("user cancelled, partial results delivered")
+            # Restore selection
+            if self.saved_selection_region:
+                for rect in self.saved_selection_region.rects():
+                    self.tv.setSelection(rect, QItemSelectionModel.Select)
+                self.saved_selection_region = None
 
             if False:
                 # Display a summary
@@ -1903,6 +1938,7 @@ class BookStatusDialog(SizePersistedDialog):
                 details = '\n'.join(dl)
                 MessageBox(MessageBox.INFO, title, msg, det_msg=details,
                            show_copy_button=False).exec_()
+
         else:
             self._log("No selected books")
             # Display a summary
@@ -1910,6 +1946,9 @@ class BookStatusDialog(SizePersistedDialog):
             msg = ("<p>Select one or more books to calculate word count.</p>")
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
+
+        #self._log(stats)
+        return stats
 
     def _clear_flags(self, action):
         '''
@@ -2441,6 +2480,32 @@ class BookStatusDialog(SizePersistedDialog):
 
             updateCalibreGUIView()
 
+    def _fetch_deep_view_status(self, book_ids):
+        '''
+        Get current status for book_ids
+        '''
+        self._log_location(book_ids)
+
+        dvp_status = {}
+        con = sqlite3.connect(self.parent.connected_device.local_db_path)
+        with con:
+            con.row_factory = sqlite3.Row
+            # Get all the books
+            cur = con.cursor()
+            cur.execute('''SELECT
+                            Books.ID as id_,
+                            DeepViewPrepared
+                           FROM Books
+                        ''')
+
+            rows = cur.fetchall()
+            for i, row in enumerate(rows):
+                book_id = row[b'id_']
+                if book_id in book_ids:
+                    dvp_status[book_id] = row[b'DeepViewPrepared']
+
+        return dvp_status
+
     def _fetch_marvin_content_hash(self, path):
         '''
         Given a Marvin path, compute/fetch a hash of its contents (excluding OPF)
@@ -2650,15 +2715,56 @@ class BookStatusDialog(SizePersistedDialog):
     def _generate_deep_view(self):
         '''
         '''
+        #WORST_CASE_CONVERSION_RATE = 2800   # WPM iPad1
+        WORST_CASE_CONVERSION_RATE = 2350   # GwR empirical including updates
+        #BEST_CASE_CONVERSION_RATE = 6500    # WPM iPad4, iPhone5
+        TIMEOUT_PADDING_FACTOR = 0.50
+
         self._log_location()
-
-        command_name = "command"
-        command_type = "GenerateDeepView"
-        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-            command_type, time.mktime(time.localtime())))
-
         selected_books = self._selected_books()
         if selected_books:
+
+            # Estimate worst-case time required to generate DV, covering word count calculations
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            self.busy_window = MyBlockingBusy(self, "Estimating time to completion…", size=60)
+            self.busy_window.start()
+            self.busy_window.show()
+            word_counts = self._calculate_word_count(silent=True)
+            self.busy_window.stop()
+            self.busy_window.accept()
+            self.busy_window = None
+            QApplication.restoreOverrideCursor()
+
+            twc = sum(word_counts.itervalues())
+            wc_seconds = twc/WORST_CASE_CONVERSION_RATE
+            timeout = int(wc_seconds + (wc_seconds * TIMEOUT_PADDING_FACTOR))
+
+            m, s = divmod(wc_seconds, 60)
+            h, m = divmod(m, 60)
+            if h:
+                estimated_time = "%d:%02d:%02d" % (h, m, s)
+            else:
+                estimated_time = "%d:%02d" % (m, s)
+
+            # Confirm that user wants to proceed given estimated time to completion
+            total_books = len(selected_books)
+            book_descriptor = "books" if total_books > 1 else "book"
+            title = "Estimated time to completion"
+            msg = ("<p>Generating Deep View for " +
+                   "selected {0} ".format(book_descriptor) +
+                   "may take as long as {0}.</p>".format(estimated_time) +
+                   "<p>Proceed?</p>")
+            dlg = MessageBox(MessageBox.QUESTION, title, msg,
+                             show_copy_button=False)
+            if not dlg.exec_():
+                self._log("user declined to proceed with estimated_time of %s" % estimated_time)
+                return
+
+            command_name = "command"
+            command_type = "GenerateDeepView"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+
             # Build a manifest of selected books
             manifest_tag = Tag(update_soup, 'manifest')
             for row in sorted(selected_books.keys(), reverse=True):
@@ -2684,7 +2790,7 @@ class BookStatusDialog(SizePersistedDialog):
                 Application.processEvents()
 
             self._issue_command(command_name, update_soup,
-                                ignore_timeouts=True,
+                                timeout_override=timeout,
                                 update_local_db=True)
 
             self.busy_window.stop()
@@ -2701,15 +2807,16 @@ class BookStatusDialog(SizePersistedDialog):
                                               ignore_timeouts=True)
             """
 
-            # NO NO NO
-            # Need to test for incomplete results. If incomplete, need to get results from db
-            # OR - always get results from db.
+            # Get the latest DeepViewPrepared status for selected books
+            book_ids = [selected_books[row]['book_id'] for row in selected_books.keys()]
+            dpv_status = self._fetch_deep_view_status(book_ids)
 
             # Update visible model, self.installed_books
             for row in sorted(selected_books.keys(), reverse=True):
                 book_id = selected_books[row]['book_id']
-                self.installed_books[book_id].deep_view_prepared = 1
-                self.tm.set_deep_view(row, self.CHECKMARK)
+                self.installed_books[book_id].deep_view_prepared = dpv_status[book_id]
+                updated = self.CHECKMARK if dpv_status[book_id] else ''
+                self.tm.set_deep_view(row, updated)
 
     def _generate_marvin_hash_map(self, installed_books):
         '''
@@ -3310,7 +3417,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _issue_command(self, command_name, update_soup,
                        get_response=None,
-                       ignore_timeouts=False,
+                       timeout_override=None,
                        update_local_db=True):
         '''
         Consolidated command handler
@@ -3331,7 +3438,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Wait for completion
         response = self._wait_for_command_completion(command_name,
-                                                     ignore_timeouts=ignore_timeouts,
+                                                     timeout_override=timeout_override,
                                                      get_response=get_response,
                                                      update_local_db=update_local_db)
 
@@ -4047,8 +4154,23 @@ class BookStatusDialog(SizePersistedDialog):
         # ~~~~~~ calibre ~~~~~~
         lookup = self.parent.prefs.get('collection_field_lookup', None)
         if lookup is not None and details['active_cids']:
+
+            deleted_in_calibre = []
             for ctd in details['delete']:
-                if ctd in details['locations']['calibre']:
+                previous_name = None
+                for k, v in details['rename'].items():
+                    if v == ctd:
+                        previous_name = k
+                        break
+
+                if (ctd in details['locations']['calibre'] or
+                        previous_name in details['locations']['calibre']):
+
+                    if previous_name:
+                        # Switch identity
+                        ctd = previous_name
+                        deleted_in_calibre.append(ctd)
+
                     for cid in details['active_cids']:
                         # Get the current value from the lookup field
                         db = self.opts.gui.current_db
@@ -4071,7 +4193,7 @@ class BookStatusDialog(SizePersistedDialog):
                                 self.installed_books[book_id].calibre_collections = collections
 
             for ctr in details['rename']:
-                if ctr in details['locations']['calibre']:
+                if ctr in details['locations']['calibre'] and ctr not in deleted_in_calibre:
                     for cid in details['active_cids']:
                         # Get the current value from the lookup field
                         db = self.opts.gui.current_db
@@ -4097,18 +4219,35 @@ class BookStatusDialog(SizePersistedDialog):
                                 self.installed_books[book_id].calibre_collections = collections
 
         # ~~~~~~ Marvin ~~~~~~
-        command_name = "command"
-        command_type = "UpdateGlobalCollections"
-        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-            command_type, time.mktime(time.localtime())))
-        parameters_tag = Tag(update_soup, 'parameters')
-        update_soup.command.insert(0, parameters_tag)
 
         cached_books = self.parent.connected_device.cached_books
+
+        deleted_in_marvin = []
         for ctd in details['delete']:
-            if ctd in details['locations']['Marvin']:
-                # update self.installed_books, Device model
+            previous_name = None
+            for k, v in details['rename'].items():
+                if v == ctd:
+                    previous_name = k
+                    break
+
+            if (ctd in details['locations']['Marvin'] or
+                    previous_name in details['locations']['Marvin']):
+
+                if previous_name:
+                    # Switch identity, delete from details['rename']
+                    ctd = previous_name
+                    deleted_in_marvin.append(ctd)
+
+                # Issue one update per deleted collection
                 for book_id, book in self.installed_books.items():
+
+                    command_name = "command"
+                    command_type = "UpdateGlobalCollections"
+                    update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                        command_type, time.mktime(time.localtime())))
+                    parameters_tag = Tag(update_soup, 'parameters')
+                    update_soup.command.insert(0, parameters_tag)
+
                     if ctd in book.device_collections:
                         self._log("%s: delete '%s'" % (book.title, book.device_collections))
                         book.device_collections.remove(ctd)
@@ -4125,13 +4264,30 @@ class BookStatusDialog(SizePersistedDialog):
 
                         # Add a <parameter action="delete"> tag
                         parameter_tag = Tag(update_soup, 'parameter')
-                        parameter_tag['action'] = "delete"
+                        parameter_tag['name'] = "action"
+                        parameter_tag.insert(0, "delete")
+                        parameters_tag.insert(0, parameter_tag)
+
+                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag['name'] = "name"
                         parameter_tag.insert(0, ctd)
                         parameters_tag.insert(0, parameter_tag)
 
+                        self._issue_command(command_name, update_soup)
+
         for ctr in details['rename']:
-            if ctr in details['locations']['Marvin']:
+            if ctr in details['locations']['Marvin'] and ctr not in deleted_in_marvin:
+
+                # Issue one update per renamed collection
                 for book_id, book in self.installed_books.items():
+
+                    command_name = "command"
+                    command_type = "UpdateGlobalCollections"
+                    update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                        command_type, time.mktime(time.localtime())))
+                    parameters_tag = Tag(update_soup, 'parameters')
+                    update_soup.command.insert(0, parameters_tag)
+
                     if ctr in book.device_collections:
                         self._log("%s: rename '%s'" % (book.title, book.device_collections))
                         book.device_collections.remove(ctr)
@@ -4149,25 +4305,23 @@ class BookStatusDialog(SizePersistedDialog):
                         # Update driver
                         cached_books[book.path]['device_collections'] = book.device_collections
 
-                        # Add a <parameter action="rename"> tag
+                        # Add the parameter tags
                         parameter_tag = Tag(update_soup, 'parameter')
-                        parameter_tag['action'] = "rename"
-                        parameter_tag['newname'] = replacement
+                        parameter_tag['name'] = "action"
+                        parameter_tag.insert(0, "rename")
+                        parameters_tag.insert(0, parameter_tag)
+
+                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag['name'] = "name"
                         parameter_tag.insert(0, ctr)
                         parameters_tag.insert(0, parameter_tag)
 
-        # Tell Marvin
-        if len(parameters_tag):
+                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag['name'] = "newname"
+                        parameter_tag.insert(0, replacement)
+                        parameters_tag.insert(0, parameter_tag)
 
-            self._issue_command(command_name, update_soup)
-            """
-            # Copy command file to staging folder
-            self._stage_command_file(command_name, update_soup,
-                                     show_command=self.prefs.get('show_staged_commands', False))
-
-            # Wait for completion
-            self._wait_for_command_completion(command_name, update_local_db=True)
-            """
+                        self._issue_command(command_name, update_soup)
 
     def _update_marvin_collections(self, book_id, updated_marvin_collections):
         '''
@@ -4411,13 +4565,16 @@ class BookStatusDialog(SizePersistedDialog):
             self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
 
     def _wait_for_command_completion(self, command_name, update_local_db=True,
-            get_response=None, ignore_timeouts=False):
+            get_response=None, timeout_override=None):
         '''
         Wait for Marvin to issue progress reports via status.xml
         Marvin creates status.xml upon receiving command, increments <progress>
         from 0.0 to 1.0 as command progresses.
         '''
-        self._log_location(command_name)
+        msg = ''
+        if timeout_override:
+            msg = "using timeout_override %d" % timeout_override
+        self._log_location(msg)
 
         response = None
 
@@ -4426,12 +4583,15 @@ class BookStatusDialog(SizePersistedDialog):
                       (datetime.now().strftime('%H:%M:%S.%f'),
                       self.parent.connected_device.status_fs))
 
-            self.ignore_timeouts = ignore_timeouts
+            if not timeout_override:
+                timeout_value = self.WATCHDOG_TIMEOUT
+            else:
+                timeout_value = timeout_override
+
+            # Set initial watchdog timer for ACK with default timeout
             self.operation_timed_out = False
-            if not ignore_timeouts:
-                # Set initial watchdog timer for ACK
-                self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                self.watchdog.start()
+            self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+            self.watchdog.start()
 
             while True:
                 if not self.ios.exists(self.parent.connected_device.status_fs):
@@ -4446,11 +4606,10 @@ class BookStatusDialog(SizePersistedDialog):
 
                 else:
                     # Start a new watchdog timer per iteration
-                    if not ignore_timeouts:
-                        self.watchdog.cancel()
-                        self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                        self.operation_timed_out = False
-                        self.watchdog.start()
+                    self.watchdog.cancel()
+                    self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
+                    self.operation_timed_out = False
+                    self.watchdog.start()
 
                     self._log("%s: monitoring progress of %s" %
                               (datetime.now().strftime('%H:%M:%S.%f'),
@@ -4501,11 +4660,10 @@ class BookStatusDialog(SizePersistedDialog):
                                     self.report_progress(0.5 + progress/2, '')
                                 """
 
-                                if not ignore_timeouts:
-                                    # Reset watchdog timer
-                                    self.watchdog.cancel()
-                                    self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                                    self.watchdog.start()
+                                # Reset watchdog timer
+                                self.watchdog.cancel()
+                                self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
+                                self.watchdog.start()
 
                             Application.processEvents()
                             time.sleep(0.10)
@@ -4518,8 +4676,7 @@ class BookStatusDialog(SizePersistedDialog):
                             self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
 
                     # Command completed
-                    if not ignore_timeouts:
-                        self.watchdog.cancel()
+                    self.watchdog.cancel()
 
                     final_code = status.get('code')
                     if final_code == '-1':
@@ -4590,12 +4747,4 @@ class BookStatusDialog(SizePersistedDialog):
         Set flag if I/O operation times out
         '''
         self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
-
-        if self.ignore_timeouts:
-            # Start a new watchdog timer per iteration
-            self._log("timeouts ignored, resetting timer")
-            self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-            self.operation_timed_out = False
-            self.watchdog.start()
-        else:
-            self.operation_timed_out = True
+        self.operation_timed_out = True

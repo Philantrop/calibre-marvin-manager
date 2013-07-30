@@ -22,6 +22,9 @@ from PyQt4.Qt import (Qt, QDialog, QIcon,
 class MyDeviceCategoryEditor(DeviceCategoryEditor):
     '''
     subclass of gui2.dialogs.device_category_editor
+    .available_tags is QListWidget
+    .rename_button
+    .delete_button
     '''
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
@@ -49,8 +52,16 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
         self.to_rename = {}
         self.to_delete = set([])
 
-        cc = set(data['calibre'])
-        mc = set(data['Marvin'])
+        try:
+            cc = set(data['calibre'])
+        except:
+            cc = set([])
+
+        try:
+            mc = set(data['Marvin'])
+        except:
+            mc = set([])
+
         merged = list(cc.union(mc))
         for tag in sorted(merged, key=key):
             item = ListWidgetItem(tag)

@@ -145,16 +145,21 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         # Populate collection models
         self._initialize_collections()
 
-        if self.calibre_collections:
+        # Save initial Marvin state
+        self.initial_marvin_collections = list(self._get_marvin_collections())
+        self.marvin_gb.setToolTip("Collections assigned in Marvin")
+
+        if self.calibre_collections is not None:
             # Save initial state
             self.initial_calibre_collections = list(self._get_calibre_collections())
-            self.initial_marvin_collections = list(self._get_marvin_collections())
             # Remind the user of calibre's custom column, disable buttons if no calibre field
             calibre_cf = self.prefs.get('collection_field_comboBox', '')
             if calibre_cf:
                 self.calibre_gb.setTitle("Calibre (%s)" % calibre_cf)
+                self.calibre_gb.setToolTip("Collection assignments from '%s'" % calibre_cf)
             else:
-                self.calibre_gb.setTitle("Calibre (no collections field)")
+                self.calibre_gb.setTitle("Calibre")
+                self.calibre_gb.setToolTip("No custom column selected")
                 self.calibre_gb.setEnabled(False)
                 # Disable import/export/sync
                 self.export_to_marvin_tb.setEnabled(False)
@@ -167,9 +172,9 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
                     self.export_to_marvin_tb.setEnabled(False)
                     self.import_from_marvin_tb.setEnabled(False)
                     self.merge_collections_tb.setEnabled(False)
+
         else:
-            # Save initial state
-            self.initial_marvin_collections = list(self._get_marvin_collections())
+            # No cid, this book is Marvin only
             # Hide the calibre panel, disable tool buttons
             self.calibre_gb.setVisible(False)
             self.export_to_marvin_tb.setEnabled(False)

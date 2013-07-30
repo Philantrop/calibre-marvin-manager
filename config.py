@@ -54,7 +54,6 @@ class ConfigWidget(QWidget):
         }
     }
 
-
     def __init__(self, plugin_action):
         self.gui = get_gui()
         self.icon = plugin_action.icon
