@@ -326,7 +326,6 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                                                       top=self.BORDER_TB,
                                                       bottom=self.BORDER_TB,
                                                       border_color=self.BORDER_COLOR)
-
                 pixmap = QPixmap()
                 pixmap.loadFromData(bordered_thumb)
                 self.calibre_cover.setPixmap(pixmap)
@@ -335,7 +334,6 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             _fetch_marvin_cover()
 
     def _populate_description(self):
-
         # Set the bg color of the description text fields to the dialog bg color
         bgcolor = self.palette().color(QPalette.Background)
         palette = QPalette()
@@ -359,18 +357,18 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
     def _populate_pubdate(self):
         if 'pubdate' in self.mismatches:
             if self.mismatches['pubdate']['calibre']:
-                cs_pubdate = "<b>Published:</b> {0}".format(strftime("%e %B %Y", t=self.mismatches['pubdate']['calibre']))
+                cs_pubdate = "<b>Published:</b> {0}".format(strftime("%d %B %Y", t=self.mismatches['pubdate']['calibre']))
             else:
                 cs_pubdate = "<b>Published:</b> Date unknown"
             self.calibre_pubdate.setText(self.YELLOW_BG.format(cs_pubdate))
 
             if self.mismatches['pubdate']['Marvin']:
-                ms_pubdate = "<b>Published:</b> {0}".format(strftime("%e %B %Y", t=self.mismatches['pubdate']['Marvin']))
+                ms_pubdate = "<b>Published:</b> {0}".format(strftime("%d %B %Y", t=self.mismatches['pubdate']['Marvin']))
             else:
                 ms_pubdate = "<b>Published:</b> Date unknown"
             self.marvin_pubdate.setText(self.YELLOW_BG.format(ms_pubdate))
         elif self.installed_book.pubdate:
-            pubdate = "<b>Published:</b> {0}".format(strftime("%e %B %Y", t=self.installed_book.pubdate))
+            pubdate = "<b>Published:</b> {0}".format(strftime("%d %B %Y", t=self.installed_book.pubdate))
             self.calibre_pubdate.setText(pubdate)
             self.marvin_pubdate.setText(pubdate)
         else:

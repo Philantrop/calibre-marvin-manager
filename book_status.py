@@ -656,12 +656,12 @@ class BookStatusDialog(SizePersistedDialog):
         READING_FLAG = 2
         READ_FLAG = 1
 
-    # Column assignments
+    # Column assignments. When changing order here, also change in _construct_table_data
     if True:
         LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
                           'Title', 'Author', 'Word Count', 'Progress', 'Last read',
                           'Collections', 'Flags',
-                          'Annotations', 'Articles', 'Deep View', 'Vocabulary',
+                          'Annotations', 'Vocabulary', 'Deep View', 'Articles',
                           'Match Quality']
         ANNOTATIONS_COL = LIBRARY_HEADER.index('Annotations')
         ARTICLES_COL = LIBRARY_HEADER.index('Articles')
@@ -1120,6 +1120,9 @@ class BookStatusDialog(SizePersistedDialog):
         refresh = None
 
         if action == 'show_deep_view_articles':
+            if not self.installed_books[book_id].articles:
+                return
+
             command_name = "command"
             command_type = "GetDeepViewArticlesHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
@@ -1180,6 +1183,9 @@ class BookStatusDialog(SizePersistedDialog):
             footer = None
 
         elif action == 'show_highlights':
+            if not self.installed_books[book_id].highlights:
+                return
+
             command_name = "command"
             command_type = "GetAnnotationsHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
@@ -1204,6 +1210,9 @@ class BookStatusDialog(SizePersistedDialog):
                     }
 
         elif action == 'show_vocabulary':
+            if not self.installed_books[book_id].vocabulary:
+                return
+
             command_name = "command"
             command_type = "GetLocalVocabularyHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
@@ -1232,34 +1241,10 @@ class BookStatusDialog(SizePersistedDialog):
         response = self._issue_command(command_name, update_soup,
                                        get_response="html_response.html",
                                        update_local_db=False)
-        """
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-
-        # Copy command file to staging folder
-        self._stage_command_file(command_name, update_soup,
-                                 show_command=self.prefs.get('show_staged_commands', False))
-
-        # Wait for completion
-        content = self._wait_for_command_completion(command_name,
-                                                    update_local_db=False,
-                                                    get_response="html_response.html")
-        QApplication.restoreOverrideCursor()
-        """
-
         if response:
             # Convert Marvin's UTF-8 to unicode
             response = UnicodeDammit(response).unicode
-
-            # Inject CSS
-            response_soup = BeautifulSoup(response)
-            head = response_soup.find("head")
-            style_tag = Tag(response_soup, 'style')
-            style_tag['type'] = "text/css"
-            style_tag.insert(0, "h1 {font-size: 1.25em;} h2 {font-size: 1.125em;} h3 {font-size: 1em;}")
-            head.insert(0, style_tag)
-            response = response_soup.renderContents()
-            self._log(response)
-
+            response = self._inject_css(response)
         else:
             response = default_content
 
@@ -1806,6 +1791,7 @@ class BookStatusDialog(SizePersistedDialog):
         selected_books: {row: {'book_id':, 'cid':, 'path':, 'title':}...}
         return stats {book_id: word_count}
         silent switch used when another method needs word count (Generate DV)
+        Wait until completion to update local_db
         '''
         def _extract_body_text(data):
             '''
@@ -1906,7 +1892,7 @@ class BookStatusDialog(SizePersistedDialog):
                 book_tag['wordcount'] = wordcount.words
                 update_soup.manifest.insert(0, book_tag)
 
-                self._issue_command(command_name, update_soup)
+                self._issue_command(command_name, update_soup, update_local_db=False)
                 """
                 # Copy command file to staging folder
                 self._stage_command_file(command_name, update_soup,
@@ -1927,6 +1913,9 @@ class BookStatusDialog(SizePersistedDialog):
                 for rect in self.saved_selection_region.rects():
                     self.tv.setSelection(rect, QItemSelectionModel.Select)
                 self.saved_selection_region = None
+
+            # Update local_db for all changes
+            self._localize_marvin_database()
 
             if False:
                 # Display a summary
@@ -2236,9 +2225,9 @@ class BookStatusDialog(SizePersistedDialog):
                 collection_match,
                 flags,
                 len(book_data.highlights) if len(book_data.highlights) else '',
-                article_count if article_count else '',
-                self.CHECKMARK if book_data.deep_view_prepared else '',
                 len(book_data.vocabulary) if len(book_data.vocabulary) else '',
+                self.CHECKMARK if book_data.deep_view_prepared else '',
+                article_count if article_count else '',
                 match_quality]
             tabledata.append(this_book)
         return tabledata
@@ -2736,7 +2725,7 @@ class BookStatusDialog(SizePersistedDialog):
             QApplication.restoreOverrideCursor()
 
             twc = sum(word_counts.itervalues())
-            wc_seconds = twc/WORST_CASE_CONVERSION_RATE
+            wc_seconds = twc/WORST_CASE_CONVERSION_RATE + 1
             timeout = int(wc_seconds + (wc_seconds * TIMEOUT_PADDING_FACTOR))
 
             m, s = divmod(wc_seconds, 60)
@@ -2746,19 +2735,23 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 estimated_time = "%d:%02d" % (m, s)
 
-            # Confirm that user wants to proceed given estimated time to completion
-            total_books = len(selected_books)
-            book_descriptor = "books" if total_books > 1 else "book"
-            title = "Estimated time to completion"
-            msg = ("<p>Generating Deep View for " +
-                   "selected {0} ".format(book_descriptor) +
-                   "may take as long as {0}.</p>".format(estimated_time) +
-                   "<p>Proceed?</p>")
-            dlg = MessageBox(MessageBox.QUESTION, title, msg,
-                             show_copy_button=False)
-            if not dlg.exec_():
-                self._log("user declined to proceed with estimated_time of %s" % estimated_time)
-                return
+            if wc_seconds > 10:
+                # Confirm that user wants to proceed given estimated time to completion
+                total_books = len(selected_books)
+                book_descriptor = "books" if total_books > 1 else "book"
+                title = "Estimated time to completion"
+                msg = ("<p>Generating Deep View for " +
+                       "selected {0} ".format(book_descriptor) +
+                       "may take as long as {0}.</p>".format(estimated_time) +
+                       "<p>Proceed?</p>")
+                dlg = MessageBox(MessageBox.QUESTION, title, msg,
+                                 show_copy_button=False)
+                if not dlg.exec_():
+                    self._log("user declined to proceed with estimated_time of %s" % estimated_time)
+                    return
+            else:
+                # Use method default timeout
+                timeout = None
 
             command_name = "command"
             command_type = "GenerateDeepView"
@@ -3376,6 +3369,21 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("%s word_count: %s" % (installed_books[book].title,
                                                  repr(installed_books[book].word_count)))
         return installed_books
+
+    def _inject_css(self, raw):
+        '''
+        stick a <style> element into html
+        placeholder to render headers more reasonably
+        '''
+        self._log_location()
+
+        styled_soup = BeautifulSoup(raw)
+        head = styled_soup.find("head")
+        style_tag = Tag(styled_soup, 'style')
+        style_tag['type'] = "text/css"
+        style_tag.insert(0, "h1 {font-size: 1.25em;} h2 {font-size: 1.125em;} h3 {font-size: 1em;}")
+        head.insert(0, style_tag)
+        return styled_soup.renderContents()
 
     def _inform_marvin_collections(self, book_id):
         '''
@@ -4669,8 +4677,8 @@ class BookStatusDialog(SizePersistedDialog):
                             time.sleep(0.10)
 
                         except:
-                            import traceback
-                            self._log(traceback.format_exc())
+                            #import traceback
+                            #self._log(traceback.format_exc())
                             Application.processEvents()
                             time.sleep(0.10)
                             self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
