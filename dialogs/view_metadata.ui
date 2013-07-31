@@ -577,12 +577,28 @@
      </item>
     </layout>
    </item>
-   <item row="1" column="0">
+   <item row="2" column="0">
     <widget class="QDialogButtonBox" name="bb">
      <property name="standardButtons">
       <set>QDialogButtonBox::NoButton</set>
      </property>
     </widget>
+   </item>
+   <item row="1" column="0">
+    <spacer name="horizontalSpacer">
+     <property name="orientation">
+      <enum>Qt::Horizontal</enum>
+     </property>
+     <property name="sizeType">
+      <enum>QSizePolicy::Fixed</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>600</width>
+       <height>6</height>
+      </size>
+     </property>
+    </spacer>
    </item>
   </layout>
  </widget>

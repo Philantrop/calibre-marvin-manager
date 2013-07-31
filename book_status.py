@@ -2776,9 +2776,9 @@ class BookStatusDialog(SizePersistedDialog):
                 total_books = len(selected_books)
                 book_descriptor = "books" if total_books > 1 else "book"
                 title = "Estimated time to completion"
-                msg = ("<p>Depending on your iDevice, generating Deep View for " +
+                msg = ("<p>Generating Deep View for " +
                        "selected {0} ".format(book_descriptor) +
-                       "may take as long as {0}.</p>".format(estimated_time) +
+                       "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
                        "<p>Proceed?</p>")
                 dlg = MessageBox(MessageBox.QUESTION, title, msg,
                                  show_copy_button=False)
