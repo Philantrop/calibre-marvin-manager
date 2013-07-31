@@ -22,12 +22,10 @@ from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
 
 plugin_prefs = JSONConfig('plugins/Marvin XD')
 
-
 class ConfigWidget(QWidget):
     '''
     Config dialog for Marvin Manager
     '''
-    DEFAULT_CSS = "h1\t{font-size: 1.5em;}\nh2\t{font-size: 1.25em;}\nh3\t{font-size: 1em;}"
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -246,8 +244,8 @@ class ConfigWidget(QWidget):
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
 
-        # Restore/init the CSS
-        self.cfg_css_pte.setPlainText(self.prefs.get('injected_css', self.DEFAULT_CSS))
+        # Restore/init the stored CSS
+        self.cfg_css_pte.setPlainText(self.prefs.get('injected_css', ''))
 
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''

@@ -201,7 +201,7 @@ class MyBlockingBusy(QDialog):
     REQUESTED = 1
     ACKNOWLEDGED = 2
 
-    def __init__(self, gui, msg, size=100, window_title='Working', show_cancel=False):
+    def __init__(self, gui, msg, size=100, window_title='Marvin XD', show_cancel=False):
         QDialog.__init__(self, gui, Qt.WindowStaysOnTopHint)
 
         self._layout = QVBoxLayout()
@@ -239,7 +239,7 @@ class MyBlockingBusy(QDialog):
             self.bb.clicked.connect(self.button_handler)
             self._layout.addWidget(self.bb)
 
-        #self.setWindowTitle(window_title)
+        self.setWindowTitle(window_title)
         self.resize(self.sizeHint())
 
     def accept(self):

@@ -95,6 +95,9 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
             self.marvin_status_changed)
 
+        # Set the icon
+        self.setWindowIcon(self.parent.icon)
+
         # Set or hide the header
         if content['header']:
             self.header.setText(content['header'])

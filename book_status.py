@@ -41,7 +41,7 @@ from calibre.utils.zipfile import ZipFile
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, Book, InventoryCollections,
     MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
-    updateCalibreGUIView)
+    get_icon, updateCalibreGUIView)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'dialogs')
 
@@ -69,7 +69,7 @@ class MyTableView(QTableView):
             afn = self.parent.prefs.get('annotations_field_comboBox', None)
             no_annotations = not selected_books[row]['has_annotations']
 
-            ac = menu.addAction("View Highlights")
+            ac = menu.addAction("View Annotations")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
             if len(selected_books) > 1 or no_annotations:
@@ -86,21 +86,24 @@ class MyTableView(QTableView):
                             break
                 elif len(selected_books) == 1 and selected_books[row]['has_annotations'] and calibre_cids:
                     enabled = True
-                ac = menu.addAction("Add Highlights to '{0}' column".format(afn))
+                ac = menu.addAction("Add Annotations to '{0}' column".format(afn))
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "fetch_annotations", row))
             else:
-                ac = menu.addAction("No custom field specified for Highlights")
+                ac = menu.addAction("No 'Annotations' custom column specified")
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.setEnabled(enabled)
 
         elif col == self.parent.ARTICLES_COL:
-            no_articles = not selected_books[row]['has_articles']
-            ac = menu.addAction("View articles")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view_articles", row))
-            if len(selected_books) > 1 or no_articles:
-                ac.setEnabled(False)
+            try:
+                no_articles = not selected_books[row]['has_articles']
+                ac = menu.addAction("View articles")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'articles.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_deep_view_articles", row))
+                if len(selected_books) > 1 or no_articles:
+                    ac.setEnabled(False)
+            except:
+                pass
 
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
@@ -142,49 +145,56 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "manage_collections", row))
 
         elif col == self.parent.DEEP_VIEW_COL:
-            no_dv_content = not selected_books[row]['has_dv_content']
+            try:
+                no_dv_content = False
+                for row in selected_books:
+                    if not selected_books[row]['has_dv_content']:
+                        no_dv_content = True
+                        break
 
-            ac = menu.addAction("Generate Deep View content")
-            ac.setIcon(QIcon(I('exec.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "generate_deep_view", row))
-            ac.setEnabled(no_dv_content)
+                ac = menu.addAction("Generate Deep View content")
+                ac.setIcon(QIcon(I('exec.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "generate_deep_view", row))
+                ac.setEnabled(no_dv_content)
 
-            menu.addSeparator()
+                menu.addSeparator()
 
-            ac = menu.addAction("Deep View articles")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
-                                         "show_deep_view_articles", row))
-            if len(selected_books) > 1 or no_dv_content:
-                ac.setEnabled(False)
+                ac = menu.addAction("Deep View articles")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                             "show_deep_view_articles", row))
+                if len(selected_books) > 1 or no_dv_content:
+                    ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View names sorted alphabetically")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
-                                         "show_deep_view_alphabetically", row))
-            if len(selected_books) > 1 or no_dv_content:
-                ac.setEnabled(False)
+                ac = menu.addAction("Deep View names sorted alphabetically")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                             "show_deep_view_alphabetically", row))
+                if len(selected_books) > 1 or no_dv_content:
+                    ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View names sorted by importance")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
-                                         "show_deep_view_by_importance", row))
-            if len(selected_books) > 1 or no_dv_content:
-                ac.setEnabled(False)
+                ac = menu.addAction("Deep View names sorted by importance")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                             "show_deep_view_by_importance", row))
+                if len(selected_books) > 1 or no_dv_content:
+                    ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View names sorted by order of appearance")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
-                                         "show_deep_view_by_appearance", row))
-            if len(selected_books) > 1 or no_dv_content:
-                ac.setEnabled(False)
+                ac = menu.addAction("Deep View names sorted by order of appearance")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                             "show_deep_view_by_appearance", row))
+                if len(selected_books) > 1 or no_dv_content:
+                    ac.setEnabled(False)
 
-            ac = menu.addAction("Deep View names with notes and flags first")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
-                                         "show_deep_view_by_annotations", row))
-            if len(selected_books) > 1 or no_dv_content:
-                ac.setEnabled(False)
+                ac = menu.addAction("Deep View names with notes and flags first")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
+                                             "show_deep_view_by_annotations", row))
+                if len(selected_books) > 1 or no_dv_content:
+                    ac.setEnabled(False)
+            except:
+                pass
 
         elif col == self.parent.FLAGS_COL:
             ac = menu.addAction("Clear All")
@@ -227,7 +237,7 @@ class MyTableView(QTableView):
                     last_opened = True
                     break
 
-            title = "No 'Date read' custom field selected"
+            title = "No 'Date read' custom field specified"
             if date_read_field:
                 title = "Apply to '%s' column" % date_read_field
             ac = menu.addAction(title)
@@ -305,17 +315,20 @@ class MyTableView(QTableView):
             ac.triggered.connect(self.parent._delete_books)
 
         elif col == self.parent.VOCABULARY_COL:
-            no_vocabulary = not selected_books[row]['has_vocabulary']
+            try:
+                no_vocabulary = not selected_books[row]['has_vocabulary']
 
-            ac = menu.addAction("View vocabulary for this book")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary", row))
-            if len(selected_books) > 1 or no_vocabulary:
-                ac.setEnabled(False)
+                ac = menu.addAction("View vocabulary for this book")
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'vocabulary.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_vocabulary", row))
+                if len(selected_books) > 1 or no_vocabulary:
+                    ac.setEnabled(False)
 
-            ac = menu.addAction("View all vocabulary words")
-            ac.setIcon(QIcon(I('books_in_series.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_global_vocabulary", row))
+                ac = menu.addAction("View all vocabulary words")
+                ac.setIcon(QIcon(I('books_in_series.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_global_vocabulary", row))
+            except:
+                pass
 
         elif col == self.parent.WORD_COUNT_COL:
             ac = menu.addAction("Calculate word count")
@@ -847,9 +860,9 @@ class BookStatusDialog(SizePersistedDialog):
         asset_actions = {
             self.ANNOTATIONS_COL: 'show_highlights',
             self.ARTICLES_COL: 'show_deep_view_articles',
-            self.DEEP_VIEW_COL: 'show_deep_view_articles',
+            self.DEEP_VIEW_COL: 'show_deep_view_alphabetically',
             self.VOCABULARY_COL: 'show_vocabulary'
-        }
+            }
 
         column = index.column()
         row = index.row()
@@ -883,6 +896,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.busy_window = None
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = 'content_hashes.zip'
+        self.icon = get_icon(parent.icon)
         self.ios = parent.ios
         self.opts = parent.opts
         self.parent = parent
@@ -908,7 +922,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # ~~~~~~~~ Create the dialog ~~~~~~~~
         self.setWindowTitle(u'Marvin Library: %d books' % len(self.installed_books))
-        self.setWindowIcon(self.opts.icon)
+        self.setWindowIcon(self.icon)
         self.l = QVBoxLayout(self)
         self.setLayout(self.l)
         self.perfect_width = 0
@@ -1233,18 +1247,19 @@ class BookStatusDialog(SizePersistedDialog):
             self._log("ERROR: unsupported action '%s'" % action)
             return
 
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        self.busy_window = MyBlockingBusy(self, "Retrieving %s…" % group_box_title, size=60)
-        self.busy_window.start()
-        self.busy_window.show()
-
+        self._busy_operation_setup("Retrieving %s…" % group_box_title)
         response = self._issue_command(command_name, update_soup,
                                        get_response="html_response.html",
                                        update_local_db=False)
+
         if response:
             # Convert Marvin's UTF-8 to unicode
-            response = UnicodeDammit(response).unicode
-            response = self._inject_css(response)
+            u_response = UnicodeDammit(response).unicode
+            if u_response:
+                response = self._inject_css(u_response)
+            else:
+                self._log("unable to parse response:\n%s" % response)
+                response = default_content
         else:
             response = default_content
 
@@ -1257,10 +1272,7 @@ class BookStatusDialog(SizePersistedDialog):
             'refresh': refresh
             }
 
-        self.busy_window.stop()
-        self.busy_window.accept()
-        self.busy_window = None
-        QApplication.restoreOverrideCursor()
+        self._busy_operation_teardown()
 
         klass = os.path.join(dialog_resources_path, 'html_viewer.py')
         if os.path.exists(klass):
@@ -1341,17 +1353,9 @@ class BookStatusDialog(SizePersistedDialog):
                                    'active_cids': self.library_collections.ids,
                                    'locations': current_collections}
 
-                        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-                        self.busy_window = MyBlockingBusy(self, "Updating collections…", size=60)
-                        self.busy_window.start()
-                        self.busy_window.show()
-
+                        self._busy_operation_setup("Updating collections…")
                         self._update_global_collections(details)
-
-                        self.busy_window.stop()
-                        self.busy_window.accept()
-                        self.busy_window = None
-                        QApplication.restoreOverrideCursor()
+                        self._busy_operation_teardown()
 
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
@@ -1784,6 +1788,24 @@ class BookStatusDialog(SizePersistedDialog):
         parameters_tag.insert(0, parameter_tag)
 
         return parameters_tag
+
+    def _busy_operation_setup(self, title, show_cancel=False):
+        '''
+        '''
+        self._log_location()
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self.busy_window = MyBlockingBusy(self, title, size=60, show_cancel=show_cancel)
+        self.busy_window.start()
+        self.busy_window.show()
+
+    def _busy_operation_teardown(self):
+        '''
+        '''
+        self._log_location()
+        self.busy_window.stop()
+        self.busy_window.accept()
+        self.busy_window = None
+        QApplication.restoreOverrideCursor()
 
     def _calculate_word_count(self, silent=False):
         '''
@@ -2291,6 +2313,12 @@ class BookStatusDialog(SizePersistedDialog):
         if saved_column_widths:
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
+        else:
+            # Set narrow cols to width of LAST_OPENED
+            fixed_width = self.tv.columnWidth(self.LAST_OPENED_COL)
+            for col in [self.WORD_COUNT_COL, self.COLLECTIONS_COL, self.ANNOTATIONS_COL,
+                        self.VOCABULARY_COL, self.DEEP_VIEW_COL, self.ARTICLES_COL]:
+                self.tv.setColumnWidth(col, fixed_width)
 
         self.tv.setSortingEnabled(True)
 
@@ -2718,33 +2746,37 @@ class BookStatusDialog(SizePersistedDialog):
         if selected_books:
 
             # Estimate worst-case time required to generate DV, covering word count calculations
-            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-            self.busy_window = MyBlockingBusy(self, "Estimating time to completion…", size=60)
-            self.busy_window.start()
-            self.busy_window.show()
+            self._busy_operation_setup("Estimating time to completion…")
             word_counts = self._calculate_word_count(silent=True)
-            self.busy_window.stop()
-            self.busy_window.accept()
-            self.busy_window = None
-            QApplication.restoreOverrideCursor()
+            self._busy_operation_teardown()
 
             twc = sum(word_counts.itervalues())
-            wc_seconds = twc/WORST_CASE_CONVERSION_RATE + 1
-            timeout = int(wc_seconds + (wc_seconds * TIMEOUT_PADDING_FACTOR))
+            total_seconds = twc/WORST_CASE_CONVERSION_RATE + 1
+            self._log("word_counts: %s" % word_counts)
 
-            m, s = divmod(wc_seconds, 60)
+            individual_times = [int(v/WORST_CASE_CONVERSION_RATE + 1) for v in word_counts.values()]
+            total_seconds = sum(individual_times)
+            self._log("individual_times: %s" % individual_times)
+
+            longest = max(individual_times)
+            self._log("longest: %d" % longest)
+
+            timeout = int(longest + (longest * TIMEOUT_PADDING_FACTOR))
+            self._log("timeout: %d" % timeout)
+
+            m, s = divmod(total_seconds, 60)
             h, m = divmod(m, 60)
             if h:
                 estimated_time = "%d:%02d:%02d" % (h, m, s)
             else:
                 estimated_time = "%d:%02d" % (m, s)
 
-            if wc_seconds > 10:
+            if timeout > self.WATCHDOG_TIMEOUT:
                 # Confirm that user wants to proceed given estimated time to completion
                 total_books = len(selected_books)
                 book_descriptor = "books" if total_books > 1 else "book"
                 title = "Estimated time to completion"
-                msg = ("<p>Generating Deep View for " +
+                msg = ("<p>Depending on your iDevice, generating Deep View for " +
                        "selected {0} ".format(book_descriptor) +
                        "may take as long as {0}.</p>".format(estimated_time) +
                        "<p>Proceed?</p>")
@@ -2774,35 +2806,14 @@ class BookStatusDialog(SizePersistedDialog):
                 manifest_tag.insert(0, book_tag)
             update_soup.command.insert(0, manifest_tag)
 
-            self.busy_window = MyBlockingBusy(self,
-                                              "Generating Deep View for %s" %
-                                               ("1 book…" if len(selected_books) == 1 else
-                                                "%d books…" % len(selected_books)),
-                                              size=60,
-                                              show_cancel=True)
-            QTimer.singleShot(0, self._start_busy_window)
-
-            # Wait for the window to show up
-            while not self.busy_window.is_running:
-                Application.processEvents()
-
+            self._busy_operation_setup("Generating Deep View for %s" %
+                                     ("1 book…" if len(selected_books) == 1 else
+                                      "%d books…" % len(selected_books)),
+                                      show_cancel=True)
             self._issue_command(command_name, update_soup,
                                 timeout_override=timeout,
                                 update_local_db=True)
-
-            self.busy_window.stop()
-            self.busy_window.accept()
-            self.busy_window = None
-
-            """
-            # Copy command file to staging folder
-            self._stage_command_file(command_name, update_soup,
-                                     show_command=self.prefs.get('show_staged_commands', False))
-
-            # Wait for completion
-            self._wait_for_command_completion(command_name, update_local_db=True,
-                                              ignore_timeouts=True)
-            """
+            self._busy_operation_teardown()
 
             # Get the latest DeepViewPrepared status for selected books
             book_ids = [selected_books[row]['book_id'] for row in selected_books.keys()]
@@ -3374,19 +3385,20 @@ class BookStatusDialog(SizePersistedDialog):
                                                  repr(installed_books[book].word_count)))
         return installed_books
 
-    def _inject_css(self, raw):
+    def _inject_css(self, html):
         '''
         stick a <style> element into html
         '''
-        self._log_location()
-
-        styled_soup = BeautifulSoup(raw)
-        head = styled_soup.find("head")
-        style_tag = Tag(styled_soup, 'style')
-        style_tag['type'] = "text/css"
-        style_tag.insert(0, self.prefs.get('injected_css'))
-        head.insert(0, style_tag)
-        return styled_soup.renderContents()
+        css = self.prefs.get('injected_css', None)
+        if css:
+            styled_soup = BeautifulSoup(html)
+            head = styled_soup.find("head")
+            style_tag = Tag(styled_soup, 'style')
+            style_tag['type'] = "text/css"
+            style_tag.insert(0, css)
+            head.insert(0, style_tag)
+            html = styled_soup.renderContents()
+        return(html)
 
     def _inform_marvin_collections(self, book_id):
         '''
@@ -3824,13 +3836,6 @@ class BookStatusDialog(SizePersistedDialog):
 
         else:
             self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
-
-    def _start_busy_window(self):
-        '''
-        '''
-        self._log_location()
-        self.busy_window.start()
-        self.busy_window.show()
 
     def _update_calibre_collections(self, book_id, cid, updated_calibre_collections):
         '''

@@ -200,7 +200,7 @@ class MarvinManagerAction(InterfaceAction):
         """
         opts = Struct(
             gui=self.gui,
-            icon=get_icon(PLUGIN_ICONS[0]),
+            #icon=get_icon(PLUGIN_ICONS[0]),
             prefs=self.prefs,
             resources_path=self.resources_path,
             verbose=DEBUG)
@@ -214,7 +214,10 @@ class MarvinManagerAction(InterfaceAction):
         Set the initial default values as needed
         '''
         pref_map = {
-            'plugin_version': "%d.%d.%d" % self.interface_action_base_plugin.version}
+            'plugin_version': "%d.%d.%d" % self.interface_action_base_plugin.version,
+            'injected_css': "h1\t{font-size: 1.5em;}\nh2\t{font-size: 1.25em;}\nh3\t{font-size: 1em;}"
+            }
+
         for pm in pref_map:
             if not self.prefs.get(pm, None):
                 self.prefs.set(pm, pref_map[pm])
