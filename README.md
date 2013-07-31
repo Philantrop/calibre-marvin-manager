@@ -4,7 +4,7 @@
     A semi-useful site for previewing GFM is available at
     http://tmpvar.com/markdown.html
 -->
-##Marvin Manager##
+##Marvin XD##
 
 ###JSON switches###
 * `development_mode` controls verbose display of debug information

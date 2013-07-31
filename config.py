@@ -7,6 +7,7 @@ from __future__ import (unicode_literals, division, absolute_import,
 import importlib, os, sys
 from functools import partial
 
+from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import show_restart_warning
 from calibre.gui2.ui import get_gui
@@ -14,16 +15,20 @@ from calibre.utils.config import JSONConfig
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
-from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QGridLayout, QGroupBox, QIcon,
-                      QLabel, QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout, QWidget)
+from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
+                      QGridLayout, QGroupBox, QIcon,
+                      QLabel, QPlainTextEdit,
+                      QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout, QWidget)
 
-plugin_prefs = JSONConfig('plugins/Marvin Mangler')
+plugin_prefs = JSONConfig('plugins/Marvin XD')
 
 
 class ConfigWidget(QWidget):
     '''
     Config dialog for Marvin Manager
     '''
+    DEFAULT_CSS = "h1\t{font-size: 1.5em;}\nh2\t{font-size: 1.25em;}\nh3\t{font-size: 1em;}"
+
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
@@ -121,11 +126,11 @@ class ConfigWidget(QWidget):
         self.annotations_field_comboBox.setToolTip('Custom column for Marvin annotations and highlights')
         self.cfg_custom_fields_qgl.addWidget(self.annotations_field_comboBox, current_row, 1)
 
-        self.cfg_collections_wizard = QToolButton()
-        self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
-        self.cfg_collections_wizard.setToolTip("Create a custom column for Highlights")
-        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Highlights'))
-        self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
+        self.cfg_highlights_wizard = QToolButton()
+        self.cfg_highlights_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_highlights_wizard.setToolTip("Create a custom column for Highlights")
+        self.cfg_highlights_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Highlights'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_highlights_wizard, current_row, 2)
         current_row += 1
 
         # Progress
@@ -138,14 +143,14 @@ class ConfigWidget(QWidget):
         self.progress_field_comboBox.setToolTip('Custom column for Marvin reading progress')
         self.cfg_custom_fields_qgl.addWidget(self.progress_field_comboBox, current_row, 1)
 
-        self.cfg_collections_wizard = QToolButton()
-        self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
-        self.cfg_collections_wizard.setToolTip("Create a custom column for Progress")
-        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Progress'))
-        self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
+        self.cfg_progress_wizard = QToolButton()
+        self.cfg_progress_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_progress_wizard.setToolTip("Create a custom column for Progress")
+        self.cfg_progress_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Progress'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_progress_wizard, current_row, 2)
         current_row += 1
 
-        spacerItem1 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        spacerItem1 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_custom_fields_qgl.addItem(spacerItem1)
 
         # ~~~~~~~~ Create the General options group box ~~~~~~~~
@@ -171,10 +176,38 @@ class ConfigWidget(QWidget):
         self.debug_libimobiledevice_checkbox.setToolTip('Print libiMobileDevice diagnostic messages to console')
         self.cfg_runtime_options_qvl.addWidget(self.debug_libimobiledevice_checkbox)
 
-        spacerItem2 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        # Horizontal line
+        self.cfg_hl_1 = QFrame(self.cfg_custom_fields_gb)
+        self.cfg_hl_1.setFrameShape(QFrame.HLine)
+        self.cfg_hl_1.setFrameShadow(QFrame.Sunken)
+        self.cfg_hl_1.setObjectName("cfg_hl_1")
+        self.cfg_runtime_options_qvl.addWidget(self.cfg_hl_1)
+
+        # ~~~~~~~~ Injected CSS ~~~~~~~~
+        self.cfg_css_label = QLabel("CSS")
+        self.cfg_runtime_options_qvl.addWidget(self.cfg_css_label)
+
+        self.cfg_css_pte = QPlainTextEdit("CSS goes here")
+        self.cfg_runtime_options_qvl.addWidget(self.cfg_css_pte)
+        if isosx:
+            FONT = QFont('Monaco', 11)
+        elif iswindows:
+            FONT = QFont('Lucida Console', 9)
+        elif islinux:
+            FONT = QFont('Monospace', 9)
+            FONT.setStyleHint(QFont.TypeWriter)
+        self.cfg_css_pte.setFont(FONT)
+
+        # Tab width
+        width = QFontMetrics(FONT).width(" ") * 4
+        self.cfg_css_pte.setTabStopWidth(width)
+
+        # Group box spacer
+        spacerItem2 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_runtime_options_qvl.addItem(spacerItem2)
 
-        spacerItem3 = QSpacerItem(20, 60, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        # Widget spacer
+        spacerItem3 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.l.addItem(spacerItem3)
 
         # ~~~~~~~~ End of construction zone ~~~~~~~~
@@ -212,6 +245,9 @@ class ConfigWidget(QWidget):
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
+
+        # Restore/init the CSS
+        self.cfg_css_pte.setPlainText(self.prefs.get('injected_css', self.DEFAULT_CSS))
 
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
@@ -382,6 +418,9 @@ class ConfigWidget(QWidget):
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
         self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice_checkbox.isChecked())
+
+        # Save CSS
+        self.prefs.set('injected_css', str(self.cfg_css_pte.toPlainText()))
 
         # If restart needed, inform user
         if self.restart_required:

@@ -1,4 +1,4 @@
-The Marvin Mangler
+Marvin XD
 
 A calibre plugin for managing Marvin
 

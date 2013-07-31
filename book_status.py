@@ -43,7 +43,7 @@ from calibre_plugins.marvin_manager.common_utils import (
     MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
     updateCalibreGUIView)
 
-dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_Mangler_resources', 'dialogs')
+dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'dialogs')
 
 
 class MyTableView(QTableView):
@@ -879,7 +879,7 @@ class BookStatusDialog(SizePersistedDialog):
         self._clear_selected_rows()
 
     def initialize(self, parent):
-        self.archived_cover_hashes = JSONConfig('plugins/Marvin_Mangler_resources/cover_hashes')
+        self.archived_cover_hashes = JSONConfig('plugins/Marvin_XD_resources/cover_hashes')
         self.busy_window = None
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = 'content_hashes.zip'
@@ -2282,6 +2282,10 @@ class BookStatusDialog(SizePersistedDialog):
         # Set column width to fit contents
         self.tv.resizeColumnsToContents()
 
+        # Clip Author, Title to 250
+        self.tv.setColumnWidth(self.TITLE_COL, 250)
+        self.tv.setColumnWidth(self.AUTHOR_COL, 250)
+
         # Restore saved widths if available
         saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', False)
         if saved_column_widths:
@@ -3373,7 +3377,6 @@ class BookStatusDialog(SizePersistedDialog):
     def _inject_css(self, raw):
         '''
         stick a <style> element into html
-        placeholder to render headers more reasonably
         '''
         self._log_location()
 
@@ -3381,7 +3384,7 @@ class BookStatusDialog(SizePersistedDialog):
         head = styled_soup.find("head")
         style_tag = Tag(styled_soup, 'style')
         style_tag['type'] = "text/css"
-        style_tag.insert(0, "h1 {font-size: 1.25em;} h2 {font-size: 1.125em;} h3 {font-size: 1em;}")
+        style_tag.insert(0, self.prefs.get('injected_css'))
         head.insert(0, style_tag)
         return styled_soup.renderContents()
 

@@ -11,15 +11,15 @@ from calibre.utils.config import JSONConfig
 
 
 class MarvinManagerPlugin(InterfaceActionBase):
-    name = 'Marvin Mangler'
-    description = 'Support functions for Marvin'
+    name = 'Marvin XD'
+    description = 'Extended Driver for Marvin'
     supported_platforms = ['linux', 'osx', 'windows']
     author = 'Greg Riker'
     version = (0, 0, 1)
     minimum_calibre_version = (0, 9, 41)
 
     actual_plugin = 'calibre_plugins.marvin_manager.action:MarvinManagerAction'
-    prefs = JSONConfig('plugins/Marvin Mangler')
+    prefs = JSONConfig('plugins/Marvin XD')
 
     def is_customizable(self):
         return True

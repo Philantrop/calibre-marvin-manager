@@ -42,12 +42,12 @@ class MarvinManagerAction(InterfaceAction):
 
     icon = PLUGIN_ICONS[0]
     minimum_ios_driver_version = (1, 0, 5)
-    name = 'Marvin Mangler'
+    name = 'Marvin XD'
     prefs = cfg.plugin_prefs
     verbose = prefs.get('debug_plugin', False)
 
     # Declare the main action associated with this plugin
-    action_spec = ('Marvin Mangler', None, None, None)
+    action_spec = ('Marvin XD', None, None, None)
     #popup_type = QToolButton.InstantPopup
     action_add_menu = True
     action_menu_clone_qaction = True
