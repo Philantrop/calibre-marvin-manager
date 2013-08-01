@@ -25,12 +25,21 @@
 	div.topic p {
 		text-indent:1em;;
 	}
+	hr {
+		margin-left: 20%;
+		margin-right: 20%;
+	}
 	h2 {
 		font-family:Tahoma, Geneva, sans-serif;
         text-align: center;
         font-weight: normal;
 	}
 	h3 {
+		font-family:Tahoma, Geneva, sans-serif;
+        text-align: left;
+        font-weight: normal;
+	}
+	h4 {
 		font-family:Tahoma, Geneva, sans-serif;
         text-align: left;
         font-weight: normal;
@@ -49,11 +58,30 @@
 		margin-top:0;
 		text-align:right;
 	}
+	p.usage-topic {
+	margin-bottom: 0.5em;
+	font-style: italic;
+	font-weight: bold;
+	}
+	p.usage-explanation {
+		margin-top: 0.5em;
+	}
     td {
         padding:0.5em 1em 0.5em 1em;
     }
+	td ul {
+	font-style: normal;
+	margin-left: 1em;
+	padding-left: 0px;
+	list-style-type: square;
+	margin-bottom: 0px;
+	}
     td.checked {
 		text-align: center;
+    }
+    tr.action {
+        font-family:"Lucida Console", Monaco, monospace;
+        font-size:smaller;
     }
     tr.header {
 	background-color: #C8C8C8;
@@ -63,11 +91,6 @@
     }
     tr.green {
         background-color: #99FF99;
-        font-family:"Lucida Console", Monaco, monospace;
-        font-size:smaller;
-    }
-    tr.yellow {
-        background-color: #FDFF99;
         font-family:"Lucida Console", Monaco, monospace;
         font-size:smaller;
     }
@@ -86,6 +109,11 @@
         font-family:"Lucida Console", Monaco, monospace;
         font-size:smaller;
     }
+    tr.yellow {
+        background-color: #FDFF99;
+        font-family:"Lucida Console", Monaco, monospace;
+        font-size:smaller;
+    }
 </style>
 </head>
 <! ~~~~~~~~~~~~~~~ Body starts here ~~~~~~~~~~~~~~~>
@@ -96,9 +124,10 @@
   <h3><a name="toc" id="toc"></a>Table of Contents</h3>
 <ol class="toc">
 <li><a href="#overview">Overview</a></li>
-<li>Configuring Marvin XD</li>
+<li><a href="#configuration">Configuring Marvin XD</a></li>
 <li><a href="#match-status">Match status</a></li>
-<li><a href="#actions">Actions</a></li>
+<li><a href="#scenarios">Usage scenarios</a></li>
+<li><a href="#actions">Actions reference</a></li>
 <li><a href="#support">Support</a></li>
 </ol>
 <hr />
@@ -130,26 +159,29 @@
 
 <! ~~~~~~~~~~~~~~~ Configuration Options ~~~~~~~~~~~~~~~>
 <div class="topic">
-<h3><a name="configuration" id="configuration"></a>3. <a href="#toc">Configuration</a></h3>
+<h3><a name="configuration" id="configuration"></a>2. <a href="#toc">Configuration</a></h3>
 <p>Click the down arrow next to the Marvin XD icon , then Customize plugin to display the <strong>Customize Marvin XD</strong> dialog.</p>
-<p><strong>Custom columns</strong></p>
+<h4>Custom columns</h4>
 <img src="images/custom_columns.png" alt="" class="inline" />
 <p>The <strong>Custom columns</strong> section connects  Marvin XD columns with calibre custom columns. For example, you can select a custom column in calibre for Collections, which then allows you to synchronize collection assignments between calibre and Marvin. You may also specify custom columns for Last read, Annotations and Progress, enabling you to save those Marvin details in calibre.</p>
 <p>Clicking the combo box presents a list of existing custom columns eligible for use with the associated Marvin details.</p>
-<p>Clicking the Wizard button creates a new custom column, or renames an existing custom column.</p>
+<p>Clicking the Wizard button leads you through the steps to create a new custom column, or renames an existing custom column.</p>
 <p style="clear:left;">&nbsp;</p>
 
-<p><strong>General options</strong></p>
+<h4>General options</h4>
 <img src="images/general_options.png" alt="" class="inline" />
-<p>The General options section blah blah blah.</p>
+<p>When checked, <strong>Show reading progress as percentage</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p>
+<p><strong>Enable debug logging for plugin, </strong><strong>Enable debug logging for libiMobileDevice</strong>. If you are having a problem with the plugin, the developer may ask you to enable one or both of these check boxes, then restart calibre in debug mode from a terminal window to generate a debug log.</p>
+<p><strong>CSS</strong>. When viewing Annotations, Articles, Deep View content or Vocabulary, the content is packaged in HTML which can be formatted with CSS. The style directives from this edit control are applied to the retrieved HTML content before it is displayed.</p>
 <p style="clear:left;">&nbsp;</p>
 
 </div>
 
-<h3><a name="match-status" id="match-status"></a>2. <a href="#toc">Match status</a></h3>
+<! ~~~~~~~~~~~~~~~ Match status table ~~~~~~~~~~~~~~~>
+<div class="topic">
+<h3><a name="match-status" id="match-status"></a>3. <a href="#toc">Match status</a></h3>
   <p>Click <img src="images/show_matches.png" alt="" width="127" height="27" align="absmiddle" /> to list books installed in Marvin with a background color representing their status. </p>
   <p>Click <img src="images/hide_matches.png" alt="" width="124" height="27" align="absmiddle" /> to return to the regular display listing.</p>
-  <div class="colors">
   <table width="100%" style="border:1px solid black;">
     <tr class="header">
       <td>Color</td>
@@ -184,22 +216,337 @@
   </table>
 </div>
 
-<! ~~~~~~~~~~~~~~~ Index of Actions ~~~~~~~~~~~~~~~>
-<div class="topic">
-<h3><a name="actions" id="actions"></a>3. <a href="#toc">Index of Actions</a></h3>
-<p>Actions are initiated by double-clicking a cell, selecting an action from a cell's context menu, or clicking a button in the main window.</p>
-</div>
-
 <! ~~~~~~~~~~~~~~~ Usage scenarios ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="scenarios" id="scenarios"></a>4. <a href="#toc">Usage scenarios</a></h3>
-<p>Usage scenarios here</p>
+<p>(This is a hybrid of a how-to list and a FAQ)</p>
+<div class="usage">
+<p class="usage-topic">How does the Marvin XD plugin relate to the iOS reader applications driver? Do I still need it?</p>
+<p class="usage-explanation">Yes, you still need the iOS reader applications driver configured with Marvin as your preferred iOS reader application. Marvin XD communicates with the driver to accomplish its tasks. Marvin XD offers many more features than a conventional device driver. You should be able to accomplish all Marvin tasks through Marvin XD.</p>
+</div>
+<hr />
+
+<div class="usage">
+<p class="usage-topic">I see lots of books with yellow backgrounds when showing match status. Is that bad?</p>
+<p class="usage-explanation">No, that's good! Yellow means that the book content is the same between calibre and Marvin, but there are some metadata differences. The differences could be as minor as a difference in the title, or perhaps you have selected a new cover in Marvin. To make the books match exactly, choose which metadata you want to use, and apply it. You're now green.</p>
+</div>
+<hr />
+
+<div class="usage">
+<p class="usage-topic">I have  books in Marvin that I'd like to add to calibre. How do I do that?</p>
+<p class="usage-explanation">Select the books to add, then open the context menu by right-clicking in  the Titles or Authors column, then click 'Add to calibre library'.</p>
+</div>
+<hr />
+
+<div class="usage">
+<p class="usage-topic">Why does it take so long to generate Deep View content?</p>
+<p class="usage-explanation">Marvin needs to scan the entire text of the book to index all names, dates, events and locations. Older iDevices take longer than newer iDevices. But once it's done for a book, you never have to do it again. Go get a cup of coffee.</p>
+</div>
+<hr />
+
+<div class="usage">
+<p class="usage-topic">The guy who writes the Marvin blog entries is always more entertaining when it comes to these technical documents. Do you know when he will post better than this dry crap?</p>
+<p class="usage-explanation">Keep an eye on the <a href="http://blog.marvinapp.com">Marvin for iOS blog</a>, I'm sure he'll come up with something brilliant soon.</p>
+</div>
+<hr />
+
+<div class="usage">
+<p class="usage-topic">I have another really important question. Will it be added to this list?</p>
+<p class="usage-explanation">Probably.</p>
+</div>
+<hr />
+
+</div>
+
+<! ~~~~~~~~~~~~~~~ Index of Actions ~~~~~~~~~~~~~~~>
+<div class="topic">
+<h3><a name="actions" id="actions"></a>5. <a href="#toc">Actions reference</a></h3>
+<p>Actions in Marvin XD are initiated by double-clicking a cell, selecting an action from a cell's context menu, or clicking a button in the main window. Hover the cursor over a cell to learn more about the available options for a column.</p>
+<table width="100%" border="1">
+  <tr class="header">
+    <th scope="col">Action</th>
+    <th scope="col">Description</th>
+    <th scope="col">Where it lives</th>
+  </tr>
+  <tr class="action">
+    <td>Add annotations to a  custom column</td>
+    <td>Fetch  annotations from Marvin, apply to  custom column specified for Annotations (in configuration dialog). Applies to selected books.</td>
+    <td><ul>
+      <li>Annotations context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Add to calibre library</td>
+    <td>Add selected books to calibre library.</td>
+    <td><ul>
+      <li>Title/Author context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Apply last read date to a calibre  column</td>
+    <td>Apply last read date to custom column specified for Last read (in configuration dialog). Applies to selected books.</td>
+    <td><ul>
+      <li>Last read double-click</li>
+      <li>Last read content menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Apply reading progress to a  custom column</td>
+    <td>Apply reading progress to custom column specified for Progress (in configuration dialog). Applies to selected books. Books flagged as <strong>New</strong> will have no reading progress; books flagged as <strong>Read</strong> will have 100% reading progress.</td>
+    <td><ul>
+      <li>Progress double-click</li>
+      <li>Progress context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Calculate word count</td>
+    <td>Calculate word count for selected books.</td>
+    <td><ul>
+      <li>Word count  double-click</li>
+      <li>Word count  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Clear all</td>
+    <td>Clear <strong>New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags for selected books.</td>
+    <td><ul>
+      <li>Flags  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Clear New</td>
+    <td>Clear <strong>New</strong> flag for selected books.</td>
+    <td><ul>
+      <li>Flags  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Clear Read</td>
+    <td>Clear <strong>Read</strong> flag for selected books.</td>
+    <td><ul>
+      <li>Flags  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Clear Reading list</td>
+    <td>Clear <strong>Reading list</strong> flag for selected books.</td>
+    <td><ul>
+      <li>Flags  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Deep View articles</td>
+    <td>Display Deep View articles associated with selected book.</td>
+    <td><ul>
+      <li>Deep View  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Deep View items, sorted alphabetically</td>
+    <td>Display Deep View items (names, dates, events and locations) sorted alphabetically. Applies to selected book.</td>
+    <td><ul>
+      <li>Deep View  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Deep View items, sorted by importance</td>
+    <td>Display Deep View items (names, dates, events and locations) sorted by frequency of appearance. Applies to selected books.</td>
+    <td><ul>
+      <li>Deep View  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Deep View items, sorted by order of appearance</td>
+    <td>Display Deep View items (names, dates, events and locations) sorted by order of appearance in book. Applies to selected book.</td>
+    <td><ul>
+      <li>Deep View  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Deep View items (notes and flags first)</td>
+    <td>Display Deep View items (names, dates, events and locations) with notes and flagged items first. Applies to selected book.</td>
+    <td><ul>
+      <li>Deep View  context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Delete from Marvin library</td>
+    <td>Delete selected books from Marvin library.</td>
+    <td><ul>
+      <li>Title/Author context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Export calibre collections to Marvin</td>
+    <td>Apply collection assignments from calibre custom column (assigned in configuration dialog) to Marvin for selected books.</td>
+    <td><ul>
+      <li>Collections context menu</li>
+      <li>Collections dialog</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Export metadata from calibre to Marvin</td>
+    <td>Apply all calibre metadata to Marvin for selected books.</td>
+    <td><ul>
+      <li>Title/Author context menu</li>
+      <li>Metadata dialog</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Generate Deep View content</td>
+    <td>Generate Deep View content (names, dates, events and locations) for selected books. Depending on the iDevice, this may take several minutes for larger books.</td>
+    <td><ul>
+      <li>Deep View double-click</li>
+      <li>Deep View context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Help</td>
+    <td>Display this help file.</td>
+    <td><ul>
+      <li>Main window button</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Hide status match</td>
+    <td>Toggle display to hide match status (colored rows) in main window.</td>
+    <td><ul>
+      <li>Main window button</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Import Marvin collections to calibre</td>
+    <td>Apply collection assignments from Marvin to calibre custom column (assigned in configuration dialog) for selected books.</td>
+    <td><ul>
+      <li>Collections context menu</li>
+      <li>Collections dialog</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Import metadata from Marvin to calibre</td>
+    <td>Apply  Marvin metadata to calibre for selected books.</td>
+    <td><ul>
+      <li>Title/Author context menu</li>
+      <li>Metadata dialog</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Manage collections</td>
+    <td>Display the Collection management dialog to globally rename or delete collection names in both calibre and Marvin. Changes to collection names apply to all books with collection assignments in calibre and Marvin.</td>
+    <td><ul>
+      <li>Main window button</li>
+      <li>Collections content menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Merge collections</td>
+    <td>Merge collection assignments from calibre custom column (assigned in configuration dialog) and Marvin to selected books.</td>
+    <td><ul>
+      <li>Collections context menu</li>
+      <li>Collections dialog</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Refresh  custom columns</td>
+    <td>Apply contents of Progress, Last read and Annotations columns to  custom columns (assigned in configuration dialog) for selected books.</td>
+    <td><ul>
+      <li>Main window button</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Remove from all collections</td>
+    <td>Clear all collection assignments for selected books.</td>
+    <td><ul>
+      <li>Collections context menu</li>
+      <li>Collections dialog</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Set New</td>
+    <td>Set <strong>New</strong> flag for selected books.</td>
+    <td><ul>
+      <li>Flags context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Set Read </td>
+    <td>Set <strong>Read</strong> flag for selected books.</td>
+    <td><ul>
+      <li>Flags context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Set Reading list</td>
+    <td>Set <strong>Reading list</strong> flag for selected books.</td>
+    <td><ul>
+      <li>Flags context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Show match status</td>
+    <td>Toggle  display to show match status (colored rows) in main window.</td>
+    <td><ul>
+      <li>Main window button</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>View all vocabulary words</td>
+    <td>Display a  list of vocabulary words for all books installed in Marvin.</td>
+    <td><ul>
+      <li>Main window button</li>
+      <li>Vocabulary context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>View annotations</td>
+    <td>Display a list of annotations for selected book.</td>
+    <td><ul>
+      <li>Annotations double-click</li>
+      <li>Annotations context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>View articles</td>
+    <td>Display a list of pinned and Wiki articles for selected book.</td>
+    <td><ul>
+      <li>Articles double-click</li>
+      <li>Articles context menu</li>
+      <li>Deep View context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>View collection assignments</td>
+    <td>Display the Collections dialog with collections assignments for calibre and Marvin. Applies to selected book.</td>
+    <td><ul>
+      <li>Collections double-click</li>
+      <li>Collections context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>View metadata</td>
+    <td>Display calibre and Marvin metadata side-by-side, with differences highlighted, for currently selected book. If metadata differs, you may export metadata from calibre to Marvin, or import metadata from Marvin to calibre.</td>
+    <td><ul>
+      <li>Title/Author double-click</li>
+      <li>Title/Author context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>View vocabulary</td>
+    <td>Display vocabulary words for currently selected book.</td>
+    <td><ul>
+      <li>Vocabulary double-click</li>
+      <li>Vocabulary context menu</li>
+    </ul></td>
+  </tr>
+</table>
+<p>&nbsp;</p>
 </div>
 
 <! ~~~~~~~~~~~~~~~ Support ~~~~~~~~~~~~~~~>
 <div class="topic">
-<h3><a name="support" id="support"></a>5. <a href="#toc">Support</a></h3>
-<p>For more information on  Marvin XD, visit calibre's Plugins forum.</p>
+<h3><a name="support" id="support"></a>6. <a href="#toc">Support</a></h3>
+<p>For more information on  Marvin XD, visit calibre's Plugins forum. </p>
+<p>To support the ongoing development of Marvin XD, click here to make a PayPal contribution.</p>
 </div>
 
 </body>

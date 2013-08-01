@@ -69,13 +69,13 @@ class MyTableView(QTableView):
             afn = self.parent.prefs.get('annotations_field_comboBox', None)
             no_annotations = not selected_books[row]['has_annotations']
 
-            ac = menu.addAction("View Annotations")
+            ac = menu.addAction("View annotations")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_highlights", row))
             if len(selected_books) > 1 or no_annotations:
                 ac.setEnabled(False)
 
-            # Fetch Highlights if custom field specified
+            # Fetch Annotations if custom field specified
             enabled = False
             if afn:
                 # Do any of the selected books have annotations?
@@ -86,11 +86,11 @@ class MyTableView(QTableView):
                             break
                 elif len(selected_books) == 1 and selected_books[row]['has_annotations'] and calibre_cids:
                     enabled = True
-                ac = menu.addAction("Add Annotations to '{0}' column".format(afn))
+                ac = menu.addAction("Add annotations to '{0}' column".format(afn))
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "fetch_annotations", row))
             else:
-                ac = menu.addAction("No 'Annotations' custom column specified")
+                ac = menu.addAction("No custom column specified for 'Annotations'")
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'annotations.png')))
             ac.setEnabled(enabled)
 
@@ -198,7 +198,7 @@ class MyTableView(QTableView):
                 pass
 
         elif col == self.parent.FLAGS_COL:
-            ac = menu.addAction("Clear All")
+            ac = menu.addAction("Clear all")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'clear_all.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "clear_all_flags", row))
             ac = menu.addAction("Clear New")
@@ -238,7 +238,7 @@ class MyTableView(QTableView):
                     last_opened = True
                     break
 
-            title = "No 'Date read' custom field specified"
+            title = "No custom column specified for 'Last read'"
             if date_read_field:
                 title = "Apply to '%s' column" % date_read_field
             ac = menu.addAction(title)
@@ -265,9 +265,9 @@ class MyTableView(QTableView):
 #                     progress = True
 #                     break
 
-            title = "No 'Progress' custom field selected"
+            title = "No custom column specified for 'Progress'"
             if progress_field:
-                title = "Apply to '%s' column" % progress_field
+                title = "Apply to '{0}' column".format(progress_field)
             ac = menu.addAction(title)
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "apply_progress", row))
