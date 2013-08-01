@@ -19,8 +19,11 @@
 		margin-left: 15%;
 		margin-right: 15%;
 	}
+	div.topic {
+		clear: both;
+	}
 	div.topic p {
-	text-indent:1em;
+		text-indent:1em;;
 	}
 	h2 {
 		font-family:Tahoma, Geneva, sans-serif;
@@ -32,11 +35,15 @@
         text-align: left;
         font-weight: normal;
 	}
+	img.inline {
+	float: left;
+	}
 	ol.toc {
 	}
 	p.image {
 		text-align:center;
 	}
+
 	p.table_caption {
 		font-size:80%;
 		margin-top:0;
@@ -45,10 +52,14 @@
     td {
         padding:0.5em 1em 0.5em 1em;
     }
+    td.checked {
+		text-align: center;
+    }
     tr.header {
-        font-family:Tahoma, Geneva, sans-serif;
-        font-size:small;
-        text-align: left;
+	background-color: #C8C8C8;
+	font-family: Tahoma, Geneva, sans-serif;
+	font-size: small;
+	text-align: left;
     }
     tr.green {
         background-color: #99FF99;
@@ -57,6 +68,11 @@
     }
     tr.yellow {
         background-color: #FDFF99;
+        font-family:"Lucida Console", Monaco, monospace;
+        font-size:smaller;
+    }
+    tr.orange {
+        background-color: #FCCD99;
         font-family:"Lucida Console", Monaco, monospace;
         font-size:smaller;
     }
@@ -72,64 +88,118 @@
     }
 </style>
 </head>
-
+<! ~~~~~~~~~~~~~~~ Body starts here ~~~~~~~~~~~~~~~>
 <body>
+
+<! ~~~~~~~~~~~~~~~ TOC ~~~~~~~~~~~~~~~>
 <h2>Marvin XD</h2><div class="toc">
   <h3><a name="toc" id="toc"></a>Table of Contents</h3>
 <ol class="toc">
 <li><a href="#overview">Overview</a></li>
-<li><a href="#match-quality">Match quality</a></li>
+<li>Configuring Marvin XD</li>
+<li><a href="#match-status">Match status</a></li>
+<li><a href="#actions">Actions</a></li>
 <li><a href="#support">Support</a></li>
 </ol>
 <hr />
 </div>
 
+<! ~~~~~~~~~~~~~~~ Overview ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="overview" id="overview"></a>1. <a href="#toc">Overview</a></h3>
-<p>The Marvin XD plugin enables remote management features for Marvin.</p>
-<p><img src="images/marvin_library.png" alt="" width="1080" height="386" /></p>
+<p>Marvin XD is an extended driver, offering  remote management of your Marvin library. </p><p><img src="images/marvin_library.png" alt="" width="1080" height="386" /></p>
   <div class="list_with_header">
     <p>Features:</p>
-      <ul>
-  			<li>Find duplicates.</li>
-  			<li>Synchronize collections</li>
-  			<li>Compute word counts</li>
-		</ul>
+    <ul>
+		  <li>Synchronize metadata between Marvin and calibre.</li>
+		  <li>Identify duplicates.</li>
+		  <li>Add books from Marvin library to calibre.</li>
+		  <li>Delete books from Marvin</li>
+		  <li>Compute word counts.</li>
+		  <li>Generate Deep View  lists of names, dates, events and locations.</li>
+		  <li>Show reading progress, date last read.</li>
+		  <li>Manage NEW, READING and READ flags.</li>
+		  <li>View Annotations, Vocabulary words and Deep View content.</li>
+		  <li>Manage collection assignments.</li>
+		  <li>Transfer annotations, reading progress and last read to calibre custom columns.</li>
+		  <li>Backup and restore (not yet implemented).</li>
+	  </ul>
 	</div>
   <hr />
 </div>
 
+<! ~~~~~~~~~~~~~~~ Configuration Options ~~~~~~~~~~~~~~~>
 <div class="topic">
-<h3><a name="match-quality" id="match-quality"></a>2. <a href="#toc">Match quality</a></h3>
-  <p>Books installed in Marvin's library are displayed with a background color representing matches to books in your calibre library.</p>
+<h3><a name="configuration" id="configuration"></a>3. <a href="#toc">Configuration</a></h3>
+<p>Click the down arrow next to the Marvin XD icon , then Customize plugin to display the <strong>Customize Marvin XD</strong> dialog.</p>
+<p><strong>Custom columns</strong></p>
+<img src="images/custom_columns.png" alt="" class="inline" />
+<p>The <strong>Custom columns</strong> section connects  Marvin XD columns with calibre custom columns. For example, you can select a custom column in calibre for Collections, which then allows you to synchronize collection assignments between calibre and Marvin. You may also specify custom columns for Last read, Annotations and Progress, enabling you to save those Marvin details in calibre.</p>
+<p>Clicking the combo box presents a list of existing custom columns eligible for use with the associated Marvin details.</p>
+<p>Clicking the Wizard button creates a new custom column, or renames an existing custom column.</p>
+<p style="clear:left;">&nbsp;</p>
+
+<p><strong>General options</strong></p>
+<img src="images/general_options.png" alt="" class="inline" />
+<p>The General options section blah blah blah.</p>
+<p style="clear:left;">&nbsp;</p>
+
+</div>
+
+<h3><a name="match-status" id="match-status"></a>2. <a href="#toc">Match status</a></h3>
+  <p>Click <img src="images/show_matches.png" alt="" width="127" height="27" align="absmiddle" /> to list books installed in Marvin with a background color representing their status. </p>
+  <p>Click <img src="images/hide_matches.png" alt="" width="124" height="27" align="absmiddle" /> to return to the regular display listing.</p>
   <div class="colors">
   <table width="100%" style="border:1px solid black;">
     <tr class="header">
       <td>Color</td>
-      <td>Meaning</td>
-    </tr>
-    <tr class="green">
-      <td>Green</td>
-      <td>This book has the same uuid as a book in your calibre library</td>
-    </tr>
-    <tr class="yellow">
-      <td>Yellow</td>
-      <td>This book exists in your calibre library, but with a different uuid</td>
-    </tr>
-    <tr class="red">
-      <td>Red</td>
-      <td>This book is a duplicate copy of a uuid-matched book in your calibre library</td>
+      <td>in calibre library</td>
+      <td>Match status</td>
     </tr>
     <tr class="white">
       <td>White</td>
-      <td>This book exists in Marvin, but not your calibre library</td>
+      <td class="checked">&nbsp;</td>
+      <td>Installed in Marvin, but not your calibre library</td>
+    </tr>
+    <tr class="red">
+      <td>Red</td>
+      <td class="checked">&nbsp;</td>
+      <td>Duplicate copies installed in Marvin</td>
+    </tr>
+    <tr class="green">
+      <td>Green</td>
+      <td class="checked">&#x2713;</td>
+      <td>Installed in calibre and Marvin, all metadata matches</td>
+    </tr>
+    <tr class="yellow">
+      <td>Yellow</td>
+      <td class="checked">&#x2713;</td>
+      <td>Some metadata differences between calibre and Marvin</td>
+    </tr>
+    <tr class="orange">
+      <td>Orange</td>
+      <td class="checked">&#x2713;</td>
+      <td>Duplicate copy of a matched (green or yellow) book</td>
     </tr>
   </table>
 </div>
 
+<! ~~~~~~~~~~~~~~~ Index of Actions ~~~~~~~~~~~~~~~>
 <div class="topic">
-<h3><a name="support" id="support"></a>3. <a href="#toc">Support</a></h3>
-<p>For more information on the Marvin Manager plugin, visit calibre's Plugins forum.</p>
+<h3><a name="actions" id="actions"></a>3. <a href="#toc">Index of Actions</a></h3>
+<p>Actions are initiated by double-clicking a cell, selecting an action from a cell's context menu, or clicking a button in the main window.</p>
+</div>
+
+<! ~~~~~~~~~~~~~~~ Usage scenarios ~~~~~~~~~~~~~~~>
+<div class="topic">
+<h3><a name="scenarios" id="scenarios"></a>4. <a href="#toc">Usage scenarios</a></h3>
+<p>Usage scenarios here</p>
+</div>
+
+<! ~~~~~~~~~~~~~~~ Support ~~~~~~~~~~~~~~~>
+<div class="topic">
+<h3><a name="support" id="support"></a>5. <a href="#toc">Support</a></h3>
+<p>For more information on  Marvin XD, visit calibre's Plugins forum.</p>
 </div>
 
 </body>

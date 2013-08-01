@@ -31,17 +31,17 @@ class ConfigWidget(QWidget):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     WIZARD_PROFILES = {
+        'Annotations': {
+            'label': 'mm_annotations',
+            'datatype': 'comments',
+            'display': {},
+            'is_multiple': False
+        },
         'Collections': {
             'label': 'mm_collections',
             'datatype': 'text',
             'display': {u'is_names': False},
             'is_multiple': True
-        },
-        'Highlights': {
-            'label': 'mm_highlights',
-            'datatype': 'comments',
-            'display': {},
-            'is_multiple': False
         },
         'Last read': {
             'label': 'mm_date_read',
@@ -80,6 +80,23 @@ class ConfigWidget(QWidget):
         self.cfg_custom_fields_qgl = QGridLayout(self.cfg_custom_fields_gb)
         current_row = 0
 
+        # Annotations
+        self.cfg_annotations_label = QLabel('Annotations')
+        self.cfg_annotations_label.setAlignment(Qt.AlignLeft)
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_annotations_label, current_row, 0)
+
+        self.annotations_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
+        self.annotations_field_comboBox.setObjectName('annotations_field_comboBox')
+        self.annotations_field_comboBox.setToolTip('Select a custom column to store Marvin annotations')
+        self.cfg_custom_fields_qgl.addWidget(self.annotations_field_comboBox, current_row, 1)
+
+        self.cfg_highlights_wizard = QToolButton()
+        self.cfg_highlights_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_highlights_wizard.setToolTip("Create a custom column to store Marvin annotations")
+        self.cfg_highlights_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Annotations'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_highlights_wizard, current_row, 2)
+        current_row += 1
+
         # Collections
         self.cfg_collections_label = QLabel('Collections')
         self.cfg_collections_label.setAlignment(Qt.AlignLeft)
@@ -87,48 +104,31 @@ class ConfigWidget(QWidget):
 
         self.collection_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.collection_field_comboBox.setObjectName('collection_field_comboBox')
-        self.collection_field_comboBox.setToolTip('Custom column for Marvin collections')
+        self.collection_field_comboBox.setToolTip('Select a custom column to store Marvin collection assignments')
         self.cfg_custom_fields_qgl.addWidget(self.collection_field_comboBox, current_row, 1)
 
         self.cfg_collections_wizard = QToolButton()
         self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
-        self.cfg_collections_wizard.setToolTip("Create a custom column for Collections")
-        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Collections'))
+        self.cfg_collections_wizard.setToolTip("Create a custom column for Marvin collection assignments")
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Annotations'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
-        # Date read
+        # Last read
         self.cfg_date_read_label = QLabel("Last read")
         self.cfg_date_read_label.setAlignment(Qt.AlignLeft)
         self.cfg_custom_fields_qgl.addWidget(self.cfg_date_read_label, current_row, 0)
 
         self.date_read_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.date_read_field_comboBox.setObjectName('date_read_field_comboBox')
-        self.date_read_field_comboBox.setToolTip('Custom column for Last read date')
+        self.date_read_field_comboBox.setToolTip('Select a custom column to store Last read date')
         self.cfg_custom_fields_qgl.addWidget(self.date_read_field_comboBox, current_row, 1)
 
         self.cfg_collections_wizard = QToolButton()
         self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
-        self.cfg_collections_wizard.setToolTip("Create a custom column for Last read date")
+        self.cfg_collections_wizard.setToolTip("Create a custom column to store Last read date")
         self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Last read'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
-        current_row += 1
-
-        # Highlights
-        self.cfg_annotations_label = QLabel('Highlights')
-        self.cfg_annotations_label.setAlignment(Qt.AlignLeft)
-        self.cfg_custom_fields_qgl.addWidget(self.cfg_annotations_label, current_row, 0)
-
-        self.annotations_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
-        self.annotations_field_comboBox.setObjectName('annotations_field_comboBox')
-        self.annotations_field_comboBox.setToolTip('Custom column for Marvin annotations and highlights')
-        self.cfg_custom_fields_qgl.addWidget(self.annotations_field_comboBox, current_row, 1)
-
-        self.cfg_highlights_wizard = QToolButton()
-        self.cfg_highlights_wizard.setIcon(QIcon(I('wizard.png')))
-        self.cfg_highlights_wizard.setToolTip("Create a custom column for Highlights")
-        self.cfg_highlights_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Highlights'))
-        self.cfg_custom_fields_qgl.addWidget(self.cfg_highlights_wizard, current_row, 2)
         current_row += 1
 
         # Progress
@@ -138,12 +138,12 @@ class ConfigWidget(QWidget):
 
         self.progress_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
         self.progress_field_comboBox.setObjectName('progress_field_comboBox')
-        self.progress_field_comboBox.setToolTip('Custom column for Marvin reading progress')
+        self.progress_field_comboBox.setToolTip('Select a custom column to store Marvin reading progress')
         self.cfg_custom_fields_qgl.addWidget(self.progress_field_comboBox, current_row, 1)
 
         self.cfg_progress_wizard = QToolButton()
         self.cfg_progress_wizard.setIcon(QIcon(I('wizard.png')))
-        self.cfg_progress_wizard.setToolTip("Create a custom column for Progress")
+        self.cfg_progress_wizard.setToolTip("Create a custom column to store Marvin reading progress")
         self.cfg_progress_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Progress'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_progress_wizard, current_row, 2)
         current_row += 1
@@ -186,6 +186,7 @@ class ConfigWidget(QWidget):
         self.cfg_runtime_options_qvl.addWidget(self.cfg_css_label)
 
         self.cfg_css_pte = QPlainTextEdit("CSS goes here")
+        self.cfg_css_pte.setToolTip("CSS applied to Annotations, Deep View content and Vocabulary retrieved from Marvin")
         self.cfg_runtime_options_qvl.addWidget(self.cfg_css_pte)
         if isosx:
             FONT = QFont('Monaco', 11)
@@ -218,7 +219,7 @@ class ConfigWidget(QWidget):
         if idx > -1:
             self.collection_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Highlights comboBox
+        # Populate/restore the Annotations comboBox
         self.populate_annotations()
         cf = self.prefs.get('annotations_field_comboBox', '')
         idx = self.annotations_field_comboBox.findText(cf)
@@ -309,7 +310,17 @@ class ConfigWidget(QWidget):
                 previous = dlg.modified_column['previous']
                 source = dlg.modified_column['source']
 
-                if source == 'Collections':
+                if source == "Annotations":
+                    _update_combo_box("annotations_field_comboBox", destination, previous)
+
+                    # Add/update the new destination so save_settings() can find it
+                    self.eligible_annotations_fields[destination] = label
+
+                    # Save Date read field manually in case user cancels
+                    self.prefs.set('annotations_field_comboBox', destination)
+                    self.prefs.set('annotations_field_lookup', label)
+
+                elif source == 'Collections':
                     _update_combo_box("collection_field_comboBox", destination, previous)
 
                     # Add/update the new destination so save_settings() can find it
@@ -328,16 +339,6 @@ class ConfigWidget(QWidget):
                     # Save Date read field manually in case user cancels
                     self.prefs.set('date_read_field_comboBox', destination)
                     self.prefs.set('date_read_field_lookup', label)
-
-                elif source == "Highlights":
-                    _update_combo_box("annotations_field_comboBox", destination, previous)
-
-                    # Add/update the new destination so save_settings() can find it
-                    self.eligible_annotations_fields[destination] = label
-
-                    # Save Date read field manually in case user cancels
-                    self.prefs.set('annotations_field_comboBox', destination)
-                    self.prefs.set('annotations_field_lookup', label)
 
                 elif source == "Progress":
                     _update_combo_box("aprogress_field_comboBox", destination, previous)

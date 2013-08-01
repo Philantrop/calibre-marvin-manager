@@ -163,31 +163,32 @@ class MyTableView(QTableView):
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                              "show_deep_view_articles", row))
-                if len(selected_books) > 1 or no_dv_content:
+                no_articles = not selected_books[row]['has_articles']
+                if len(selected_books) > 1 or no_articles:
                     ac.setEnabled(False)
 
-                ac = menu.addAction("Deep View names sorted alphabetically")
+                ac = menu.addAction("Deep View items, sorted alphabetically")
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                              "show_deep_view_alphabetically", row))
                 if len(selected_books) > 1 or no_dv_content:
                     ac.setEnabled(False)
 
-                ac = menu.addAction("Deep View names sorted by importance")
+                ac = menu.addAction("Deep View items, sorted by importance")
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                              "show_deep_view_by_importance", row))
                 if len(selected_books) > 1 or no_dv_content:
                     ac.setEnabled(False)
 
-                ac = menu.addAction("Deep View names sorted by order of appearance")
+                ac = menu.addAction("Deep View items, sorted by order of appearance")
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                              "show_deep_view_by_appearance", row))
                 if len(selected_books) > 1 or no_dv_content:
                     ac.setEnabled(False)
 
-                ac = menu.addAction("Deep View names with notes and flags first")
+                ac = menu.addAction("Deep View items, notes and flags first")
                 ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'deep_view.png')))
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event,
                                              "show_deep_view_by_annotations", row))
@@ -304,13 +305,13 @@ class MyTableView(QTableView):
                     in_library = False
                     break
 
-            ac = menu.addAction("Add to library")
+            ac = menu.addAction("Add to calibre library")
             ac.setIcon(QIcon(I('plus.png')))
             ac.triggered.connect(self.parent._add_books_to_library)
             ac.setEnabled(not in_library)
 
             menu.addSeparator()
-            ac = menu.addAction("Delete")
+            ac = menu.addAction("Delete from Marvin library")
             ac.setIcon(QIcon(I('trash.png')))
             ac.triggered.connect(self.parent._delete_books)
 
@@ -672,7 +673,7 @@ class BookStatusDialog(SizePersistedDialog):
     # Column assignments. When changing order here, also change in _construct_table_data
     if True:
         LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
-                          'Title', 'Author', 'Word Count', 'Progress', 'Last read',
+                          'Title', 'Author', 'Word count', 'Progress', 'Last read',
                           'Collections', 'Flags',
                           'Annotations', 'Vocabulary', 'Deep View', 'Articles',
                           'Match Quality']
@@ -691,7 +692,7 @@ class BookStatusDialog(SizePersistedDialog):
         TITLE_COL = LIBRARY_HEADER.index('Title')
         UUID_COL = LIBRARY_HEADER.index('uuid')
         VOCABULARY_COL = LIBRARY_HEADER.index('Vocabulary')
-        WORD_COUNT_COL = LIBRARY_HEADER.index('Word Count')
+        WORD_COUNT_COL = LIBRARY_HEADER.index('Word count')
 
         HIDDEN_COLUMNS = [
             UUID_COL,
@@ -1163,19 +1164,19 @@ class BookStatusDialog(SizePersistedDialog):
 
             header = None
             if action == 'show_deep_view_alphabetically':
-                group_box_title = "Deep View names alphabetically"
+                group_box_title = "Deep View items alphabetically"
                 parameter_tag.insert(0, "alphabetically")
 
             elif action == 'show_deep_view_by_importance':
-                group_box_title = "Deep View names by importance"
+                group_box_title = "Deep View items by importance"
                 parameter_tag.insert(0, "importance")
 
             elif action == 'show_deep_view_by_appearance':
-                group_box_title = "Deep View names by appearance"
+                group_box_title = "Deep View items by appearance"
                 parameter_tag.insert(0, "appearance")
 
             elif action == 'show_deep_view_by_annotations':
-                group_box_title = "Deep View names with notes and flags first"
+                group_box_title = "Deep View items (notes and flags first)"
                 parameter_tag.insert(0, "annotated")
 
             parameters_tag.insert(0, parameter_tag)
@@ -1486,14 +1487,14 @@ class BookStatusDialog(SizePersistedDialog):
         self.show_match_colors = not self.show_match_colors
         self.opts.prefs.set('show_match_colors', self.show_match_colors)
         if self.show_match_colors:
-            self.show_match_colors_button.setText("Hide Matches")
+            self.show_match_colors_button.setText("Hide match status")
             self.tv.sortByColumn(self.LIBRARY_HEADER.index('Match Quality'), Qt.DescendingOrder)
             self.capture_sort_column(self.LIBRARY_HEADER.index('Match Quality'))
             self.show_match_colors_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                                      'icons',
                                                                      'matches_hide.png')))
         else:
-            self.show_match_colors_button.setText("Show Matches")
+            self.show_match_colors_button.setText("Show match status")
             self.show_match_colors_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                                      'icons',
                                                                      'matches_show.png')))

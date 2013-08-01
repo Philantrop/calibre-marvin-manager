@@ -155,11 +155,11 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
             # Remind the user of calibre's custom column, disable buttons if no calibre field
             calibre_cf = self.prefs.get('collection_field_comboBox', '')
             if calibre_cf:
-                self.calibre_gb.setTitle("Calibre (%s)" % calibre_cf)
+                self.calibre_gb.setTitle("calibre ('%s')" % calibre_cf)
                 self.calibre_gb.setToolTip("Collection assignments from '%s'" % calibre_cf)
             else:
-                self.calibre_gb.setTitle("Calibre")
-                self.calibre_gb.setToolTip("No custom column selected")
+                self.calibre_gb.setTitle("calibre")
+                self.calibre_gb.setToolTip("No custom column selected for collection assignments")
                 self.calibre_gb.setEnabled(False)
                 # Disable import/export/sync
                 self.export_to_marvin_tb.setEnabled(False)
