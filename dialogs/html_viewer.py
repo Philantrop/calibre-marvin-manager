@@ -129,7 +129,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.html_tb.setText(content['html_content'])
             #self.html_tb.setPalette(palette)
 
-        # Set or hide the footer
+        # Set or hide the footer, footer_spacer
         if content['footer']:
             self.footer.setText(content['footer'])
         else:

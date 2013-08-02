@@ -1209,14 +1209,14 @@ class BookStatusDialog(SizePersistedDialog):
             update_soup.command.insert(0, parameters_tag)
 
             header = None
-            group_box_title = 'Highlights and Annotations'
+            group_box_title = 'Annotations'
             if self.installed_books[book_id].highlights:
                 default_content = '\n'.join(self.installed_books[book_id].highlights)
             else:
-                default_content = "<p>No highlights</p>"
+                default_content = "<p>No annotations</p>"
             footer = (
-                '<p>The <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
-                'Annotations plugin</a> imports highlights and annotations from Marvin.</p>')
+                '<p>For finer control of annotation layout and formatting, see the <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
+                'Annotations plugin</a>.</p>')
             afn = self.parent.prefs.get('annotations_field_comboBox', None)
             if afn:
                 refresh = {

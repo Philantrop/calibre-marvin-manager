@@ -136,22 +136,23 @@
 <! ~~~~~~~~~~~~~~~ Overview ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="overview" id="overview"></a>1. <a href="#toc">Overview</a></h3>
-<p>Marvin XD is an extended driver, offering  remote management of your Marvin library. </p><p><img src="images/marvin_library.png" alt="" width="1080" height="386" /></p>
+<p>Marvin XD is an extended driver, offering  advanced remote management of your Marvin library. </p><p><img src="images/marvin_library.png" alt="" width="1080" height="386" /></p>
   <div class="list_with_header">
     <p>Features:</p>
     <ul>
 		  <li>Synchronize metadata between Marvin and calibre.</li>
 		  <li>Identify duplicates.</li>
-		  <li>Add books from Marvin library to calibre.</li>
-		  <li>Delete books from Marvin</li>
-		  <li>Compute word counts.</li>
-		  <li>Generate Deep View  lists of names, dates, events and locations.</li>
+		  <li>Add books from Marvin library to calibre library.</li>
+		  <li>Delete books from Marvin library.</li>
+		  <li>Calculate word counts.</li>
+		  <li>Generate Deep View  lists of names, dates, events and places.</li>
 		  <li>Show reading progress, date last read.</li>
-		  <li>Manage NEW, READING and READ flags.</li>
-		  <li>View Annotations, Vocabulary words and Deep View content.</li>
+		  <li>Manage <strong>New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags.</li>
+		  <li>View annotations, vocabulary words, Deep View content and pinned articles.</li>
 		  <li>Manage collection assignments.</li>
+		  <li>Create, rename and delete collections.</li>
 		  <li>Transfer annotations, reading progress and last read to calibre custom columns.</li>
-		  <li>Backup and restore (not yet implemented).</li>
+		  <li>Backup and restore (<em>not yet implemented</em>).</li>
 	  </ul>
 	</div>
   <hr />
@@ -160,7 +161,7 @@
 <! ~~~~~~~~~~~~~~~ Configuration Options ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="configuration" id="configuration"></a>2. <a href="#toc">Configuration</a></h3>
-<p>Click the down arrow next to the Marvin XD icon , then Customize plugin to display the <strong>Customize Marvin XD</strong> dialog.</p>
+<p>Click the down arrow next to the Marvin XD icon, then Customize plugin to display the <strong>Customize Marvin XD</strong> dialog.</p>
 <h4>Custom columns</h4>
 <img src="images/custom_columns.png" alt="" class="inline" />
 <p>The <strong>Custom columns</strong> section connects  Marvin XD columns with calibre custom columns. For example, you can select a custom column in calibre for Collections, which then allows you to synchronize collection assignments between calibre and Marvin. You may also specify custom columns for Last read, Annotations and Progress, enabling you to save those Marvin details in calibre.</p>
@@ -171,7 +172,7 @@
 <h4>General options</h4>
 <img src="images/general_options.png" alt="" class="inline" />
 <p>When checked, <strong>Show reading progress as percentage</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p>
-<p><strong>Enable debug logging for plugin, </strong><strong>Enable debug logging for libiMobileDevice</strong>. If you are having a problem with the plugin, the developer may ask you to enable one or both of these check boxes, then restart calibre in debug mode from a terminal window to generate a debug log.</p>
+<p><strong>Enable debug logging for plugin, </strong><strong>Enable debug logging for libiMobileDevice</strong>. If you are having a problem with the plugin, the developer may ask you to enable one or both of these check boxes, then restart calibre in debug mode from a terminal window to generate a debug log. To start calibre in debug mode, type <tt>calibre-debug -g</tt> in a terminal window.</p>
 <p><strong>CSS</strong>. When viewing Annotations, Articles, Deep View content or Vocabulary, the content is packaged in HTML which can be formatted with CSS. The style directives from this edit control are applied to the retrieved HTML content before it is displayed.</p>
 <p style="clear:left;">&nbsp;</p>
 
@@ -191,27 +192,27 @@
     <tr class="white">
       <td>White</td>
       <td class="checked">&nbsp;</td>
-      <td>Installed in Marvin, but not your calibre library</td>
+      <td>Installed in Marvin, but not your calibre library.</td>
     </tr>
     <tr class="red">
       <td>Red</td>
       <td class="checked">&nbsp;</td>
-      <td>Duplicate copies installed in Marvin</td>
+      <td>More than one copy of the book exists in your Marvin library. The book was not found in calibre.</td>
     </tr>
     <tr class="green">
       <td>Green</td>
       <td class="checked">&#x2713;</td>
-      <td>Installed in calibre and Marvin, all metadata matches</td>
+      <td>Installed in calibre and Marvin, all metadata matches.</td>
     </tr>
     <tr class="yellow">
       <td>Yellow</td>
       <td class="checked">&#x2713;</td>
-      <td>Some metadata differences between calibre and Marvin</td>
+      <td>Some metadata differences between calibre and Marvin.</td>
     </tr>
     <tr class="orange">
       <td>Orange</td>
       <td class="checked">&#x2713;</td>
-      <td>Duplicate copy of a matched (green or yellow) book</td>
+      <td>Duplicate copy of a book in your calibre library.</td>
     </tr>
   </table>
 </div>
@@ -219,16 +220,16 @@
 <! ~~~~~~~~~~~~~~~ Usage scenarios ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="scenarios" id="scenarios"></a>4. <a href="#toc">Usage scenarios</a></h3>
-<p>(This is a hybrid of a how-to list and a FAQ)</p>
 <div class="usage">
-<p class="usage-topic">How does the Marvin XD plugin relate to the iOS reader applications driver? Do I still need it?</p>
+  <p class="usage-topic">How does the Marvin XD plugin relate to the iOS reader applications driver? Do I still need it?</p>
 <p class="usage-explanation">Yes, you still need the iOS reader applications driver configured with Marvin as your preferred iOS reader application. Marvin XD communicates with the driver to accomplish its tasks. Marvin XD offers many more features than a conventional device driver. You should be able to accomplish all Marvin tasks through Marvin XD.</p>
 </div>
 <hr />
 
 <div class="usage">
 <p class="usage-topic">I see lots of books with yellow backgrounds when showing match status. Is that bad?</p>
-<p class="usage-explanation">No, that's good! Yellow means that the book content is the same between calibre and Marvin, but there are some metadata differences. The differences could be as minor as a difference in the title, or perhaps you have selected a new cover in Marvin. To make the books match exactly, choose which metadata you want to use, and apply it. You're now green.</p>
+<p class="usage-explanation">No, that's good! Yellow means that the book content is the same between calibre and Marvin, but there are some metadata differences. The differences could be as minor as a difference in the title, or perhaps you have selected a new cover in Marvin. </p>
+<p class="usage-explanation">To compare the metadata, double-click the title to open the Metadata window. To make the books match exactly, choose which metadata you want to use, and apply it. The changes are applied immediately.</p>
 </div>
 <hr />
 
@@ -245,7 +246,7 @@
 <hr />
 
 <div class="usage">
-<p class="usage-topic">The guy who writes the Marvin blog entries is always more entertaining when it comes to these technical documents. Do you know when he will post better than this dry crap?</p>
+<p class="usage-topic">The guy who writes the Marvin blog entries is always more entertaining when it comes to these technical documents. Do you know when he will post something better than this dry crap?</p>
 <p class="usage-explanation">Keep an eye on the <a href="http://blog.marvinapp.com">Marvin for iOS blog</a>, I'm sure he'll come up with something brilliant soon.</p>
 </div>
 <hr />
@@ -307,28 +308,28 @@
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Clear all</td>
+    <td>Clear all flags</td>
     <td>Clear <strong>New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags for selected books.</td>
     <td><ul>
       <li>Flags  context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Clear New</td>
+    <td>Clear New flag</td>
     <td>Clear <strong>New</strong> flag for selected books.</td>
     <td><ul>
       <li>Flags  context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Clear Read</td>
+    <td>Clear Read flag</td>
     <td>Clear <strong>Read</strong> flag for selected books.</td>
     <td><ul>
       <li>Flags  context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Clear Reading list</td>
+    <td>Clear Reading list flag</td>
     <td>Clear <strong>Reading list</strong> flag for selected books.</td>
     <td><ul>
       <li>Flags  context menu</li>
@@ -462,21 +463,21 @@
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Set New</td>
+    <td>Set New flag</td>
     <td>Set <strong>New</strong> flag for selected books.</td>
     <td><ul>
       <li>Flags context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Set Read </td>
+    <td>Set Read flag</td>
     <td>Set <strong>Read</strong> flag for selected books.</td>
     <td><ul>
       <li>Flags context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Set Reading list</td>
+    <td>Set Reading list flag</td>
     <td>Set <strong>Reading list</strong> flag for selected books.</td>
     <td><ul>
       <li>Flags context menu</li>
