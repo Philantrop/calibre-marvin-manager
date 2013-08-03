@@ -3278,112 +3278,130 @@ class BookStatusDialog(SizePersistedDialog):
         if self.opts.prefs.get('development_mode', False):
             self._log("local_db_path: %s" % self.parent.connected_device.local_db_path)
 
-        # Fetch/compute hashes
-        cached_books = self.parent.connected_device.cached_books
-        hashes = self._scan_marvin_books(cached_books)
-
-        # Get the mainDb data
         installed_books = {}
-        con = sqlite3.connect(self.parent.connected_device.local_db_path)
-        with con:
-            con.row_factory = sqlite3.Row
 
-            # Build a collection map
-            collections_cur = con.cursor()
-            collections_cur.execute('''SELECT
-                                        ID,
-                                        Name
-                                       FROM Collections
-                                    ''')
-            rows = collections_cur.fetchall()
-            collection_map = {}
-            for row in rows:
-                collection_map[row[b'ID']] = row[b'Name']
-            collections_cur.close()
+        # Wait for device driver to complete initialization
+        while True:
+            if not hasattr(self.parent.connected_device, "cached_books"):
+                Application.processEvents()
+            else:
+                break
 
-            # Get the books
-            cur = con.cursor()
-            cur.execute('''SELECT
-                            Author,
-                            AuthorSort,
-                            Books.ID as id_,
-                            CalibreCoverHash,
-                            CalibreSeries,
-                            CalibreSeriesIndex,
-                            CalibreTitleSort,
-                            CoverFile,
-                            DateOpened,
-                            DatePublished,
-                            DeepViewPrepared,
-                            Description,
-                            FileName,
-                            IsRead,
-                            NewFlag,
-                            Progress,
-                            Publisher,
-                            ReadingList,
-                            Title,
-                            UUID,
-                            WordCount
-                          FROM Books
-                        ''')
+        # Is there a valid mainDb?
+        local_db_path = getattr(self.parent.connected_device, "local_db_path")
+        if local_db_path is not None:
+            # Fetch/compute hashes
+            cached_books = self.parent.connected_device.cached_books
+            hashes = self._scan_marvin_books(cached_books)
 
-            rows = cur.fetchall()
+            # Get the mainDb data
+            con = sqlite3.connect(self.parent.connected_device.local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
 
-            pb = ProgressBar(parent=self.opts.gui, window_title="Performing Marvin metadata magic", on_top=True)
-            book_count = len(rows)
-            pb.set_maximum(book_count)
-            pb.set_value(0)
-            pb.set_label('{:^100}'.format("1 of %d" % (book_count)))
-            pb.show()
+                # Build a collection map
+                collections_cur = con.cursor()
+                collections_cur.execute('''SELECT
+                                            ID,
+                                            Name
+                                           FROM Collections
+                                        ''')
+                rows = collections_cur.fetchall()
+                collection_map = {}
+                for row in rows:
+                    collection_map[row[b'ID']] = row[b'Name']
+                collections_cur.close()
 
-            for i, row in enumerate(rows):
-                pb.set_label('{:^100}'.format("%d of %d" % (i+1, book_count)))
+                # Get the books
+                cur = con.cursor()
+                cur.execute('''SELECT
+                                Author,
+                                AuthorSort,
+                                Books.ID as id_,
+                                CalibreCoverHash,
+                                CalibreSeries,
+                                CalibreSeriesIndex,
+                                CalibreTitleSort,
+                                CoverFile,
+                                DateOpened,
+                                DatePublished,
+                                DeepViewPrepared,
+                                Description,
+                                FileName,
+                                IsRead,
+                                NewFlag,
+                                Progress,
+                                Publisher,
+                                ReadingList,
+                                Title,
+                                UUID,
+                                WordCount
+                              FROM Books
+                            ''')
 
-                cid, mi = _get_calibre_id(row[b'UUID'],
-                                          row[b'Title'],
-                                          row[b'Author'])
+                rows = cur.fetchall()
 
-                book_id = row[b'id_']
-                # Get the primary metadata from Books
-                this_book = Book(row[b'Title'], row[b'Author'].split(', '))
-                this_book.articles = _get_articles(cur, book_id)
-                this_book.author_sort = row[b'AuthorSort']
-                this_book.cid = cid
-                this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
-                this_book.comments = row[b'Description']
-                this_book.cover_file = row[b'CoverFile']
-                this_book.device_collections = _get_collections(cur, book_id)
-                this_book.date_opened = row[b'DateOpened']
-                this_book.deep_view_prepared = row[b'DeepViewPrepared']
-                this_book.flags = _get_flags(cur, row)
-                this_book.hash = hashes[row[b'FileName']]['hash']
-                this_book.highlights = _get_highlights(cur, book_id)
-                this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
-                this_book.mid = book_id
-                this_book.on_device = _get_on_device_status(this_book.cid)
-                this_book.path = row[b'FileName']
-                this_book.progress = row[b'Progress']
-                this_book.pubdate = _get_pubdate(row)
-                this_book.tags = _get_marvin_genres(book_id)
-                this_book.title_sort = row[b'CalibreTitleSort']
-                this_book.uuid = row[b'UUID']
-                this_book.vocabulary = _get_vocabulary_list(cur, book_id)
-                this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
-                installed_books[book_id] = this_book
+                pb = ProgressBar(parent=self.opts.gui, window_title="Performing Marvin metadata magic", on_top=True)
+                book_count = len(rows)
+                pb.set_maximum(book_count)
+                pb.set_value(0)
+                pb.set_label('{:^100}'.format("1 of %d" % (book_count)))
+                pb.show()
 
-                pb.increment()
+                for i, row in enumerate(rows):
+                    pb.set_label('{:^100}'.format("%d of %d" % (i+1, book_count)))
 
-            pb.hide()
+                    cid, mi = _get_calibre_id(row[b'UUID'],
+                                              row[b'Title'],
+                                              row[b'Author'])
 
-        # Remove orphan cover_hashes
-        _purge_cover_hash_orphans()
+                    book_id = row[b'id_']
+                    # Get the primary metadata from Books
+                    this_book = Book(row[b'Title'], row[b'Author'].split(', '))
+                    this_book.articles = _get_articles(cur, book_id)
+                    this_book.author_sort = row[b'AuthorSort']
+                    this_book.cid = cid
+                    this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
+                    this_book.comments = row[b'Description']
+                    this_book.cover_file = row[b'CoverFile']
+                    this_book.device_collections = _get_collections(cur, book_id)
+                    this_book.date_opened = row[b'DateOpened']
+                    this_book.deep_view_prepared = row[b'DeepViewPrepared']
+                    this_book.flags = _get_flags(cur, row)
+                    this_book.hash = hashes[row[b'FileName']]['hash']
+                    this_book.highlights = _get_highlights(cur, book_id)
+                    this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
+                    this_book.mid = book_id
+                    this_book.on_device = _get_on_device_status(this_book.cid)
+                    this_book.path = row[b'FileName']
+                    this_book.progress = row[b'Progress']
+                    this_book.pubdate = _get_pubdate(row)
+                    this_book.tags = _get_marvin_genres(book_id)
+                    this_book.title_sort = row[b'CalibreTitleSort']
+                    this_book.uuid = row[b'UUID']
+                    this_book.vocabulary = _get_vocabulary_list(cur, book_id)
+                    this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
+                    installed_books[book_id] = this_book
 
-        if self.opts.prefs.get('development_mode', False):
-            self._log("%d cached books from Marvin:" % len(cached_books))
-            for book in installed_books:
-                self._log("%s word_count: %s" % (installed_books[book].title,
-                                                 repr(installed_books[book].word_count)))
+                    pb.increment()
+
+                pb.hide()
+
+            # Remove orphan cover_hashes
+            _purge_cover_hash_orphans()
+
+            if self.opts.prefs.get('development_mode', False):
+                self._log("%d cached books from Marvin:" % len(cached_books))
+                for book in installed_books:
+                    self._log("%s word_count: %s" % (installed_books[book].title,
+                                                     repr(installed_books[book].word_count)))
+        else:
+            self._log("Marvin database is damaged")
+            title = "Damaged database"
+            msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
+            MessageBox(MessageBox.ERROR, title, msg,
+                       show_copy_button=False).exec_()
+
         return installed_books
 
     def _inject_css(self, html):

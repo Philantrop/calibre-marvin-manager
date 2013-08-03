@@ -18,8 +18,8 @@ from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (Qt, QColor, QDialogButtonBox, QIcon, QPalette, QPixmap,
-                      QPushButton, QSize, QSizePolicy,
+from PyQt4.Qt import (Qt, QBrush, QColor, QDialogButtonBox, QIcon, QImage,
+                      QPainter, QPalette, QPixmap, QPushButton, QSize, QSizePolicy,
                       pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
@@ -30,6 +30,8 @@ if True:
 
 
 class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
+    BORDER_COLOR = "#FDFF99"
+    BORDER_WIDTH = 4
     COVER_ICON_SIZE = 200
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
@@ -85,7 +87,6 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.parent = parent
         self.stored_command = None
         self.verbose = parent.verbose
-        self.BORDER_COLOR = "#FDFF99"
         self.BORDER_LR = 4
         self.BORDER_TB = 8
         self.GREY_FG = '<font style="color:#A0A0A0">{0}</font>'
@@ -257,30 +258,43 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                     rows = cover_cur.fetchall()
 
                 if len(rows):
-                    try:
-                        marvin_cover_jpg = rows[0][b'LargeCoverJpg']
-                        marvin_thumb = thumbnail(marvin_cover_jpg,
-                                                 self.COVER_ICON_SIZE,
-                                                 self.COVER_ICON_SIZE)
-                        pixmap = QPixmap()
-                        if with_border:
-                            bordered_thumb = add_borders_to_image(marvin_thumb[2],
-                                                                  left=self.BORDER_LR,
-                                                                  right=self.BORDER_LR,
-                                                                  top=self.BORDER_TB,
-                                                                  bottom=self.BORDER_TB,
-                                                                  border_color=self.BORDER_COLOR)
-                            pixmap.loadFromData(bordered_thumb)
-                        else:
-                            pixmap.loadFromData(marvin_thumb[2])
-                        self.marvin_cover.setPixmap(pixmap)
-                    except:
-                        # No cover available, use generic
-                        import traceback
-                        self._log(traceback.format_exc())
+                    marvin_cover_jpg = rows[0][b'LargeCoverJpg']
+                    if marvin_cover_jpg is not None:
+                        m_image = QImage()
+                        m_image.loadFromData(marvin_cover_jpg)
 
-                        self._log("failed to fetch LargeCoverJpg for %s (%s)" %
-                                  (self.installed_book.title, self.book_id))
+                        if with_border:
+                            m_image = m_image.scaledToHeight(
+                                self.COVER_ICON_SIZE - self.BORDER_WIDTH * 2,
+                                Qt.SmoothTransformation)
+
+                            # Construct a QPixmap with yellow background
+                            self.m_pixmap = QPixmap(
+                                QSize(m_image.width() + self.BORDER_WIDTH * 2,
+                                      m_image.height() + self.BORDER_WIDTH * 2))
+
+                            m_painter = QPainter(self.m_pixmap)
+                            m_painter.setRenderHints(m_painter.Antialiasing)
+
+                            m_painter.fillRect(self.m_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
+                            m_painter.drawImage(self.BORDER_WIDTH, self.BORDER_WIDTH, m_image)
+                        else:
+                            m_image = m_image.scaledToHeight(
+                                self.COVER_ICON_SIZE,
+                                Qt.SmoothTransformation)
+
+                            self.m_pixmap = QPixmap(
+                                QSize(m_image.width(),
+                                      m_image.height()))
+
+                            m_painter = QPainter(self.m_pixmap)
+                            m_painter.setRenderHints(m_painter.Antialiasing)
+
+                            m_painter.drawImage(0, 0, m_image)
+
+                        self.marvin_cover.setPixmap(self.m_pixmap)
+                    else:
+                        # No cover available, use generic
                         pixmap = QPixmap()
                         pixmap.load(I('book.png'))
                         pixmap = pixmap.scaled(self.COVER_ICON_SIZE,
@@ -304,31 +318,46 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
             if 'cover_hash' not in self.mismatches:
                 db = self.opts.gui.current_db
                 mi = db.get_metadata(self.cid, index_is_id=True, get_cover=True, cover_as_data=True)
-                calibre_thumb = thumbnail(mi.cover_data[1],
-                                          self.COVER_ICON_SIZE,
-                                          self.COVER_ICON_SIZE)
-                pixmap = QPixmap()
-                pixmap.loadFromData(calibre_thumb[2])
-                self.calibre_cover.setPixmap(pixmap)
+                c_image = QImage()
+                c_image.loadFromData(mi.cover_data[1])
+                c_image = c_image.scaledToHeight(self.COVER_ICON_SIZE,
+                                                           Qt.SmoothTransformation)
+                self.c_pixmap = QPixmap(QSize(c_image.width(),
+                                              c_image.height()))
+                c_painter = QPainter(self.c_pixmap)
+                c_painter.setRenderHints(c_painter.Antialiasing)
+                c_painter.drawImage(0, 0, c_image)
+
+                # Set calibre cover
+                self.calibre_cover.setPixmap(self.c_pixmap)
 
                 # Marvin cover matches calibre cover
-                self.marvin_cover.setPixmap(pixmap)
+                self.marvin_cover.setPixmap(self.c_pixmap)
             else:
                 # Covers don't match - render with border
                 db = self.opts.gui.current_db
-                mi = db.get_metadata(self.cid, index_is_id=True, get_cover=True, cover_as_data=True)
-                calibre_thumb = thumbnail(mi.cover_data[1],
-                                          self.COVER_ICON_SIZE,
-                                          self.COVER_ICON_SIZE)
-                bordered_thumb = add_borders_to_image(calibre_thumb[2],
-                                                      left=self.BORDER_LR,
-                                                      right=self.BORDER_LR,
-                                                      top=self.BORDER_TB,
-                                                      bottom=self.BORDER_TB,
-                                                      border_color=self.BORDER_COLOR)
-                pixmap = QPixmap()
-                pixmap.loadFromData(bordered_thumb)
-                self.calibre_cover.setPixmap(pixmap)
+
+                # Construct a QImage with the cover sized to fit inside border
+                c_image = QImage()
+                cdata = db.cover(self.cid, index_is_id=True)
+                if cdata is None:
+                    c_image.load(I('book.png'))
+                else:
+                    c_image.loadFromData(cdata)
+
+                c_image = c_image.scaledToHeight(
+                    self.COVER_ICON_SIZE - self.BORDER_WIDTH * 2,
+                    Qt.SmoothTransformation)
+
+                # Construct a QPixmap with yellow background
+                self.c_pixmap = QPixmap(
+                    QSize(c_image.width() + self.BORDER_WIDTH * 2,
+                          c_image.height() + self.BORDER_WIDTH * 2))
+                c_painter = QPainter(self.c_pixmap)
+                c_painter.setRenderHints(c_painter.Antialiasing)
+                c_painter.fillRect(self.c_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
+                c_painter.drawImage(self.BORDER_WIDTH, self.BORDER_WIDTH, c_image)
+                self.calibre_cover.setPixmap(self.c_pixmap)
                 _fetch_marvin_cover(with_border=True)
         else:
             _fetch_marvin_cover()

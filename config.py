@@ -74,11 +74,23 @@ class ConfigWidget(QWidget):
 
         # ~~~~~~~~ Create the Custom fields options group box ~~~~~~~~
         self.cfg_custom_fields_gb = QGroupBox(self)
-        self.cfg_custom_fields_gb.setTitle('Custom columns')
+        self.cfg_custom_fields_gb.setTitle('Custom column assignments')
         self.l.addWidget(self.cfg_custom_fields_gb)
 
         self.cfg_custom_fields_qgl = QGridLayout(self.cfg_custom_fields_gb)
         current_row = 0
+
+        # Labels + HLine
+        self.marvin_source_label = QLabel("Marvin source")
+        self.cfg_custom_fields_qgl.addWidget(self.marvin_source_label, current_row, 0)
+        self.calibre_destination_label = QLabel("calibre destination")
+        self.cfg_custom_fields_qgl.addWidget(self.calibre_destination_label, current_row, 1)
+        current_row += 1
+        self.sd_hl = QFrame(self.cfg_custom_fields_gb)
+        self.sd_hl.setFrameShape(QFrame.HLine)
+        self.sd_hl.setFrameShadow(QFrame.Sunken)
+        self.cfg_custom_fields_qgl.addWidget(self.sd_hl, current_row, 0, 1, 3)
+        current_row += 1
 
         # Annotations
         self.cfg_annotations_label = QLabel('Annotations')
