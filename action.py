@@ -10,6 +10,7 @@ __docformat__ = 'restructuredtext en'
 
 import os, sys, threading
 
+from lxml import etree, html
 from zipfile import ZipFile
 
 from PyQt4.Qt import (pyqtSignal, QIcon, QMenu, QTimer, QUrl)
@@ -315,6 +316,28 @@ class MarvinManagerAction(InterfaceAction):
             if (hasattr(self.connected_device, 'ios_reader_app') and
                     self.connected_device.ios_reader_app == 'Marvin'):
                 self.launch_library_scanner()
+
+            # Explore status.xml for <has_password>
+            connected_fs = getattr(self.connected_device, 'connected_fs', None)
+            if connected_fs and self.ios.exists(connected_fs):
+                self._log("parsing status.xml")
+                # Wait for the driver to be silent to explore status.xml
+                while self.connected_device.get_busy_flag():
+                    Application.processEvents()
+                self.connected_device.set_busy_flag(True)
+
+                connection = etree.fromstring(self.ios.read(connected_fs))
+                self._log(etree.tostring(connection, pretty_print=True))
+                connection_state = connection.find('state').text
+                self._log("connection_state: %s" % connection_state)
+                has_password = connection.find('has_password')
+                if has_password is not None:
+                    self._log("has_password: %s" % has_password.text)
+                else:
+                    self._log("<has_password> not found")
+
+                self.connected_device.set_busy_flag(False)
+
         else:
             self._log_location("device disconnected")
 

@@ -1185,6 +1185,39 @@ class BookStatusDialog(SizePersistedDialog):
             default_content = "{0} to be provided by Marvin.".format(group_box_title)
             footer = None
 
+            if False:
+                # Get a list of DV items by querying mainDb
+                entities = "Entities_%d" % book_id
+                entity_locations = "EntityLocations_%d" % book_id
+                by_appearance = "Loc ASC, E.Name ASC"
+                by_frequency = "Cnt DESC, E.Name ASC"
+                by_alpha = "E.Name COLLATE NOCASE ASC"
+                sort_order = by_alpha
+                con = sqlite3.connect(self.parent.connected_device.local_db_path)
+                with con:
+                    con.row_factory = sqlite3.Row
+                    dv_names_cur = con.cursor()
+                    dv_names_cur.execute('''SELECT
+                                             E.ID,
+                                             E.Name,
+                                             COUNT(L.SentenceIndex) AS Cnt,
+                                             MIN(L.SectionIndex * 1000000 + L.SentenceIndex) as Loc,
+                                             Flag,
+                                             Note,
+                                             E.Confidence
+                                            FROM {0} as E JOIN {1} AS L ON E.ID = L.EntityID
+                                            GROUP BY E.ID
+                                            ORDER BY {2}
+                                            '''.format(entities, entity_locations, sort_order))
+                    rows = dv_names_cur.fetchall()
+                    dv_names_cur.close()
+                self._log("%d names found" % len(rows))
+                self._log("keys: %s" % rows[0].keys())
+                for row in rows:
+                    self._log(row[b'Name'])
+
+
+
         elif action == 'show_global_vocabulary':
             command_name = "command"
             command_type = "GetGlobalVocabularyHTML"

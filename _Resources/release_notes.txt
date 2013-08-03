@@ -50,3 +50,8 @@ Using Marvin XD
 The first time that you use Marvin XD with an iDevice, caches are constructed which will make subsequent connections much faster.
 
 If you are trying to do bulk operations, please try them with just a few books at a time before trying your entire library. The code has been lightly tested, but there are probably some combinations of actions that will have unintended consequences. That's why you're a beta tester!
+
+If you have problems:
+ • Please report issues at https://github.com/GRiker/calibre-marvin-manager/issues
+ • Provide as much detail as possible to recreate the problem. At a minimum, your OS, the type of iDevice you're using, the version of Marvin you have installed, and the steps necessary to recreate the problem.
+ • If the problem is a crash, please post a debug log with your issue. Instructions for creating a debug log may be found in 'Creating a new issue' at https://github.com/GRiker/calibre-marvin-manager/issues.
