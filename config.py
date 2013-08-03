@@ -88,7 +88,7 @@ class ConfigWidget(QWidget):
         current_row += 1
         self.sd_hl = QFrame(self.cfg_custom_fields_gb)
         self.sd_hl.setFrameShape(QFrame.HLine)
-        self.sd_hl.setFrameShadow(QFrame.Sunken)
+        self.sd_hl.setFrameShadow(QFrame.Raised)
         self.cfg_custom_fields_qgl.addWidget(self.sd_hl, current_row, 0, 1, 3)
         current_row += 1
 
