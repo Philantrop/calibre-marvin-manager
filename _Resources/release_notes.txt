@@ -9,7 +9,7 @@ With Marvin XD, you can:
  • Delete books from Marvin
  • Calculate word counts
  • Generate Deep View content of names, dates, events and places
- • View reading progress and date last read, optionally adding them to a custom column
+ • View reading progress and date last read, optionally adding them to a calibre custom column
  • Manage NEW, READING LIST and READ flags
  • View annotations, vocabulary words, Deep View content and pinned articles
  • Manage collections assignments, including creating, renaming and deleting collections
@@ -22,36 +22,45 @@ Requirements:
  • Marvin 1.94 or later
 
 Installation:
- • Download Marvin XD from https://www.dropbox.com/s/six0c50asmvkjm8/Marvin%20XD.zip
- • Download iOS reader applications v1.0.6 from https://www.dropbox.com/s/vaihbwks17sfdz4/iOS%20reader%20applications.zip
- • Disconnect your iDevice
- • Install the iOS reader applications device driver. If this is the first time you have installed this driver, you will need to configure it with Marvin as your preferred iOS reader application. See the instructions at http://www.mobileread.com/forums/showthread.php?t=215624 for more details.
- • Install the Marvin XD plugin
- • Choose 'The main toolbar when a device is connected' as the location for the icon
- • Open calibre Preferences|Interface|Toolbar
- • Select 'The main toolbar when a device is connected'
+ • Disconnect your iDevice from your computer.
+ • Download Marvin XD from https://www.dropbox.com/s/six0c50asmvkjm8/Marvin%20XD.zip.
+ • Download iOS reader applications v1.0.6 from https://www.dropbox.com/s/vaihbwks17sfdz4/iOS%20reader%20applications.zip.
+ • Install the iOS reader applications device driver. If this is the first time you have installed this driver, you will need to configure it with Marvin as your preferred iOS reader application. See the instructions at http://www.mobileread.com/forums/showthread.php?t=215624 for more details. If you have already installed the released version of the plugin, you still need to update it to this later version with special features supporting Marvin XD.
+ • Install the Marvin XD plugin.
+ • Choose 'The main toolbar when a device is connected' as the location for the icon.
+ • Open calibre Preferences|Interface|Toolbar.
+ • Select 'The main toolbar when a device is connected'.
  • Select the Marvin XD icon (should be at the bottom), then click the up arrow repeatedly to move it just below the 'Location Manager' icon. This will display the Marvin XD icon next to the Marvin icon when the calibre connector is running.
- • Accept all changes
- • Exit calibre
+ • Accept all changes.
+ • Exit calibre.
 
 Using Marvin XD
- • Connect your iDevice
- • Start Marvin
+ • Connect your iDevice.
+ • Start Marvin (v1.94 or later).
  • Initiate the calibre connector by touching the cloud icon in either the Home screen or the Library screen, then touching 'calibre'.
- • Start calibre
+ • Start calibre.
  • After calibre is finished initializing, you should see the Marvin icon in the main toolbar, with the Marvin XD icon next to it.
- • Click the Marvin XD icon to view the Marvin Library
+ • Click the Marvin XD icon to view the Marvin Library.
  • Click the Help button for detailed help on using Marvin XD.
  • You can also hover your cursor over individual cells or right-click for a context menu of possible actions.
  • Click Close to exit the Marvin XD window.
- • Click the down arrow next to the Marvin XD icon, then 'Customize plugin…'
- • Under General options, tick the 'Enable debug logging for plugin' box
+ • Click the down arrow next to the Marvin XD icon, then 'Customize plugin…'.
+ • Under General options, tick the 'Enable debug logging for plugin' box.
 
 The first time that you use Marvin XD with an iDevice, caches are constructed which will make subsequent connections much faster.
 
-If you are trying to do bulk operations, please try them with just a few books at a time before trying your entire library. The code has been lightly tested, but there are probably some combinations of actions that will have unintended consequences. That's why you're a beta tester!
+If you are trying to do bulk operations, please try them with just a few books at a time before trying your entire library. The code has been lightly tested, but there are probably some combinations of actions that will have unintended consequences.
 
 If you have problems:
  • Please report issues at https://github.com/GRiker/calibre-marvin-manager/issues
  • Provide as much detail as possible to recreate the problem. At a minimum, your OS, the type of iDevice you're using, the version of Marvin you have installed, and the steps necessary to recreate the problem.
  • If the problem is a crash, please post a debug log with your issue. Instructions for creating a debug log may be found in 'Creating a new issue' at https://github.com/GRiker/calibre-marvin-manager/issues.
+
+Feedback requested:
+ • Is this a useful plugin?
+ • How could it be more useful?
+ • How could the online Help be improved?
+
+Thanks,
+
+G
