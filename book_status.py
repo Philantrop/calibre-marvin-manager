@@ -251,11 +251,34 @@ class MyTableView(QTableView):
                 ac.setEnabled(False)
 
         elif col == self.parent.LOCKED_COL:
+            any_ids_locked = False
+            for row in selected_books:
+                if selected_books[row]['locked']:
+                    any_ids_locked = True
+                    break
+
+            any_ids_unlocked = False
+            for row in selected_books:
+                if not selected_books[row]['locked']:
+                    any_ids_unlocked = True
+                    break
+
             ac = menu.addAction("Lock")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'lock_enabled.png')))
+            ac.setEnabled(any_ids_unlocked)
+            if any_ids_unlocked:
+                icon = QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'lock_enabled.png'))
+            else:
+                icon = QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'lock_disabled.png'))
+            ac.setIcon(icon)
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_locked", row))
+
             ac = menu.addAction("Unlock")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'unlock_enabled.png')))
+            ac.setEnabled(any_ids_locked)
+            if any_ids_locked:
+                icon = QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'unlock_enabled.png'))
+            else:
+                icon = QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'unlock_disabled.png'))
+            ac.setIcon(icon)
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_unlocked", row))
 
         elif col == self.parent.PROGRESS_COL:
@@ -853,7 +876,7 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'manage_collections':
             self.show_manage_collections_dialog()
         elif action in ['set_locked', 'set_unlocked']:
-            self._update_lock_status(action)
+            self._update_locked_status(action)
 
         elif action in ['show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
@@ -907,6 +930,8 @@ class BookStatusDialog(SizePersistedDialog):
             msg = "<p>Right-click in the Flags column for flag management options.</p>"
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
+        elif column == self.LOCKED_COL:
+            self._toggle_locked_status(row)
         elif column == self.WORD_COUNT_COL:
             self._calculate_word_count()
         else:
@@ -2405,14 +2430,8 @@ class BookStatusDialog(SizePersistedDialog):
         for index in self.HIDDEN_COLUMNS:
             self.tv.hideColumn(index)
 
-        # Show/hide the Locked column depending on password status from connected.xml
-        if self.parent.has_password == "false":
-            self.tv.hideColumn(self.LOCKED_COL)
-        elif self.parent.has_password == "true":
-            self.tv.showColumn(self.LOCKED_COL)
-
         # Set horizontal self.header props
-        #self.tv.horizontalHeader().setStretchLastSection(True)
+        self.tv.horizontalHeader().setStretchLastSection(True)
 
         # Set column width to fit contents
         self.tv.resizeColumnsToContents()
@@ -2432,6 +2451,13 @@ class BookStatusDialog(SizePersistedDialog):
             for col in [self.WORD_COUNT_COL, self.COLLECTIONS_COL, self.ANNOTATIONS_COL,
                         self.VOCABULARY_COL, self.DEEP_VIEW_COL, self.ARTICLES_COL]:
                 self.tv.setColumnWidth(col, fixed_width)
+
+        # Show/hide the Locked column depending on password status from connected.xml
+        if self.parent.has_password:
+            self.tv.showColumn(self.LOCKED_COL)
+            self.tv.setColumnWidth(self.LOCKED_COL, 24)
+        else:
+            self.tv.hideColumn(self.LOCKED_COL)
 
         self.tv.setSortingEnabled(True)
 
@@ -3833,6 +3859,7 @@ class BookStatusDialog(SizePersistedDialog):
             has_dv_content = bool(self.tm.get_deep_view(row))
             has_vocabulary = bool(self.tm.get_vocabulary(row))
             last_opened = str(self.tm.get_last_opened(row).text())
+            locked = self.tm.get_locked(row).sort_key
             path = self.tm.get_path(row)
             progress = self.tm.get_progress(row).sort_key
             title = str(self.tm.get_title(row).text())
@@ -3846,6 +3873,7 @@ class BookStatusDialog(SizePersistedDialog):
                 'has_dv_content': has_dv_content,
                 'has_vocabulary': has_vocabulary,
                 'last_opened': last_opened,
+                'locked': locked,
                 'path': path,
                 'progress': progress,
                 'title': title,
@@ -3975,6 +4003,19 @@ class BookStatusDialog(SizePersistedDialog):
 
         else:
             self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
+
+    def _toggle_locked_status(self, row):
+        '''
+        '''
+        current_status = self.tm.get_locked(row).sort_key
+        self._log_location("current_status: %s" %  current_status)
+
+        if current_status == 1:
+            action = "set_unlocked"
+        else:
+            action = "set_locked"
+
+        self._update_locked_status(action)
 
     def _update_calibre_collections(self, book_id, cid, updated_calibre_collections):
         '''
@@ -4478,11 +4519,10 @@ class BookStatusDialog(SizePersistedDialog):
 
                         self._issue_command(command_name, update_soup)
 
-    def _update_lock_status(self, action):
+    def _update_locked_status(self, action):
         '''
         '''
         self._log_location(action)
-
 
         selected_books = self._selected_books()
 

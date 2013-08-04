@@ -333,8 +333,8 @@ class MarvinManagerAction(InterfaceAction):
 
                 has_password = connection.find('has_password')
                 if has_password is not None:
-                    self.has_password = has_password.text
-                    self._log("has_password: %s" % has_password.text)
+                    self.has_password = bool(has_password.text == "true")
+                    self._log("has_password: %s" % self.has_password)
 
                 self.connected_device.set_busy_flag(False)
 
