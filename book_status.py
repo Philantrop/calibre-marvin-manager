@@ -21,7 +21,7 @@ from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
                       QColor, QCursor, QDialogButtonBox, QFont, QIcon,
                       QItemSelectionModel, QLabel, QMenu, QModelIndex, QPainter, QPixmap,
-                      QProgressDialog, QTableView, QTableWidgetItem, QTimer,
+                      QProgressDialog, QString, QTableView, QTableWidgetItem, QTimer,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
 
@@ -507,6 +507,9 @@ class MarkupTableModel(QAbstractTableModel):
               and not self.parent.prefs.get('show_progress_as_percentage', False)):
             return self.arraydata[row][self.parent.PROGRESS_COL].picture
 
+        elif role == Qt.DisplayRole and col == self.parent.SERIES_COL:
+            return self.arraydata[row][self.parent.SERIES_COL].text()
+
         elif role == Qt.DisplayRole and col == self.parent.TITLE_COL:
             return self.arraydata[row][self.parent.TITLE_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.AUTHOR_COL:
@@ -561,6 +564,10 @@ class MarkupTableModel(QAbstractTableModel):
             elif col in [self.parent.FLAGS_COL]:
                 return tip + "<br/>Right-click for options</p>"
 
+            elif col == self.parent.LOCKED_COL:
+                return ("<p>Double-click to toggle locked status" +
+                        "<br/>Right-click for more options</p>")
+
             elif col in [self.parent.WORD_COUNT_COL]:
                 return (tip + "<br/>Double-click to generate word count" +
                               "<br/>Right-click to generate word count for multiple books</p>")
@@ -577,9 +584,37 @@ class MarkupTableModel(QAbstractTableModel):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
                 return QVariant(self.headerdata[col])
-#         if role == Qt.ToolTipRole:
-#             if orientation == Qt.Horizontal:
-#                 return QString("Tooltip for col %d" % col)
+        if role == Qt.ToolTipRole:
+            if orientation == Qt.Horizontal:
+                if col == self.parent.ANNOTATIONS_COL:
+                    tip = "Annotations"
+                elif col == self.parent.ARTICLES_COL:
+                    tip = "Articles"
+                elif col == self.parent.AUTHOR_COL:
+                    tip = "Author"
+                elif col == self.parent.COLLECTIONS_COL:
+                    tip = "Collection assignments"
+                elif col == self.parent.DEEP_VIEW_COL:
+                    tip = "Deep View items"
+                elif col == self.parent.FLAGS_COL:
+                    tip = "Flags"
+                elif col == self.parent.LAST_OPENED_COL:
+                    tip = "Last read"
+                elif col == self.parent.LOCKED_COL:
+                    tip = "Locked status"
+                elif col == self.parent.PROGRESS_COL:
+                    tip = "Reading progress"
+                elif col == self.parent.SERIES_COL:
+                    tip = "Series"
+                elif col == self.parent.TITLE_COL:
+                    tip = "Title"
+                elif col == self.parent.VOCABULARY_COL:
+                    tip = "Vocabulary words"
+                elif col == self.parent.WORD_COUNT_COL:
+                    tip = "Word count"
+                else:
+                    tip = ''
+                return QString(tip)
 
         return QVariant()
 
@@ -719,17 +754,17 @@ class BookStatusDialog(SizePersistedDialog):
     # Column assignments. When changing order here, also change in _construct_table_data
     if True:
         LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path', CIRCLE_SLASH,
-                          'Title', 'Author', 'Word count', 'Progress', 'Last read',
+                          'Title', 'Author', 'Series', 'Word count', 'Progress', 'Last read',
                           'Collections', 'Flags',
-                          'Annotations', 'Vocabulary', 'Deep View', 'Articles',
+                          'Ann', 'Voc', 'DV', 'Art',
                           'Match Quality']
-        ANNOTATIONS_COL = LIBRARY_HEADER.index('Annotations')
-        ARTICLES_COL = LIBRARY_HEADER.index('Articles')
+        ANNOTATIONS_COL = LIBRARY_HEADER.index('Ann')
+        ARTICLES_COL = LIBRARY_HEADER.index('Art')
         AUTHOR_COL = LIBRARY_HEADER.index('Author')
         BOOK_ID_COL = LIBRARY_HEADER.index('mid')
         CALIBRE_ID_COL = LIBRARY_HEADER.index('cid')
         COLLECTIONS_COL = LIBRARY_HEADER.index('Collections')
-        DEEP_VIEW_COL = LIBRARY_HEADER.index('Deep View')
+        DEEP_VIEW_COL = LIBRARY_HEADER.index('DV')
         FLAGS_COL = LIBRARY_HEADER.index('Flags')
         LAST_OPENED_COL = LIBRARY_HEADER.index('Last read')
         LOCKED_COL = LIBRARY_HEADER.index(CIRCLE_SLASH)
@@ -737,8 +772,9 @@ class BookStatusDialog(SizePersistedDialog):
         PATH_COL = LIBRARY_HEADER.index('path')
         PROGRESS_COL = LIBRARY_HEADER.index('Progress')
         TITLE_COL = LIBRARY_HEADER.index('Title')
+        SERIES_COL = LIBRARY_HEADER.index('Series')
         UUID_COL = LIBRARY_HEADER.index('uuid')
-        VOCABULARY_COL = LIBRARY_HEADER.index('Vocabulary')
+        VOCABULARY_COL = LIBRARY_HEADER.index('Voc')
         WORD_COUNT_COL = LIBRARY_HEADER.index('Word count')
 
         HIDDEN_COLUMNS = [
@@ -911,7 +947,7 @@ class BookStatusDialog(SizePersistedDialog):
         asset_actions = {
             self.ANNOTATIONS_COL: 'show_highlights',
             self.ARTICLES_COL: 'show_deep_view_articles',
-            self.DEEP_VIEW_COL: 'show_deep_view_alphabetically',
+            self.DEEP_VIEW_COL: 'show_deep_view_by_importance',
             self.VOCABULARY_COL: 'show_vocabulary'
             }
 
@@ -1279,7 +1315,7 @@ class BookStatusDialog(SizePersistedDialog):
                 sys.path.insert(0, dialog_resources_path)
                 this_dc = importlib.import_module('deep_view_items')
                 sys.path.remove(dialog_resources_path)
-                dlg = this_dc.DeepViewItems(self.opts.gui, group_box_title, rows)
+                dlg = this_dc.DeepViewItems(self, group_box_title, rows)
                 dlg.exec_()
 
                 if dlg.result:
@@ -2332,6 +2368,23 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("%s match_quality: %s" % (book_data.title, match_quality))
             return match_quality
 
+        def _generate_series(book_data):
+            '''
+            Generate a sort key based on series index
+            '''
+            series_ts = ''
+            series_sort = ''
+            if book_data.series:
+                if book_data.series_index.endswith('.0'):
+                    cs_index = book_data.series_index[:-2]
+                series_ts = "%s [%s]" % (book_data.series, cs_index)
+                index = float(book_data.series_index)
+                integer = int(index)
+                fraction = index - integer
+                series_sort = '%04d%s' % (integer, str('%0.4f' % fraction).lstrip('0'))
+            series = SortableTableWidgetItem(series_ts, series_sort)
+            return series
+
         def _generate_title(book_data):
             '''
             '''
@@ -2357,6 +2410,7 @@ class BookStatusDialog(SizePersistedDialog):
             match_quality = _generate_match_quality(book_data)
             progress = self._generate_reading_progress(book_data)
             title = _generate_title(book_data)
+            series = _generate_series(book_data)
 
             article_count = 0
             if 'Wiki' in book_data.articles:
@@ -2373,6 +2427,7 @@ class BookStatusDialog(SizePersistedDialog):
                 locked,
                 title,
                 author,
+                series,
                 "{0} ".format(book_data.word_count) if book_data.word_count > '0' else '',
                 progress,
                 last_opened,
@@ -2431,7 +2486,7 @@ class BookStatusDialog(SizePersistedDialog):
             self.tv.hideColumn(index)
 
         # Set horizontal self.header props
-        self.tv.horizontalHeader().setStretchLastSection(True)
+        #self.tv.horizontalHeader().setStretchLastSection(True)
 
         # Set column width to fit contents
         self.tv.resizeColumnsToContents()
@@ -2446,10 +2501,13 @@ class BookStatusDialog(SizePersistedDialog):
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
         else:
-            # Set narrow cols to width of LAST_OPENED
+            # Set narrow cols to width of FLAGS
             fixed_width = self.tv.columnWidth(self.LAST_OPENED_COL)
-            for col in [self.WORD_COUNT_COL, self.COLLECTIONS_COL, self.ANNOTATIONS_COL,
-                        self.VOCABULARY_COL, self.DEEP_VIEW_COL, self.ARTICLES_COL]:
+            for col in [self.WORD_COUNT_COL, self.COLLECTIONS_COL]:
+                self.tv.setColumnWidth(col, fixed_width)
+            fixed_width = self.tv.columnWidth(self.FLAGS_COL)
+            for col in [self.ANNOTATIONS_COL, self.VOCABULARY_COL,
+                        self.DEEP_VIEW_COL, self.ARTICLES_COL]:
                 self.tv.setColumnWidth(col, fixed_width)
 
         # Show/hide the Locked column depending on password status from connected.xml
@@ -3074,6 +3132,8 @@ class BookStatusDialog(SizePersistedDialog):
         Pin
         Title
         Author
+        CalibreSeries
+        CalibreSeriesIndex
         Last read
         Bookmarks
         Highlights/annotations
@@ -3517,6 +3577,8 @@ class BookStatusDialog(SizePersistedDialog):
                     this_book.pin = row[b'Pin']
                     this_book.progress = row[b'Progress']
                     this_book.pubdate = _get_pubdate(row)
+                    this_book.series = row[b'CalibreSeries']
+                    this_book.series_index = row[b'CalibreSeriesIndex']
                     this_book.tags = _get_marvin_genres(book_id)
                     this_book.title_sort = row[b'CalibreTitleSort']
                     this_book.uuid = row[b'UUID']
