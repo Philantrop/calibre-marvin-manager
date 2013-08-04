@@ -18,8 +18,8 @@ Requirements:
  • calibre v0.9.41 or later (Linux, OS X and Windows supported)
  • Linux users may need to install imagemagick https://help.ubuntu.com/community/ImageMagick
  • iOS reader applications driver v1.0.6 or later
- • Marvin XD plugin
- • Marvin 1.931 or later
+ • Marvin XD plugin 0.1.0 or later
+ • Marvin 1.94 or later
 
 Installation:
  • Download Marvin XD from https://www.dropbox.com/s/six0c50asmvkjm8/Marvin%20XD.zip

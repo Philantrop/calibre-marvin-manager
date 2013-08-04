@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Ui_Config</class>
+ <widget class="QWidget" name="Ui_Config">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+    <height>348</height>
+   </rect>
+  </property>
+  <layout class="QVBoxLayout" name="l">
+   <item>
+    <layout class="QVBoxLayout" name="verticalLayout">
+     <item>
+      <widget class="QGroupBox" name="cfg_custom_fields_gb">
+       <property name="title">
+        <string>Custom columns</string>
+       </property>
+       <layout class="QGridLayout" name="gridLayout_2">
+        <item row="0" column="0">
+         <layout class="QGridLayout" name="cfg_custom_columns_qgl">
+          <item row="0" column="0">
+           <widget class="QLabel" name="cfg_collections_label">
+            <property name="text">
+             <string>Collections</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="1">
+           <widget class="QComboBox" name="collection_field_comboBox"/>
+          </item>
+          <item row="0" column="2">
+           <widget class="QToolButton" name="cfg_collections_wizard">
+            <property name="text">
+             <string>...</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QLabel" name="cfg_date_read_label">
+            <property name="text">
+             <string>Last read</string>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="1">
+           <widget class="QComboBox" name="date_read_field_comboBox"/>
+          </item>
+          <item row="1" column="2">
+           <widget class="QToolButton" name="cfg_date_read_wizard">
+            <property name="text">
+             <string>...</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="0">
+           <widget class="QLabel" name="cfg_annotations_label">
+            <property name="text">
+             <string>Annotations</string>
+            </property>
+           </widget>
+          </item>
+          <item row="2" column="1">
+           <widget class="QComboBox" name="annotations_field_comboBox"/>
+          </item>
+          <item row="2" column="2">
+           <widget class="QToolButton" name="cfg_annotations_wizard">
+            <property name="text">
+             <string>...</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="0">
+           <widget class="QLabel" name="cfg_progress_label">
+            <property name="text">
+             <string>Progress</string>
+            </property>
+           </widget>
+          </item>
+          <item row="3" column="1">
+           <widget class="QComboBox" name="progress_field_comboBox"/>
+          </item>
+          <item row="3" column="2">
+           <widget class="QToolButton" name="cfg_progress_wizard">
+            <property name="text">
+             <string>...</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item row="1" column="0">
+         <spacer name="spacer1">
+          <property name="orientation">
+           <enum>Qt::Vertical</enum>
+          </property>
+          <property name="sizeType">
+           <enum>QSizePolicy::Expanding</enum>
+          </property>
+          <property name="sizeHint" stdset="0">
+           <size>
+            <width>20</width>
+            <height>20</height>
+           </size>
+          </property>
+         </spacer>
+        </item>
+       </layout>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QGroupBox" name="cfg_runtime_options_gb">
+     <property name="title">
+      <string>General options</string>
+     </property>
+     <layout class="QVBoxLayout" name="verticalLayout_2">
+      <item>
+       <layout class="QVBoxLayout" name="cfg_runtime_options_qvl">
+        <item>
+         <widget class="QCheckBox" name="reading_progress_checkbox">
+          <property name="text">
+           <string>Show reading progress as percentage</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="debug_plugin_checkbox">
+          <property name="text">
+           <string>Enable debug logging for plugin</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QCheckBox" name="debug_libimobiledevice_checkbox">
+          <property name="text">
+           <string>Enable debug logging for libiMobileDevice</string>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <spacer name="spacer2">
+        <property name="orientation">
+         <enum>Qt::Vertical</enum>
+        </property>
+        <property name="sizeType">
+         <enum>QSizePolicy::Expanding</enum>
+        </property>
+        <property name="sizeHint" stdset="0">
+         <size>
+          <width>20</width>
+          <height>20</height>
+         </size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <spacer name="spacer3">
+     <property name="orientation">
+      <enum>Qt::Vertical</enum>
+     </property>
+     <property name="sizeHint" stdset="0">
+      <size>
+       <width>20</width>
+       <height>40</height>
+      </size>
+     </property>
+    </spacer>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
