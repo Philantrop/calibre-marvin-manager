@@ -8,6 +8,8 @@ __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
 import base64, hashlib, importlib, inspect, locale, operator, os, re, sqlite3, sys, time
+
+from collections import OrderedDict
 from datetime import datetime
 from functools import partial
 from lxml import etree
@@ -248,6 +250,14 @@ class MyTableView(QTableView):
             if (not date_read_field) or (not calibre_cids) or (not last_opened):
                 ac.setEnabled(False)
 
+        elif col == self.parent.LOCKED_COL:
+            ac = menu.addAction("Lock")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'lock_enabled.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_locked", row))
+            ac = menu.addAction("Unlock")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'unlock_enabled.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_unlocked", row))
+
         elif col == self.parent.PROGRESS_COL:
             progress_field = self.parent.prefs.get('progress_field_comboBox', None)
 
@@ -456,6 +466,9 @@ class MarkupTableModel(QAbstractTableModel):
             else:
                 return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, self.HSVALUE)))
 
+        elif role == Qt.DecorationRole and col == self.parent.LOCKED_COL:
+            return self.arraydata[row][self.parent.LOCKED_COL].picture
+
         elif role == Qt.DecorationRole and col == self.parent.FLAGS_COL:
             return self.arraydata[row][self.parent.FLAGS_COL].picture
 
@@ -613,6 +626,13 @@ class MarkupTableModel(QAbstractTableModel):
     def get_last_opened(self, row):
         return self.arraydata[row][self.parent.LAST_OPENED_COL]
 
+    def get_locked(self, row):
+        return self.arraydata[row][self.parent.LOCKED_COL]
+
+    def set_locked(self, row, value):
+        self.arraydata[row][self.parent.LOCKED_COL] = value
+        #self.parent.repaint()
+
     def get_match_quality(self, row):
         return self.arraydata[row][self.parent.MATCHED_COL]
 
@@ -651,9 +671,12 @@ class BookStatusDialog(SizePersistedDialog):
     '''
     '''
     CHECKMARK = u"\u2713"
+    CIRCLE_SLASH = u"\u20E0"
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
+    MAX_BOOKS_BEFORE_SPINNER = 4
 
     WATCHDOG_TIMEOUT = 10.0
 
@@ -672,7 +695,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     # Column assignments. When changing order here, also change in _construct_table_data
     if True:
-        LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path',
+        LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path', CIRCLE_SLASH,
                           'Title', 'Author', 'Word count', 'Progress', 'Last read',
                           'Collections', 'Flags',
                           'Annotations', 'Vocabulary', 'Deep View', 'Articles',
@@ -686,6 +709,7 @@ class BookStatusDialog(SizePersistedDialog):
         DEEP_VIEW_COL = LIBRARY_HEADER.index('Deep View')
         FLAGS_COL = LIBRARY_HEADER.index('Flags')
         LAST_OPENED_COL = LIBRARY_HEADER.index('Last read')
+        LOCKED_COL = LIBRARY_HEADER.index(CIRCLE_SLASH)
         MATCHED_COL = LIBRARY_HEADER.index('Match Quality')
         PATH_COL = LIBRARY_HEADER.index('path')
         PROGRESS_COL = LIBRARY_HEADER.index('Progress')
@@ -828,6 +852,9 @@ class BookStatusDialog(SizePersistedDialog):
             self._generate_deep_view()
         elif action == 'manage_collections':
             self.show_manage_collections_dialog()
+        elif action in ['set_locked', 'set_unlocked']:
+            self._update_lock_status(action)
+
         elif action in ['show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
@@ -1153,50 +1180,60 @@ class BookStatusDialog(SizePersistedDialog):
         elif action in ('show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations'):
             command_name = "command"
-            command_type = "GetDeepViewNamesHTML"
+            command_type = "GetFirstOccurrenceHTML"
             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
                 command_type, time.mktime(time.localtime())))
-            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
+            parameters_tag = Tag(update_soup, 'parameters')
+            update_soup.command.insert(0, parameters_tag)
 
-            # <parameter> for order
+            # The bookID we know - entityID and hits we get from the user
             parameter_tag = Tag(update_soup, 'parameter')
-            parameter_tag['name'] = "order"
+            parameter_tag['name'] = "bookID"
+            parameter_tag.insert(0, str(book_id))
+            parameters_tag.insert(0, parameter_tag)
 
             header = None
             if action == 'show_deep_view_alphabetically':
                 group_box_title = "Deep View items alphabetically"
-                parameter_tag.insert(0, "alphabetically")
+                sort_order = "E.Name COLLATE NOCASE ASC"
 
             elif action == 'show_deep_view_by_importance':
                 group_box_title = "Deep View items by importance"
-                parameter_tag.insert(0, "importance")
+                sort_order = "Cnt DESC, E.Name ASC"
 
             elif action == 'show_deep_view_by_appearance':
                 group_box_title = "Deep View items by appearance"
-                parameter_tag.insert(0, "appearance")
+                sort_order = "Loc ASC, E.Name ASC"
 
             elif action == 'show_deep_view_by_annotations':
                 group_box_title = "Deep View items (notes and flags first)"
-                parameter_tag.insert(0, "annotated")
-
-            parameters_tag.insert(0, parameter_tag)
-            update_soup.command.insert(0, parameters_tag)
+                sort_order = "NoteFlagOrder DESC, Cnt DESC, E.Name ASC"
 
             default_content = "{0} to be provided by Marvin.".format(group_box_title)
             footer = None
 
-            if False:
-                # Get a list of DV items by querying mainDb
-                entities = "Entities_%d" % book_id
-                entity_locations = "EntityLocations_%d" % book_id
-                by_appearance = "Loc ASC, E.Name ASC"
-                by_frequency = "Cnt DESC, E.Name ASC"
-                by_alpha = "E.Name COLLATE NOCASE ASC"
-                sort_order = by_alpha
-                con = sqlite3.connect(self.parent.connected_device.local_db_path)
-                with con:
-                    con.row_factory = sqlite3.Row
-                    dv_names_cur = con.cursor()
+            # Get a list of DV items by querying mainDb
+            entities = "Entities_%d" % book_id
+            entity_locations = "EntityLocations_%d" % book_id
+            con = sqlite3.connect(self.parent.connected_device.local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+                dv_names_cur = con.cursor()
+                if action == "show_deep_view_by_annotations":
+                    dv_names_cur.execute('''SELECT
+                                             E.ID,
+                                             E.Name,
+                                             COUNT(L.SentenceIndex) AS Cnt,
+                                             MIN(L.SectionIndex * 1000000 + L.SentenceIndex) AS Loc,
+                                             Flag,
+                                             Note,
+                                             E.Confidence,
+                                            CASE WHEN Note IS NULL THEN 0 ELSE 2 END + Flag AS NoteFlagOrder
+                                            FROM {0} as E JOIN {1} AS L ON E.ID = L.EntityID
+                                            GROUP BY E.ID
+                                            ORDER BY {2}
+                                         '''.format(entities, entity_locations, sort_order))
+                else:
                     dv_names_cur.execute('''SELECT
                                              E.ID,
                                              E.Name,
@@ -1208,14 +1245,34 @@ class BookStatusDialog(SizePersistedDialog):
                                             FROM {0} as E JOIN {1} AS L ON E.ID = L.EntityID
                                             GROUP BY E.ID
                                             ORDER BY {2}
-                                            '''.format(entities, entity_locations, sort_order))
-                    rows = dv_names_cur.fetchall()
-                    dv_names_cur.close()
-                self._log("%d names found" % len(rows))
-                self._log("keys: %s" % rows[0].keys())
-                for row in rows:
-                    self._log(row[b'Name'])
+                                         '''.format(entities, entity_locations, sort_order))
 
+                rows = dv_names_cur.fetchall()
+                dv_names_cur.close()
+            klass = os.path.join(dialog_resources_path, 'deep_view_items.py')
+            if os.path.exists(klass):
+                sys.path.insert(0, dialog_resources_path)
+                this_dc = importlib.import_module('deep_view_items')
+                sys.path.remove(dialog_resources_path)
+                dlg = this_dc.DeepViewItems(self.opts.gui, group_box_title, rows)
+                dlg.exec_()
+
+                if dlg.result:
+                    # entityID
+                    parameter_tag = Tag(update_soup, 'parameter')
+                    parameter_tag['name'] = "entityID"
+                    parameter_tag.insert(0, dlg.result['ID'])
+                    parameters_tag.insert(0, parameter_tag)
+
+                    # hits
+                    parameter_tag = Tag(update_soup, 'parameter')
+                    parameter_tag['name'] = "hits"
+                    parameter_tag.insert(0, dlg.result['hits'])
+                    parameters_tag.insert(0, parameter_tag)
+
+                    group_box_title = dlg.result['item']
+                else:
+                    return
 
 
         elif action == 'show_global_vocabulary':
@@ -2192,6 +2249,20 @@ class BookStatusDialog(SizePersistedDialog):
                 last_opened_sort)
             return last_opened
 
+        def _generate_locked_status(book_data):
+            '''
+            Generate a SortableImageWidgetItem representing the Pin value
+            '''
+            #image_name = "unlock_enabled.png"
+            image_name = "empty_16x16.png"
+            if book_data.pin:
+                image_name = "lock_enabled.png"
+            locked = SortableImageWidgetItem(self,
+                                             os.path.join(self.parent.opts.resources_path,
+                                                          'icons', image_name),
+                                             book_data.pin, self.LOCKED_COL)
+            return locked
+
         def _generate_match_quality(book_data):
             '''
             4: Marvin uuid matches calibre uuid (hard match): Green
@@ -2257,6 +2328,7 @@ class BookStatusDialog(SizePersistedDialog):
             collection_match = self._generate_collection_match(book_data)
             flags = _generate_flags_profile(book_data)
             last_opened = _generate_last_opened(book_data)
+            locked = _generate_locked_status(book_data)
             match_quality = _generate_match_quality(book_data)
             progress = self._generate_reading_progress(book_data)
             title = _generate_title(book_data)
@@ -2273,6 +2345,7 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.cid,
                 book_data.mid,
                 book_data.path,
+                locked,
                 title,
                 author,
                 "{0} ".format(book_data.word_count) if book_data.word_count > '0' else '',
@@ -2331,6 +2404,12 @@ class BookStatusDialog(SizePersistedDialog):
         # Hide hidden columns
         for index in self.HIDDEN_COLUMNS:
             self.tv.hideColumn(index)
+
+        # Show/hide the Locked column depending on password status from connected.xml
+        if self.parent.has_password == "false":
+            self.tv.hideColumn(self.LOCKED_COL)
+        elif self.parent.has_password == "true":
+            self.tv.showColumn(self.LOCKED_COL)
 
         # Set horizontal self.header props
         #self.tv.horizontalHeader().setStretchLastSection(True)
@@ -2966,6 +3045,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Build a profile of all installed books for display
         On Device
+        Pin
         Title
         Author
         Last read
@@ -3363,6 +3443,7 @@ class BookStatusDialog(SizePersistedDialog):
                                 FileName,
                                 IsRead,
                                 NewFlag,
+                                Pin,
                                 Progress,
                                 Publisher,
                                 ReadingList,
@@ -3407,6 +3488,7 @@ class BookStatusDialog(SizePersistedDialog):
                     this_book.mid = book_id
                     this_book.on_device = _get_on_device_status(this_book.cid)
                     this_book.path = row[b'FileName']
+                    this_book.pin = row[b'Pin']
                     this_book.progress = row[b'Progress']
                     this_book.pubdate = _get_pubdate(row)
                     this_book.tags = _get_marvin_genres(book_id)
@@ -3440,16 +3522,21 @@ class BookStatusDialog(SizePersistedDialog):
     def _inject_css(self, html):
         '''
         stick a <style> element into html
+        Deep View content structured differently
+        <html style=""><body style="">
         '''
         css = self.prefs.get('injected_css', None)
         if css:
-            styled_soup = BeautifulSoup(html)
-            head = styled_soup.find("head")
-            style_tag = Tag(styled_soup, 'style')
-            style_tag['type'] = "text/css"
-            style_tag.insert(0, css)
-            head.insert(0, style_tag)
-            html = styled_soup.renderContents()
+            try:
+                styled_soup = BeautifulSoup(html)
+                head = styled_soup.find("head")
+                style_tag = Tag(styled_soup, 'style')
+                style_tag['type'] = "text/css"
+                style_tag.insert(0, css)
+                head.insert(0, style_tag)
+                html = styled_soup.renderContents()
+            except:
+                return html
         return(html)
 
     def _inform_marvin_collections(self, book_id):
@@ -4390,6 +4477,58 @@ class BookStatusDialog(SizePersistedDialog):
                         parameters_tag.insert(0, parameter_tag)
 
                         self._issue_command(command_name, update_soup)
+
+    def _update_lock_status(self, action):
+        '''
+        '''
+        self._log_location(action)
+
+
+        selected_books = self._selected_books()
+
+        if action == 'set_locked':
+            new_pin_value = 1
+            new_image_name = "lock_enabled.png"
+            command_type = "LockBooks"
+        elif action == 'set_unlocked':
+            new_pin_value = 0
+            new_image_name = "empty_16x16.png"
+            #new_image_name = "unlock_enabled.png"
+            command_type = "UnlockBooks"
+
+        # Build the command shell
+        command_name = "command"
+        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+            command_type, time.mktime(time.localtime())))
+        manifest_tag = Tag(update_soup, 'manifest')
+        update_soup.command.insert(0, manifest_tag)
+
+        new_locked_widget = SortableImageWidgetItem(self,
+                                                    os.path.join(self.parent.opts.resources_path,
+                                                                 'icons', new_image_name),
+                                                    new_pin_value, self.LOCKED_COL)
+
+        for row in selected_books:
+            # Update the spreadsheet
+            book_id = selected_books[row]['book_id']
+            self.tm.set_locked(row, new_locked_widget)
+
+            # Update self.installed_books
+            self.installed_books[book_id].pin = new_pin_value
+
+            # Add the book to the manifest
+            book_tag = Tag(update_soup, 'book')
+            book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
+            book_tag['filename'] = self.installed_books[book_id].path
+            book_tag['title'] = self.installed_books[book_id].title
+            book_tag['uuid'] = self.installed_books[book_id].uuid
+            manifest_tag.insert(0, book_tag)
+
+        if len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER:
+            self._busy_operation_setup("Updating Marvin")
+        self._issue_command(command_name, update_soup, update_local_db=True)
+        if len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER:
+            self._busy_operation_teardown()
 
     def _update_marvin_collections(self, book_id, updated_marvin_collections):
         '''

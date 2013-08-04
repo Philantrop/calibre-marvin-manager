@@ -79,6 +79,7 @@ populated in _get_installed_books()
 .mid
 .on_device
 .path
+.pin
 .progress
 .pubdate
 .tags

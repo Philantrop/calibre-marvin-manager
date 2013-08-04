@@ -320,21 +320,21 @@ class MarvinManagerAction(InterfaceAction):
             # Explore status.xml for <has_password>
             connected_fs = getattr(self.connected_device, 'connected_fs', None)
             if connected_fs and self.ios.exists(connected_fs):
-                self._log("parsing status.xml")
-                # Wait for the driver to be silent to explore status.xml
+                self._log("parsing connected.xml")
+
+                # Wait for the driver to be silent to explore connected.xml
                 while self.connected_device.get_busy_flag():
                     Application.processEvents()
                 self.connected_device.set_busy_flag(True)
 
+                # connection.keys(): ['timestamp', 'marvin', 'device', 'system']
                 connection = etree.fromstring(self.ios.read(connected_fs))
-                self._log(etree.tostring(connection, pretty_print=True))
-                connection_state = connection.find('state').text
-                self._log("connection_state: %s" % connection_state)
+                #self._log(etree.tostring(connection, pretty_print=True))
+
                 has_password = connection.find('has_password')
                 if has_password is not None:
+                    self.has_password = has_password.text
                     self._log("has_password: %s" % has_password.text)
-                else:
-                    self._log("<has_password> not found")
 
                 self.connected_device.set_busy_flag(False)
 
@@ -352,6 +352,9 @@ class MarvinManagerAction(InterfaceAction):
 
             # Invalidate the library hash map, as library contents may change before reconnection
             self.library_scanner.hash_map = None
+
+            # Clear has_password
+            self.has_password = None
 
         self.rebuild_menus()
 
