@@ -3584,11 +3584,11 @@ class BookStatusDialog(SizePersistedDialog):
 
                     rows = cur.fetchall()
 
-                    pb = ProgressBar(parent=self.opts.gui, window_title="Performing Marvin metadata magic", on_top=True)
+                    pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 2 of 2", on_top=True)
                     book_count = len(rows)
                     pb.set_maximum(book_count)
                     pb.set_value(0)
-                    pb.set_label('{:^100}'.format("Analyzing metadata in %d installed books" % (book_count)))
+                    pb.set_label('{:^100}'.format("Performing Marvin metadata magic…"))
                     pb.show()
 
                     for i, row in enumerate(rows):
@@ -3954,7 +3954,7 @@ class BookStatusDialog(SizePersistedDialog):
         self._localize_hash_cache(cached_books)
 
         # Set up the progress bar
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library", on_top=True)
+        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 1 of 2", on_top=True)
         total_books = len(cached_books)
         pb.set_maximum(total_books)
         pb.set_value(0)
