@@ -122,7 +122,7 @@ class ConfigWidget(QWidget):
         self.cfg_collections_wizard = QToolButton()
         self.cfg_collections_wizard.setIcon(QIcon(I('wizard.png')))
         self.cfg_collections_wizard.setToolTip("Create a custom column for Marvin collection assignments")
-        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Annotations'))
+        self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Collections'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
         current_row += 1
 
@@ -353,7 +353,7 @@ class ConfigWidget(QWidget):
                     self.prefs.set('date_read_field_lookup', label)
 
                 elif source == "Progress":
-                    _update_combo_box("aprogress_field_comboBox", destination, previous)
+                    _update_combo_box("progress_field_comboBox", destination, previous)
 
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_progress_fields[destination] = label

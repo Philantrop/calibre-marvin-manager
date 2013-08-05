@@ -37,7 +37,7 @@ Installation:
 Using Marvin XD
  • Connect your iDevice.
  • Start Marvin (v1.94 or later).
- • Initiate the calibre connector by touching the cloud icon in either the Home screen or the Library screen, then touching 'calibre'.
+ • Initiate the calibre connector by touching the cloud icon in either the Home screen or the Library screen (iPad) or Library screen (iPhone), then touching 'calibre'.
  • Start calibre.
  • After calibre is finished initializing, you should see the Marvin icon in the main toolbar, with the Marvin XD icon next to it.
  • Click the Marvin XD icon to view the Marvin Library.

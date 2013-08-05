@@ -320,7 +320,6 @@ class MarvinManagerAction(InterfaceAction):
             # Explore status.xml for <has_password>
             connected_fs = getattr(self.connected_device, 'connected_fs', None)
             if connected_fs and self.ios.exists(connected_fs):
-                self._log("parsing connected.xml")
 
                 # Wait for the driver to be silent to explore connected.xml
                 while self.connected_device.get_busy_flag():
@@ -330,11 +329,11 @@ class MarvinManagerAction(InterfaceAction):
                 # connection.keys(): ['timestamp', 'marvin', 'device', 'system']
                 connection = etree.fromstring(self.ios.read(connected_fs))
                 #self._log(etree.tostring(connection, pretty_print=True))
+                self._log_location("%s running iOS %s" % (connection.get('device'), connection.get('system')))
 
                 has_password = connection.find('has_password')
                 if has_password is not None:
                     self.has_password = bool(has_password.text == "true")
-                    self._log("has_password: %s" % self.has_password)
 
                 self.connected_device.set_busy_flag(False)
 
@@ -452,6 +451,7 @@ class MarvinManagerAction(InterfaceAction):
         self._log_location()
 
     def start_library_indexing(self):
+        self._log_location()
         self.library_scanner.start()
 
     def _log(self, msg=None):

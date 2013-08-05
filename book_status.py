@@ -7,7 +7,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import base64, hashlib, importlib, inspect, locale, operator, os, re, sqlite3, sys, time
+import base64, hashlib, importlib, inspect, json, locale, operator, os, re, sqlite3, sys, time
 
 from collections import OrderedDict
 from datetime import datetime
@@ -1175,9 +1175,9 @@ class BookStatusDialog(SizePersistedDialog):
             pb.set_value(0)
             pb.show()
 
-            for i, row in enumerate(self.tm.all_rows()):
-                self.tv.selectRow(row)
-                pb.set_label('{:^100}'.format(self.tm.all_rows[row]['title']))
+            for i in range(len(self.tm.all_rows())):
+                self.tv.selectRow(i)
+                pb.set_label('{:^100}'.format(str(self.tm.get_title(i).text())))
                 self._fetch_annotations()
                 self._apply_date_read()
                 self._apply_progress()
@@ -2375,6 +2375,7 @@ class BookStatusDialog(SizePersistedDialog):
             series_ts = ''
             series_sort = ''
             if book_data.series:
+                cs_index = book_data.series_index
                 if book_data.series_index.endswith('.0'):
                     cs_index = book_data.series_index[:-2]
                 series_ts = "%s [%s]" % (book_data.series, cs_index)
@@ -2878,7 +2879,9 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Scan library books for hashes
         if self.library_scanner.isRunning():
+            self._busy_operation_setup("Scanning calibre library…")
             self.library_scanner.wait()
+            self._busy_operation_teardown()
 
         # Save a reference to the title, uuid map
         self.library_title_map = self.library_scanner.title_map
@@ -3479,11 +3482,16 @@ class BookStatusDialog(SizePersistedDialog):
 
         installed_books = {}
 
-        # Wait for device driver to complete initialization
+        # Wait for device driver to complete initialization, but tell user what's happening
+        if not hasattr(self.parent.connected_device, "cached_books"):
+            self._busy_operation_setup("Waiting for driver to finish initialization…")
+
         while True:
             if not hasattr(self.parent.connected_device, "cached_books"):
                 Application.processEvents()
             else:
+                if self.busy_window is not None:
+                    self._busy_operation_teardown()
                 break
 
         # Is there a valid mainDb?
@@ -3545,11 +3553,10 @@ class BookStatusDialog(SizePersistedDialog):
                 book_count = len(rows)
                 pb.set_maximum(book_count)
                 pb.set_value(0)
-                pb.set_label('{:^100}'.format("1 of %d" % (book_count)))
+                pb.set_label('{:^100}'.format("%d installed books" % (book_count)))
                 pb.show()
 
                 for i, row in enumerate(rows):
-                    pb.set_label('{:^100}'.format("%d of %d" % (i+1, book_count)))
 
                     cid, mi = _get_calibre_id(row[b'UUID'],
                                               row[b'Title'],
@@ -3815,30 +3822,69 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Generate hashes for library epubs
         '''
+        def _get_hash(cid):
+            path = db.format(cid, 'epub', index_is_id=True,
+                             as_path=True, preserve_filename=True)
+            hash = self._compute_epub_hash(path)
+            os.remove(path)
+            return hash
+
         # Scan library books for hashes
         if self.library_scanner.isRunning():
+            self._busy_operation_setup("Waiting for library scan to complete…")
             self.library_scanner.wait()
+            self._busy_operation_teardown()
 
         uuid_map = library_scanner.uuid_map
-        self._log_location("%d epubs" % len(uuid_map))
+        total_books = len(uuid_map)
+        self._log_location("%d epubs" % total_books)
 
         pb = ProgressBar(parent=self.opts.gui, window_title="Scanning library", on_top=True)
-        total_books = len(uuid_map)
         pb.set_maximum(total_books)
         pb.set_value(0)
-        pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
+        pb.set_label('{:^100}'.format("Identifying %d books" % (total_books)))
         pb.show()
 
         db = self.opts.gui.current_db
         close_requested = False
+
+        all_cached_hashes = db.get_all_custom_book_data('epub_hash')
+        for k, v in all_cached_hashes.items():
+            all_cached_hashes[k] = json.loads(v)
+
         for i, uuid in enumerate(uuid_map):
             try:
-                pb.set_label('{:^100}'.format("%d of %d" % (i+1, total_books)))
+                cid = uuid_map[uuid]['id']
 
-                path = db.format(uuid_map[uuid]['id'], 'epub', index_is_id=True,
-                                 as_path=True, preserve_filename=True)
-                uuid_map[uuid]['hash'] = self._compute_epub_hash(path)
-                os.remove(path)
+                # Do we have a cached hash?
+                cached_hash = all_cached_hashes.get(cid, None)
+                if cached_hash is None:
+                    # Generate the hash, save it to local hash map
+                    #self._log("generating hash")
+                    hash = _get_hash(cid)
+                    uuid_map[uuid]['hash'] = hash
+
+                    # Cache hash to db
+                    #self._log("adding cached_hash to db")
+                    mtime = db.format_last_modified(cid, 'epub')
+                    cached_dict = {'mtime': time.mktime(mtime.timetuple()), 'hash': hash}
+                    db.add_custom_book_data(cid, 'epub_hash', json.dumps(cached_dict))
+                else:
+                    mtime = db.format_last_modified(cid, 'epub')
+                    if cached_hash['mtime'] == time.mktime(mtime.timetuple()):
+                        #self._log("fetching cached_hash from db")
+                        hash = cached_hash['hash']
+                        uuid_map[uuid]['hash'] = hash
+                    else:
+                        # Book has been modified since we generated the hash
+                        #self._log("generating new cached_hash")
+                        hash = _get_hash(cid)
+                        uuid_map[uuid]['hash'] = hash
+
+                        # Update db
+                        cached_dict = {'mtime': time.mktime(mtime.timetuple()), 'hash': hash}
+                        db.add_custom_book_data(cid, 'epub_hash', json.dumps(cached_dict))
+
             except:
                 # Book deleted since scan
                 pass
@@ -3873,14 +3919,14 @@ class BookStatusDialog(SizePersistedDialog):
         total_books = len(cached_books)
         pb.set_maximum(total_books)
         pb.set_value(0)
-        pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
+        pb.set_label('{:^100}'.format("Identifying %d books" % (total_books)))
         pb.show()
 
         close_requested = False
         installed_books = {}
         for i, path in enumerate(cached_books):
             this_book = {}
-            pb.set_label('{:^100}'.format("%d of %d" % (i+1, total_books)))
+            #pb.set_label('{:^100}'.format("%d of %d" % (i+1, total_books)))
             this_book['hash'] = self._fetch_marvin_content_hash(path)
 
             installed_books[path] = this_book

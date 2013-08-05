@@ -311,8 +311,8 @@ class ProgressBar(QDialog):
 
     def set_label(self, value):
         self.label.setText(value)
-        self.label.repaint()
-        self.refresh()
+        #self.label.repaint()
+        #self.refresh()
 
     def set_maximum(self, value):
         self.progressBar.setMaximum(value)
