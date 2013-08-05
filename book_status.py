@@ -510,6 +510,9 @@ class MarkupTableModel(QAbstractTableModel):
         elif role == Qt.DisplayRole and col == self.parent.SERIES_COL:
             return self.arraydata[row][self.parent.SERIES_COL].text()
 
+        elif role == Qt.DisplayRole and col == self.parent.WORD_COUNT_COL:
+            return self.arraydata[row][self.parent.WORD_COUNT_COL].text()
+
         elif role == Qt.DisplayRole and col == self.parent.TITLE_COL:
             return self.arraydata[row][self.parent.TITLE_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.AUTHOR_COL:
@@ -584,6 +587,7 @@ class MarkupTableModel(QAbstractTableModel):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
                 return QVariant(self.headerdata[col])
+
         if role == Qt.ToolTipRole:
             if orientation == Qt.Horizontal:
                 if col == self.parent.ANNOTATIONS_COL:
@@ -594,6 +598,7 @@ class MarkupTableModel(QAbstractTableModel):
                     tip = "Author"
                 elif col == self.parent.COLLECTIONS_COL:
                     tip = "Collection assignments"
+
                 elif col == self.parent.DEEP_VIEW_COL:
                     tip = "Deep View items"
                 elif col == self.parent.FLAGS_COL:
@@ -730,6 +735,8 @@ class BookStatusDialog(SizePersistedDialog):
     '''
     CHECKMARK = u"\u2713"
     CIRCLE_SLASH = u"\u20E0"
+    MATH_TIMES_CIRCLED = u" \u2297 "
+    MATH_TIMES = u" \u00d7 "
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -753,7 +760,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     # Column assignments. When changing order here, also change in _construct_table_data
     if True:
-        LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path', CIRCLE_SLASH,
+        LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path', MATH_TIMES,
                           'Title', 'Author', 'Series', 'Word count', 'Progress', 'Last read',
                           'Collections', 'Flags',
                           'Ann', 'Voc', 'DV', 'Art',
@@ -767,7 +774,7 @@ class BookStatusDialog(SizePersistedDialog):
         DEEP_VIEW_COL = LIBRARY_HEADER.index('DV')
         FLAGS_COL = LIBRARY_HEADER.index('Flags')
         LAST_OPENED_COL = LIBRARY_HEADER.index('Last read')
-        LOCKED_COL = LIBRARY_HEADER.index(CIRCLE_SLASH)
+        LOCKED_COL = LIBRARY_HEADER.index(MATH_TIMES)
         MATCHED_COL = LIBRARY_HEADER.index('Match Quality')
         PATH_COL = LIBRARY_HEADER.index('path')
         PROGRESS_COL = LIBRARY_HEADER.index('Progress')
@@ -987,6 +994,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.hash_cache = 'content_hashes.zip'
         self.icon = get_icon(parent.icon)
         self.ios = parent.ios
+        self.installed_books = None
         self.opts = parent.opts
         self.parent = parent
         self.prefs = parent.opts.prefs
@@ -1331,7 +1339,7 @@ class BookStatusDialog(SizePersistedDialog):
                     parameter_tag.insert(0, dlg.result['hits'])
                     parameters_tag.insert(0, parameter_tag)
 
-                    group_box_title = dlg.result['item']
+                    group_box_title = "Deep View hits for %s" % dlg.result['item']
                 else:
                     return
 
@@ -1366,7 +1374,7 @@ class BookStatusDialog(SizePersistedDialog):
             else:
                 default_content = "<p>No annotations</p>"
             footer = (
-                '<p>For finer control of annotation layout and formatting, see the <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
+                '<p>For finer control of annotation layout and formatting, consider installing the <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
                 'Annotations plugin</a>.</p>')
             afn = self.parent.prefs.get('annotations_field_comboBox', None)
             if afn:
@@ -2046,7 +2054,13 @@ class BookStatusDialog(SizePersistedDialog):
 
                 # Update the model
                 wc = locale.format("%d", wordcount.words, grouping=True)
-                self.tm.set_word_count(row, "{0} ".format(wc))
+                if wc > "0":
+                    word_count_item = SortableTableWidgetItem(
+                        "{0} ".format(wc),
+                        wordcount.words)
+                else:
+                    word_count_item = SortableTableWidgetItem('', 0)
+                self.tm.set_word_count(row, word_count_item)
 
                 # Update self.installed_books
                 book_id = selected_books[row]['book_id']
@@ -2371,9 +2385,10 @@ class BookStatusDialog(SizePersistedDialog):
         def _generate_series(book_data):
             '''
             Generate a sort key based on series index
+            Force non-series to sort after series
             '''
             series_ts = ''
-            series_sort = ''
+            series_sort = '~'
             if book_data.series:
                 cs_index = book_data.series_index
                 if book_data.series_index.endswith('.0'):
@@ -2382,7 +2397,9 @@ class BookStatusDialog(SizePersistedDialog):
                 index = float(book_data.series_index)
                 integer = int(index)
                 fraction = index - integer
-                series_sort = '%04d%s' % (integer, str('%0.4f' % fraction).lstrip('0'))
+                series_sort = '%s %04d%s' % (book_data.series,
+                                             integer,
+                                             str('%0.4f' % fraction).lstrip('0'))
             series = SortableTableWidgetItem(series_ts, series_sort)
             return series
 
@@ -2396,6 +2413,17 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.title,
                 book_data.title_sort.upper())
             return title
+
+        def _generate_word_count(book_data):
+            '''
+            '''
+            if book_data.word_count > "0":
+                word_count = SortableTableWidgetItem(
+                    "{0} ".format(book_data.word_count),
+                    locale.atoi(book_data.word_count))
+            else:
+                word_count = SortableTableWidgetItem('', 0)
+            return word_count
 
         self._log_location()
 
@@ -2412,6 +2440,7 @@ class BookStatusDialog(SizePersistedDialog):
             progress = self._generate_reading_progress(book_data)
             title = _generate_title(book_data)
             series = _generate_series(book_data)
+            word_count = _generate_word_count(book_data)
 
             article_count = 0
             if 'Wiki' in book_data.articles:
@@ -2429,7 +2458,7 @@ class BookStatusDialog(SizePersistedDialog):
                 title,
                 author,
                 series,
-                "{0} ".format(book_data.word_count) if book_data.word_count > '0' else '',
+                word_count,
                 progress,
                 last_opened,
                 collection_match,
@@ -2482,6 +2511,10 @@ class BookStatusDialog(SizePersistedDialog):
         # Hide the vertical self.header
         self.tv.verticalHeader().setVisible(False)
 
+        # Check whether we're showing LOCKED_COL
+        if not self.parent.has_password:
+            self.HIDDEN_COLUMNS.append(self.LOCKED_COL)
+
         # Hide hidden columns
         for index in self.HIDDEN_COLUMNS:
             self.tv.hideColumn(index)
@@ -2506,17 +2539,16 @@ class BookStatusDialog(SizePersistedDialog):
             fixed_width = self.tv.columnWidth(self.LAST_OPENED_COL)
             for col in [self.WORD_COUNT_COL, self.COLLECTIONS_COL]:
                 self.tv.setColumnWidth(col, fixed_width)
+
             fixed_width = self.tv.columnWidth(self.FLAGS_COL)
             for col in [self.ANNOTATIONS_COL, self.VOCABULARY_COL,
                         self.DEEP_VIEW_COL, self.ARTICLES_COL]:
                 self.tv.setColumnWidth(col, fixed_width)
 
-        # Show/hide the Locked column depending on password status from connected.xml
+        # Show/hide the Locked column depending on restrictions
         if self.parent.has_password:
             self.tv.showColumn(self.LOCKED_COL)
             self.tv.setColumnWidth(self.LOCKED_COL, 24)
-        else:
-            self.tv.hideColumn(self.LOCKED_COL)
 
         self.tv.setSortingEnabled(True)
 
@@ -3151,6 +3183,8 @@ class BookStatusDialog(SizePersistedDialog):
         PinnedArticles + Wiki articles
 
         {mid: Book, ...}
+
+        Try to use previously generated installed_books if available
         '''
         def _get_articles(cur, book_id):
             '''
@@ -3475,142 +3509,143 @@ class BookStatusDialog(SizePersistedDialog):
                     self._log("removing orphan cid %s from archived_cover_hashes" % ch_cid)
                     del self.archived_cover_hashes[ch_cid]
 
+        # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
+
         self._log_location()
 
-        if self.opts.prefs.get('development_mode', False):
-            self._log("local_db_path: %s" % self.parent.connected_device.local_db_path)
+        installed_books = getattr(self.parent, 'installed_books', None)
+        if installed_books is None:
+            installed_books = {}
 
-        installed_books = {}
-
-        # Wait for device driver to complete initialization, but tell user what's happening
-        if not hasattr(self.parent.connected_device, "cached_books"):
-            self._busy_operation_setup("Waiting for driver to finish initialization…")
-
-        while True:
+            # Wait for device driver to complete initialization, but tell user what's happening
             if not hasattr(self.parent.connected_device, "cached_books"):
-                Application.processEvents()
+                self._busy_operation_setup("Waiting for driver to finish initialization…")
+
+            while True:
+                if not hasattr(self.parent.connected_device, "cached_books"):
+                    Application.processEvents()
+                else:
+                    if self.busy_window is not None:
+                        self._busy_operation_teardown()
+                    break
+
+            # Is there a valid mainDb?
+            local_db_path = getattr(self.parent.connected_device, "local_db_path")
+            if local_db_path is not None:
+                # Fetch/compute hashes
+                cached_books = self.parent.connected_device.cached_books
+                hashes = self._scan_marvin_books(cached_books)
+
+                # Get the mainDb data
+                con = sqlite3.connect(self.parent.connected_device.local_db_path)
+                with con:
+                    con.row_factory = sqlite3.Row
+
+                    # Build a collection map
+                    collections_cur = con.cursor()
+                    collections_cur.execute('''SELECT
+                                                ID,
+                                                Name
+                                               FROM Collections
+                                            ''')
+                    rows = collections_cur.fetchall()
+                    collection_map = {}
+                    for row in rows:
+                        collection_map[row[b'ID']] = row[b'Name']
+                    collections_cur.close()
+
+                    # Get the books
+                    cur = con.cursor()
+                    cur.execute('''SELECT
+                                    Author,
+                                    AuthorSort,
+                                    Books.ID as id_,
+                                    CalibreCoverHash,
+                                    CalibreSeries,
+                                    CalibreSeriesIndex,
+                                    CalibreTitleSort,
+                                    CoverFile,
+                                    DateOpened,
+                                    DatePublished,
+                                    DeepViewPrepared,
+                                    Description,
+                                    FileName,
+                                    IsRead,
+                                    NewFlag,
+                                    Pin,
+                                    Progress,
+                                    Publisher,
+                                    ReadingList,
+                                    Title,
+                                    UUID,
+                                    WordCount
+                                  FROM Books
+                                ''')
+
+                    rows = cur.fetchall()
+
+                    pb = ProgressBar(parent=self.opts.gui, window_title="Performing Marvin metadata magic", on_top=True)
+                    book_count = len(rows)
+                    pb.set_maximum(book_count)
+                    pb.set_value(0)
+                    pb.set_label('{:^100}'.format("Analyzing metadata in %d installed books" % (book_count)))
+                    pb.show()
+
+                    for i, row in enumerate(rows):
+
+                        cid, mi = _get_calibre_id(row[b'UUID'],
+                                                  row[b'Title'],
+                                                  row[b'Author'])
+
+                        book_id = row[b'id_']
+                        # Get the primary metadata from Books
+                        this_book = Book(row[b'Title'], row[b'Author'].split(', '))
+                        this_book.articles = _get_articles(cur, book_id)
+                        this_book.author_sort = row[b'AuthorSort']
+                        this_book.cid = cid
+                        this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
+                        this_book.comments = row[b'Description']
+                        this_book.cover_file = row[b'CoverFile']
+                        this_book.device_collections = _get_collections(cur, book_id)
+                        this_book.date_opened = row[b'DateOpened']
+                        this_book.deep_view_prepared = row[b'DeepViewPrepared']
+                        this_book.flags = _get_flags(cur, row)
+                        this_book.hash = hashes[row[b'FileName']]['hash']
+                        this_book.highlights = _get_highlights(cur, book_id)
+                        this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
+                        this_book.mid = book_id
+                        this_book.on_device = _get_on_device_status(this_book.cid)
+                        this_book.path = row[b'FileName']
+                        this_book.pin = row[b'Pin']
+                        this_book.progress = row[b'Progress']
+                        this_book.pubdate = _get_pubdate(row)
+                        this_book.series = row[b'CalibreSeries']
+                        this_book.series_index = row[b'CalibreSeriesIndex']
+                        this_book.tags = _get_marvin_genres(book_id)
+                        this_book.title_sort = row[b'CalibreTitleSort']
+                        this_book.uuid = row[b'UUID']
+                        this_book.vocabulary = _get_vocabulary_list(cur, book_id)
+                        this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
+                        installed_books[book_id] = this_book
+
+                        pb.increment()
+
+                    pb.hide()
+
+                # Remove orphan cover_hashes
+                _purge_cover_hash_orphans()
+
+                if self.opts.prefs.get('development_mode', False):
+                    self._log("%d cached books from Marvin:" % len(cached_books))
+                    for book in installed_books:
+                        self._log("%s word_count: %s" % (installed_books[book].title,
+                                                         repr(installed_books[book].word_count)))
             else:
-                if self.busy_window is not None:
-                    self._busy_operation_teardown()
-                break
-
-        # Is there a valid mainDb?
-        local_db_path = getattr(self.parent.connected_device, "local_db_path")
-        if local_db_path is not None:
-            # Fetch/compute hashes
-            cached_books = self.parent.connected_device.cached_books
-            hashes = self._scan_marvin_books(cached_books)
-
-            # Get the mainDb data
-            con = sqlite3.connect(self.parent.connected_device.local_db_path)
-            with con:
-                con.row_factory = sqlite3.Row
-
-                # Build a collection map
-                collections_cur = con.cursor()
-                collections_cur.execute('''SELECT
-                                            ID,
-                                            Name
-                                           FROM Collections
-                                        ''')
-                rows = collections_cur.fetchall()
-                collection_map = {}
-                for row in rows:
-                    collection_map[row[b'ID']] = row[b'Name']
-                collections_cur.close()
-
-                # Get the books
-                cur = con.cursor()
-                cur.execute('''SELECT
-                                Author,
-                                AuthorSort,
-                                Books.ID as id_,
-                                CalibreCoverHash,
-                                CalibreSeries,
-                                CalibreSeriesIndex,
-                                CalibreTitleSort,
-                                CoverFile,
-                                DateOpened,
-                                DatePublished,
-                                DeepViewPrepared,
-                                Description,
-                                FileName,
-                                IsRead,
-                                NewFlag,
-                                Pin,
-                                Progress,
-                                Publisher,
-                                ReadingList,
-                                Title,
-                                UUID,
-                                WordCount
-                              FROM Books
-                            ''')
-
-                rows = cur.fetchall()
-
-                pb = ProgressBar(parent=self.opts.gui, window_title="Performing Marvin metadata magic", on_top=True)
-                book_count = len(rows)
-                pb.set_maximum(book_count)
-                pb.set_value(0)
-                pb.set_label('{:^100}'.format("%d installed books" % (book_count)))
-                pb.show()
-
-                for i, row in enumerate(rows):
-
-                    cid, mi = _get_calibre_id(row[b'UUID'],
-                                              row[b'Title'],
-                                              row[b'Author'])
-
-                    book_id = row[b'id_']
-                    # Get the primary metadata from Books
-                    this_book = Book(row[b'Title'], row[b'Author'].split(', '))
-                    this_book.articles = _get_articles(cur, book_id)
-                    this_book.author_sort = row[b'AuthorSort']
-                    this_book.cid = cid
-                    this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
-                    this_book.comments = row[b'Description']
-                    this_book.cover_file = row[b'CoverFile']
-                    this_book.device_collections = _get_collections(cur, book_id)
-                    this_book.date_opened = row[b'DateOpened']
-                    this_book.deep_view_prepared = row[b'DeepViewPrepared']
-                    this_book.flags = _get_flags(cur, row)
-                    this_book.hash = hashes[row[b'FileName']]['hash']
-                    this_book.highlights = _get_highlights(cur, book_id)
-                    this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
-                    this_book.mid = book_id
-                    this_book.on_device = _get_on_device_status(this_book.cid)
-                    this_book.path = row[b'FileName']
-                    this_book.pin = row[b'Pin']
-                    this_book.progress = row[b'Progress']
-                    this_book.pubdate = _get_pubdate(row)
-                    this_book.series = row[b'CalibreSeries']
-                    this_book.series_index = row[b'CalibreSeriesIndex']
-                    this_book.tags = _get_marvin_genres(book_id)
-                    this_book.title_sort = row[b'CalibreTitleSort']
-                    this_book.uuid = row[b'UUID']
-                    this_book.vocabulary = _get_vocabulary_list(cur, book_id)
-                    this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
-                    installed_books[book_id] = this_book
-
-                    pb.increment()
-
-                pb.hide()
-
-            # Remove orphan cover_hashes
-            _purge_cover_hash_orphans()
-
-            if self.opts.prefs.get('development_mode', False):
-                self._log("%d cached books from Marvin:" % len(cached_books))
-                for book in installed_books:
-                    self._log("%s word_count: %s" % (installed_books[book].title,
-                                                     repr(installed_books[book].word_count)))
-        else:
-            self._log("Marvin database is damaged")
-            title = "Damaged database"
-            msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
-            MessageBox(MessageBox.ERROR, title, msg,
-                       show_copy_button=False).exec_()
+                self._log("Marvin database is damaged")
+                title = "Damaged database"
+                msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
+                MessageBox(MessageBox.ERROR, title, msg,
+                           show_copy_button=False).exec_()
 
         return installed_books
 
@@ -3829,21 +3864,25 @@ class BookStatusDialog(SizePersistedDialog):
             os.remove(path)
             return hash
 
+        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning calibre library", on_top=True)
+        pb.set_label('{:^100}'.format("Waiting for library scan to complete…"))
+        pb.set_value(0)
+        pb.show()
+
         # Scan library books for hashes
         if self.library_scanner.isRunning():
-            self._busy_operation_setup("Waiting for library scan to complete…")
+            #self._busy_operation_setup("Waiting for library scan to complete…")
+            #Application.processEvents()
             self.library_scanner.wait()
-            self._busy_operation_teardown()
+            #self._busy_operation_teardown()
 
         uuid_map = library_scanner.uuid_map
         total_books = len(uuid_map)
         self._log_location("%d epubs" % total_books)
 
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning library", on_top=True)
+        #pb = ProgressBar(parent=self.opts.gui, window_title="Scanning library", on_top=True)
         pb.set_maximum(total_books)
-        pb.set_value(0)
-        pb.set_label('{:^100}'.format("Identifying %d books" % (total_books)))
-        pb.show()
+        pb.set_label('{:^100}'.format("Identifying %d books in calibre library…" % (total_books)))
 
         db = self.opts.gui.current_db
         close_requested = False
@@ -3915,11 +3954,11 @@ class BookStatusDialog(SizePersistedDialog):
         self._localize_hash_cache(cached_books)
 
         # Set up the progress bar
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin", on_top=True)
+        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library", on_top=True)
         total_books = len(cached_books)
         pb.set_maximum(total_books)
         pb.set_value(0)
-        pb.set_label('{:^100}'.format("Identifying %d books" % (total_books)))
+        pb.set_label('{:^100}'.format("Identifying %d books in Marvin library…" % (total_books)))
         pb.show()
 
         close_requested = False

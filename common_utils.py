@@ -311,8 +311,8 @@ class ProgressBar(QDialog):
 
     def set_label(self, value):
         self.label.setText(value)
-        #self.label.repaint()
-        #self.refresh()
+        self.label.repaint()
+        self.refresh()
 
     def set_maximum(self, value):
         self.progressBar.setMaximum(value)
@@ -395,17 +395,17 @@ class IndexLibrary(QThread):
         id = self.cdb.FIELD_MAP['id']
         title = self.cdb.FIELD_MAP['title']
         uuid = self.cdb.FIELD_MAP['uuid']
-
         by_uuid = {}
-        for record in self.cdb.data.iterall():
-            profile = self.cdb.get_data_as_dict(ids=[record[id]])[0]
-            if 'available_formats' in profile and 'EPUB' in profile['available_formats']:
-                by_uuid[record[uuid]] = {
-                    'authors': record[authors].split(','),
-                    'id': record[id],
-                    'title': record[title],
-                    'path': profile['fmt_epub']
+
+        cids = self.cdb.search_getting_ids('formats:EPUB', '', False, False)
+        for cid in cids:
+            uuid = self.cdb.uuid(cid, index_is_id=True)
+            by_uuid[uuid] = {
+                'authors': self.cdb.authors(cid, index_is_id=True).split(','),
+                'id': cid,
+                'title': self.cdb.title(cid, index_is_id=True),
                 }
+
         return by_uuid
 
 

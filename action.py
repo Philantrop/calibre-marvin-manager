@@ -13,11 +13,12 @@ import os, sys, threading
 from lxml import etree, html
 from zipfile import ZipFile
 
-from PyQt4.Qt import (pyqtSignal, QIcon, QMenu, QTimer, QUrl)
+from PyQt4.Qt import (Qt, QCursor, QIcon, QMenu, QTimer, QUrl,
+                      pyqtSignal)
 
 from calibre.constants import DEBUG
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
-from calibre.gui2 import open_url
+from calibre.gui2 import Application, open_url
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
@@ -78,6 +79,7 @@ class MarvinManagerAction(InterfaceAction):
         self.blocking_busy = MyBlockingBusy(self.gui, "Updating Marvin Library…", size=50)
         self.connected_device = None
         self.ios = None
+        self.installed_books = None
         self.marvin_content_updated = False
         self.menus_lock = threading.RLock()
         self.sync_lock = threading.RLock()
@@ -261,6 +263,7 @@ class MarvinManagerAction(InterfaceAction):
         self.library_indexed = True
         self.indexed_library = self.gui.current_db
         self.library_last_modified = self.gui.current_db.last_modified()
+        self._busy_operation_teardown()
 
     def main_menu_button_clicked(self):
         '''
@@ -313,11 +316,15 @@ class MarvinManagerAction(InterfaceAction):
             self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
                 self.marvin_status_changed)
 
+            # If we've already built the hash map and the library hasn't changed, don't rescan
             if (hasattr(self.connected_device, 'ios_reader_app') and
                     self.connected_device.ios_reader_app == 'Marvin'):
-                self.launch_library_scanner()
+                if self.indexed_library is not None and self.library_indexed:
+                    self._log("library already indexed")
+                else:
+                    self.launch_library_scanner()
 
-            # Explore status.xml for <has_password>
+            # Explore connected.xml for <has_password>
             connected_fs = getattr(self.connected_device, 'connected_fs', None)
             if connected_fs and self.ios.exists(connected_fs):
 
@@ -334,6 +341,7 @@ class MarvinManagerAction(InterfaceAction):
                 has_password = connection.find('has_password')
                 if has_password is not None:
                     self.has_password = bool(has_password.text == "true")
+                    self._log("self.has_password: %s" % self.has_password)
 
                 self.connected_device.set_busy_flag(False)
 
@@ -350,10 +358,13 @@ class MarvinManagerAction(InterfaceAction):
             self.connected_device = None
 
             # Invalidate the library hash map, as library contents may change before reconnection
-            self.library_scanner.hash_map = None
+            #self.library_scanner.hash_map = None
 
             # Clear has_password
             self.has_password = None
+
+            # Dump our saved copy of installed_books
+            self.installed_books = None
 
         self.rebuild_menus()
 
@@ -444,6 +455,10 @@ class MarvinManagerAction(InterfaceAction):
             self.book_status_dialog.initialize(self)
             self._log_location("BookStatus initialized")
             self.book_status_dialog.exec_()
+
+            # Keep a copy of installed_books in case user reopens w/o disconnect
+            self.installed_books = self.book_status_dialog.installed_books
+
             self.book_status_dialog = None
 
     # subclass override
@@ -452,7 +467,26 @@ class MarvinManagerAction(InterfaceAction):
 
     def start_library_indexing(self):
         self._log_location()
+        self._busy_operation_setup("Indexing calibre library…")
         self.library_scanner.start()
+
+    def _busy_operation_setup(self, title, show_cancel=False):
+        '''
+        '''
+        self._log_location()
+        Application.setOverrideCursor(QCursor(Qt.WaitCursor))
+        self.busy_window = MyBlockingBusy(self.gui, title, size=60, show_cancel=show_cancel)
+        self.busy_window.start()
+        self.busy_window.show()
+
+    def _busy_operation_teardown(self):
+        '''
+        '''
+        self._log_location()
+        self.busy_window.stop()
+        self.busy_window.accept()
+        self.busy_window = None
+        Application.restoreOverrideCursor()
 
     def _log(self, msg=None):
         '''
@@ -483,3 +517,4 @@ class MarvinManagerAction(InterfaceAction):
         debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
                     func=sys._getframe(1).f_code.co_name,
                     arg1=arg1, arg2=arg2))
+
