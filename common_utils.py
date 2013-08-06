@@ -202,7 +202,7 @@ class MyBlockingBusy(QDialog):
     ACKNOWLEDGED = 2
 
     def __init__(self, gui, msg, size=100, window_title='Marvin XD', show_cancel=False):
-        QDialog.__init__(self, gui, Qt.WindowStaysOnTopHint)
+        QDialog.__init__(self, gui, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
 
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)
