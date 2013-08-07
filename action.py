@@ -10,6 +10,7 @@ __docformat__ = 'restructuredtext en'
 
 import os, sys, threading
 
+from functools import partial
 from lxml import etree, html
 from zipfile import ZipFile
 
@@ -35,7 +36,6 @@ import calibre_plugins.marvin_manager.config as cfg
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
 PLUGIN_ICONS = ['images/connected.png', 'images/disconnected.png']
-
 
 class MarvinManagerAction(InterfaceAction):
 
@@ -69,6 +69,30 @@ class MarvinManagerAction(InterfaceAction):
             ac.setIcon(QIcon(image))
         m.addAction(ac)
         return ac
+
+    def developer_utilities(self, action):
+        '''
+        'Delete calibre hashes', 'Delete Marvin hashes'
+        remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
+        '''
+        self._log_location(action)
+        if action in ['Delete calibre hashes', 'Delete Marvin hashes']:
+            if action == 'Delete Marvin hashes':
+                hash_cache = 'content_hashes.zip'
+                remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
+                rhc = b'/'.join([remote_cache_folder, hash_cache])
+
+                if self.ios.exists(rhc):
+                    self.ios.remove(rhc)
+                    self._log("remote hash cache at %s deleted" % rhc)
+            elif action == 'Delete calibre hashes':
+                self.gui.current_db.delete_all_custom_book_data('epub_hash')
+                self._log("cached epub hashes deleted")
+                # Invalidate the library hash map, as library contents may change before reconnection
+                self.library_scanner.hash_map = None
+
+        else:
+            self._log("unrecognized action")
 
     # subclass override
     def genesis(self):
@@ -380,20 +404,23 @@ class MarvinManagerAction(InterfaceAction):
             m.addSeparator()
 
             # Add menu options for connected Marvin
+            marvin_connected = False
             if self.connected_device:
                 if (self.connected_device.ios_reader_app == 'Marvin' and
                         self.connected_device.ios_connection['connected'] is True):
                     self._log("Marvin connected")
+                    marvin_connected = True
                     ac = self.create_menu_item(m, 'Explore Marvin Library', image=I("dialog_information.png"))
                     ac.triggered.connect(self.show_installed_books)
 
-                    ac = self.create_menu_item(m, 'Backup or Restore Library', image=I("swap.png"))
-                    ac.triggered.connect(self.backup_restore)
-                    ac.setEnabled(False)
+                    if False:
+                        ac = self.create_menu_item(m, 'Backup or Restore Library', image=I("swap.png"))
+                        ac.triggered.connect(self.backup_restore)
+                        ac.setEnabled(False)
 
-                    ac = self.create_menu_item(m, 'Reset Marvin Library', image=I("trash.png"))
-                    ac.triggered.connect(self.reset_marvin_library)
-                    ac.setEnabled(False)
+                        ac = self.create_menu_item(m, 'Reset Marvin Library', image=I("trash.png"))
+                        ac.triggered.connect(self.reset_marvin_library)
+                        ac.setEnabled(False)
 
                 else:
                     self._log("Marvin not connected")
@@ -414,6 +441,21 @@ class MarvinManagerAction(InterfaceAction):
             # Add 'Help'
             ac = self.create_menu_item(m, 'Help', image=I('help.png'))
             ac.triggered.connect(self.show_help)
+
+            # If Alt/Option key pressed, show Developer submenu
+            modifiers = Application.keyboardModifiers()
+            if bool(modifiers & Qt.AltModifier):
+                m.addSeparator()
+                self.developer_menu = m.addMenu(QIcon(I('config.png')),
+                                                "Developer…")
+                action = 'Delete calibre hashes'
+                ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
+                ac.triggered.connect(partial(self.developer_utilities, action))
+
+                action = 'Delete Marvin hashes'
+                ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
+                ac.triggered.connect(partial(self.developer_utilities, action))
+                ac.setEnabled(marvin_connected)
 
     def reset_marvin_library(self):
         self._log_location("not implemented")

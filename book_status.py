@@ -3863,11 +3863,35 @@ class BookStatusDialog(SizePersistedDialog):
         total_books = len(uuid_map)
         self._log_location("%d epubs" % total_books)
 
-        #pb = ProgressBar(parent=self.opts.gui, window_title="Scanning library", on_top=True)
         pb.set_maximum(total_books)
         pb.set_label('{:^100}'.format("Identifying %d books in calibre library…" % (total_books)))
 
-        db = self.opts.gui.current_db
+        if False:
+            '''
+            Determine if there have been any changes to this lib since we last scanned it
+            last_modified appears to always change even when no user changes. Ask KG
+            '''
+            db = self.opts.gui.current_db
+            lib_name = os.path.dirname(db.dbpath).split(os.path.sep)[-1]
+            last_modified = time.mktime(db.last_modified().timetuple())
+            library_snapshots = self.opts.prefs.get('calibre_library_snapshots', {})
+            rescan_required = True
+            if lib_name in library_snapshots:
+                self._log("calibre_library_snapshots: %s" % library_snapshots[lib_name])
+                if library_snapshots[lib_name] == last_modified:
+                    rescan_required = False
+                    self._log("No changes detected since last scan")
+                else:
+                    self._log("lib appears to have changed")
+                    self._log("last_modified: %s" % repr(last_modified))
+                    self._log("library_snapshots[lib_name]: %s" % repr(library_snapshots[lib_name]))
+            else:
+                self._log("%s not found in calibre_library_snapshots" % lib_name)
+
+            # Store last_modified to prefs for future reference
+            library_snapshots[lib_name] = last_modified
+            self.opts.prefs.set('calibre_library_snapshots', library_snapshots)
+
         close_requested = False
 
         all_cached_hashes = db.get_all_custom_book_data('epub_hash')

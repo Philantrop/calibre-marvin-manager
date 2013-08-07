@@ -277,9 +277,11 @@ class ProgressBar(QDialog):
     def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
                  label='Label goes here', on_top=False):
         if on_top:
-            QDialog.__init__(self, parent=parent, flags=Qt.WindowStaysOnTopHint)
+            QDialog.__init__(self, parent=parent,
+                             flags=Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
         else:
-            QDialog.__init__(self, parent=parent)
+            QDialog.__init__(self, parent=parent,
+                             flags=Qt.FramelessWindowHint)
         self.application = Application
         self.setWindowTitle(window_title)
         self.l = QVBoxLayout(self)

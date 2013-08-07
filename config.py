@@ -55,6 +55,12 @@ class ConfigWidget(QWidget):
             'display': {u'number_format': u'{0:.0f}%'},
             'is_multiple': False
         }
+        'Word count': {
+            'label': 'mm_word_count',
+            'datatype': 'text',
+            'display': {u'is_names': False},
+            'is_multiple': False
+        }
     }
 
     def __init__(self, plugin_action):
@@ -159,6 +165,8 @@ class ConfigWidget(QWidget):
         self.cfg_progress_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Progress'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_progress_wizard, current_row, 2)
         current_row += 1
+
+
 
         spacerItem1 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_custom_fields_qgl.addItem(spacerItem1)
