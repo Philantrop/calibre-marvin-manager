@@ -365,9 +365,36 @@ class MyTableView(QTableView):
                 pass
 
         elif col == self.parent.WORD_COUNT_COL:
+            word_count_field = self.parent.prefs.get('word_count_field_comboBox', None)
+
+            # Test for calibre cids
+            calibre_cids = False
+            for row in selected_books:
+                if selected_books[row]['cid'] is not None:
+                    calibre_cids = True
+                    break
+
+            # Test for active word counts
+            word_counts = False
+            for row in selected_books:
+                print(repr(selected_books[row]['word_count']))
+                if selected_books[row]['word_count'] > '':
+                    word_counts = True
+                    break
+
             ac = menu.addAction("Calculate word count")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'word_count.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "calculate_word_count", row))
+
+            title = "No custom column specified for 'Word count'"
+            if word_count_field:
+                title = "Apply to '{0}' column".format(word_count_field)
+            ac = menu.addAction(title)
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'from_marvin.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "apply_word_count", row))
+
+            if (not word_count_field) or (not calibre_cids) or (not word_counts):
+                ac.setEnabled(False)
 
         menu.exec_(event.globalPos())
 
@@ -902,6 +929,8 @@ class BookStatusDialog(SizePersistedDialog):
             self._apply_date_read()
         elif action == 'apply_progress':
             self._apply_progress()
+        elif action == 'apply_word_count':
+            self._apply_word_count()
         elif action == 'calculate_word_count':
             self._calculate_word_count()
         elif action in ['clear_all_collections', 'export_collections',
@@ -1096,7 +1125,7 @@ class BookStatusDialog(SizePersistedDialog):
             # Get a list of the active custom columns
             enabled = []
             for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
-                        'progress_field_comboBox']:
+                        'progress_field_comboBox', 'word_count_field_comboBox']:
                 cfv = self.parent.prefs.get(cfn, None)
                 if cfv:
                     enabled.append(cfv)
@@ -1166,7 +1195,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         enabled = []
         for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
-                    'progress_field_comboBox']:
+                    'progress_field_comboBox', 'word_count_field_comboBox']:
             cfv = self.parent.prefs.get(cfn, None)
             if cfv:
                 enabled.append(cfv)
@@ -1187,9 +1216,10 @@ class BookStatusDialog(SizePersistedDialog):
             for i in range(len(self.tm.all_rows())):
                 self.tv.selectRow(i)
                 pb.set_label('{:^100}'.format(str(self.tm.get_title(i).text())))
-                self._fetch_annotations()
-                self._apply_date_read()
-                self._apply_progress()
+                self._fetch_annotations(update_gui=False)
+                self._apply_date_read(update_gui=False)
+                self._apply_progress(update_gui=False)
+                self._apply_word_count(update_gui=False)
                 pb.increment()
         else:
             rows_to_refresh = sorted(self._selected_books())
@@ -1201,9 +1231,10 @@ class BookStatusDialog(SizePersistedDialog):
             for row in rows_to_refresh:
                 self.tv.selectRow(row)
                 pb.set_label('{:^100}'.format(self._selected_books()[row]['title']))
-                self._fetch_annotations()
-                self._apply_date_read()
-                self._apply_progress()
+                self._fetch_annotations(update_gui=False)
+                self._apply_date_read(update_gui=False)
+                self._apply_progress(update_gui=False)
+                self._apply_word_count(update_gui=False)
                 pb.increment()
 
         pb.hide()
@@ -1778,14 +1809,15 @@ class BookStatusDialog(SizePersistedDialog):
             # Launch row flasher
             self._flash_affected_rows()
 
-    def _apply_date_read(self):
+    def _apply_date_read(self, update_gui=True):
         '''
         Fetch the LAST_OPENED date, convert to datetime, apply to custom field
         '''
-        self._log_location()
         lookup = self.parent.prefs.get('date_read_field_lookup', None)
         if lookup:
+            self._log_location()
             selected_books = self._selected_books()
+            updated = False
             for row in selected_books:
                 cid = selected_books[row]['cid']
                 if cid is not None:
@@ -1798,6 +1830,7 @@ class BookStatusDialog(SizePersistedDialog):
                     # Build a new datetime object from Last read
                     new_date = selected_books[row]['last_opened']
                     if new_date:
+                        updated = True
                         um = mi.metadata_for_field(lookup)
                         ndo = datetime.strptime(new_date, "%Y-%m-%d")
                         um['#value#'] = ndo.replace(hour=12)
@@ -1806,18 +1839,17 @@ class BookStatusDialog(SizePersistedDialog):
                                         commit=True)
                     else:
                         self._log("'%s' has no Last read date" % selected_books[row]['title'])
-            #updateCalibreGUIView()
-        else:
-            self._log("No date_read_field_lookup specified")
+            if updated and update_gui:
+                updateCalibreGUIView()
 
-    def _apply_progress(self):
+    def _apply_progress(self, update_gui=True):
         '''
         Fetch Progress, apply to custom field
         Need to assert force_changes for db to allow custom field to be set to None.
         '''
-        self._log_location()
         lookup = self.parent.prefs.get('progress_field_lookup', None)
         if lookup:
+            self._log_location()
             selected_books = self._selected_books()
             for row in selected_books:
                 cid = selected_books[row]['cid']
@@ -1835,9 +1867,38 @@ class BookStatusDialog(SizePersistedDialog):
                     mi.set_user_metadata(lookup, um)
                     db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                     commit=True, force_changes=True)
-            updateCalibreGUIView()
+            if update_gui:
+                updateCalibreGUIView()
+
+    def _apply_word_count(self, update_gui=True):
+        '''
+        Fetch Progress, apply to custom field
+        '''
+        lookup = self.parent.prefs.get('word_count_field_lookup', None)
+        if lookup:
+            self._log_location()
+            selected_books = self._selected_books()
+            updated = False
+            for row in selected_books:
+                cid = selected_books[row]['cid']
+                if cid is not None:
+                    # Get the current value from the lookup field
+                    db = self.opts.gui.current_db
+                    mi = db.get_metadata(cid, index_is_id=True)
+                    um = mi.metadata_for_field(lookup)
+
+                    new_word_count = str(self.tm.get_word_count(row).text()).rstrip()
+                    if new_word_count > '':
+                        um['#value#'] = new_word_count
+
+                        mi.set_user_metadata(lookup, um)
+                        db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                        commit=True, force_changes=True)
+                        updated = True
+            if updated and update_gui:
+                updateCalibreGUIView()
         else:
-            self._log("No progress_field_lookup specified")
+            self._log("No word_count_field_lookup specified")
 
     def _build_metadata_update(self, book_id, cid, book, mismatches):
         '''
@@ -2662,15 +2723,14 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
-    def _fetch_annotations(self):
+    def _fetch_annotations(self, update_gui=True):
         '''
         A lightweight version of fetch annotations
         Request HTML annotations from Marvin, add to custom column specified in config
         '''
-        self._log_location()
-
         lookup = self.parent.prefs.get('annotations_field_lookup', None)
         if lookup:
+            self._log_location()
             for row, book in self._selected_books().items():
                 cid = book['cid']
                 if cid is not None:
@@ -2715,7 +2775,8 @@ class BookStatusDialog(SizePersistedDialog):
                     else:
                         self._log("'%s' has no annotations" % book['title'])
 
-            updateCalibreGUIView()
+            if update_gui:
+                updateCalibreGUIView()
 
     def _fetch_deep_view_status(self, book_ids):
         '''
@@ -3866,12 +3927,13 @@ class BookStatusDialog(SizePersistedDialog):
         pb.set_maximum(total_books)
         pb.set_label('{:^100}'.format("Identifying %d books in calibre library…" % (total_books)))
 
+        db = self.opts.gui.current_db
+
         if False:
             '''
             Determine if there have been any changes to this lib since we last scanned it
             last_modified appears to always change even when no user changes. Ask KG
             '''
-            db = self.opts.gui.current_db
             lib_name = os.path.dirname(db.dbpath).split(os.path.sep)[-1]
             last_modified = time.mktime(db.last_modified().timetuple())
             library_snapshots = self.opts.prefs.get('calibre_library_snapshots', {})
@@ -4018,6 +4080,7 @@ class BookStatusDialog(SizePersistedDialog):
             progress = self.tm.get_progress(row).sort_key
             title = str(self.tm.get_title(row).text())
             uuid = self.tm.get_uuid(row)
+            word_count = str(self.tm.get_word_count(row).text()).rstrip()
             selected_books[row] = {
                 'author': author,
                 'book_id': book_id,
@@ -4031,7 +4094,8 @@ class BookStatusDialog(SizePersistedDialog):
                 'path': path,
                 'progress': progress,
                 'title': title,
-                'uuid': uuid}
+                'uuid': uuid,
+                'word_count': word_count}
 
         return selected_books
 

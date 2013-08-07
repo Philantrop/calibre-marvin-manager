@@ -54,7 +54,7 @@ class ConfigWidget(QWidget):
             'datatype': 'float',
             'display': {u'number_format': u'{0:.0f}%'},
             'is_multiple': False
-        }
+        },
         'Word count': {
             'label': 'mm_word_count',
             'datatype': 'text',
@@ -166,7 +166,22 @@ class ConfigWidget(QWidget):
         self.cfg_custom_fields_qgl.addWidget(self.cfg_progress_wizard, current_row, 2)
         current_row += 1
 
+        # Word count
+        self.cfg_word_count_label = QLabel('Word count')
+        self.cfg_word_count_label.setAlignment(Qt.AlignLeft)
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_word_count_label, current_row, 0)
 
+        self.word_count_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
+        self.word_count_field_comboBox.setObjectName('word_count_field_comboBox')
+        self.word_count_field_comboBox.setToolTip('Select a custom column to store Marvin word counts')
+        self.cfg_custom_fields_qgl.addWidget(self.word_count_field_comboBox, current_row, 1)
+
+        self.cfg_word_count_wizard = QToolButton()
+        self.cfg_word_count_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_word_count_wizard.setToolTip("Create a custom column to store Marvin word counts")
+        self.cfg_word_count_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Word count'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_word_count_wizard, current_row, 2)
+        current_row += 1
 
         spacerItem1 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_custom_fields_qgl.addItem(spacerItem1)
@@ -259,6 +274,13 @@ class ConfigWidget(QWidget):
         idx = self.progress_field_comboBox.findText(cf)
         if idx > -1:
             self.progress_field_comboBox.setCurrentIndex(idx)
+
+        # Populate/restore the Word count comboBox
+        self.populate_word_count()
+        cf = self.prefs.get('word_count_field_comboBox', '')
+        idx = self.word_count_field_comboBox.findText(cf)
+        if idx > -1:
+            self.word_count_field_comboBox.setCurrentIndex(idx)
 
         # Restore general settings
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
@@ -370,6 +392,15 @@ class ConfigWidget(QWidget):
                     self.prefs.set('progress_field_comboBox', destination)
                     self.prefs.set('progress_field_lookup', label)
 
+                elif source == "Word count":
+                    _update_combo_box("word_count_field_comboBox", destination, previous)
+
+                    # Add/update the new destination so save_settings() can find it
+                    self.eligible_word_count_fields[destination] = label
+
+                    # Save Word count field manually in case user cancels
+                    self.prefs.set('word_count_field_comboBox', destination)
+                    self.prefs.set('word_count_field_lookup', label)
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -397,6 +428,12 @@ class ConfigWidget(QWidget):
         self.progress_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_progress_fields.keys(), key=lambda s: s.lower())
         self.progress_field_comboBox.addItems(ecf)
+
+    def populate_word_count(self):
+        self.eligible_word_count_fields = self.get_eligible_custom_fields(['text'])
+        self.word_count_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_word_count_fields.keys(), key=lambda s: s.lower())
+        self.word_count_field_comboBox.addItems(ecf)
 
     def save_settings(self):
         self._log_location()
@@ -432,6 +469,14 @@ class ConfigWidget(QWidget):
             self.prefs.set('progress_field_lookup', self.eligible_progress_fields[cf])
         else:
             self.prefs.set('progress_field_lookup', '')
+
+        # Save Word count field
+        cf = str(self.word_count_field_comboBox.currentText())
+        self.prefs.set('word_count_field_comboBox', cf)
+        if cf:
+            self.prefs.set('word_count_field_lookup', self.eligible_word_count_fields[cf])
+        else:
+            self.prefs.set('word_count_field_lookup', '')
 
         # Save general settings
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
