@@ -584,12 +584,20 @@ class MarkupTableModel(QAbstractTableModel):
                 else:
                     return tip + '<br/>Right-click for more options</p>'
 
-            elif col in [self.parent.DEEP_VIEW_COL, self.parent.VOCABULARY_COL]:
+            elif col in [self.parent.VOCABULARY_COL]:
                 has_content = bool(self.arraydata[row][col])
                 if has_content:
-                    return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
+                    return tip + "<br/>>Double-click to view Vocabulary words<br/>Right-click for more options</p>"
                 else:
-                    return tip + '<br/>Right-click for more options</p>'
+                    return tip + '<br/>Right-click for options</p>'
+
+
+            elif col in [self.parent.DEEP_VIEW_COL]:
+                has_content = bool(self.arraydata[row][col])
+                if has_content:
+                    return tip + "<br/>Double-click to view Deep View content<br/>Right-click for more options</p>"
+                else:
+                    return tip + '<br/>Double-click to generate Deep View content<br/>Right-click for more options</p>'
 
             elif col in [self.parent.FLAGS_COL]:
                 return tip + "<br/>Right-click for options</p>"
@@ -993,9 +1001,17 @@ class BookStatusDialog(SizePersistedDialog):
 
         if column in [self.TITLE_COL, self.AUTHOR_COL]:
             self.show_view_metadata_dialog(row)
-        elif column in [self.ANNOTATIONS_COL, self.DEEP_VIEW_COL,
+        elif column in [self.ANNOTATIONS_COL,
                         self.ARTICLES_COL, self.VOCABULARY_COL]:
             self.show_html_dialog(asset_actions[column], row)
+        elif column == self.DEEP_VIEW_COL:
+            # If no DV content, generate DV content, else show it
+            has_dv_content = self._selected_books()[row]['has_dv_content']
+            if has_dv_content:
+                self.show_html_dialog(asset_actions[column], row)
+            else:
+                self._generate_deep_view()
+
         elif column == self.COLLECTIONS_COL:
             self.show_view_collections_dialog(row)
         elif column in [self.FLAGS_COL]:
