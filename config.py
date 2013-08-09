@@ -57,8 +57,8 @@ class ConfigWidget(QWidget):
         },
         'Word count': {
             'label': 'mm_word_count',
-            'datatype': 'text',
-            'display': {u'is_names': False},
+            'datatype': 'int',
+            'display': {u'number_format': u'{0:n}'},
             'is_multiple': False
         }
     }
@@ -430,7 +430,9 @@ class ConfigWidget(QWidget):
         self.progress_field_comboBox.addItems(ecf)
 
     def populate_word_count(self):
-        self.eligible_word_count_fields = self.get_eligible_custom_fields(['text'])
+        #self.eligible_word_count_fields = self.get_eligible_custom_fields(['int'])
+        datatype = self.WIZARD_PROFILES['Word count']['datatype']
+        self.eligible_word_count_fields = self.get_eligible_custom_fields([datatype])
         self.word_count_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_word_count_fields.keys(), key=lambda s: s.lower())
         self.word_count_field_comboBox.addItems(ecf)

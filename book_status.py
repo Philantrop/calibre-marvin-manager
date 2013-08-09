@@ -377,8 +377,8 @@ class MyTableView(QTableView):
             # Test for active word counts
             word_counts = False
             for row in selected_books:
-                print(repr(selected_books[row]['word_count']))
-                if selected_books[row]['word_count'] > '':
+                #print(repr(selected_books[row]['word_count']))
+                if selected_books[row]['word_count']:
                     word_counts = True
                     break
 
@@ -1903,8 +1903,8 @@ class BookStatusDialog(SizePersistedDialog):
                     mi = db.get_metadata(cid, index_is_id=True)
                     um = mi.metadata_for_field(lookup)
 
-                    new_word_count = str(self.tm.get_word_count(row).text()).rstrip()
-                    if new_word_count > '':
+                    new_word_count = self.tm.get_word_count(row).sort_key
+                    if new_word_count:
                         um['#value#'] = new_word_count
 
                         mi.set_user_metadata(lookup, um)
@@ -4096,7 +4096,7 @@ class BookStatusDialog(SizePersistedDialog):
             progress = self.tm.get_progress(row).sort_key
             title = str(self.tm.get_title(row).text())
             uuid = self.tm.get_uuid(row)
-            word_count = str(self.tm.get_word_count(row).text()).rstrip()
+            word_count = self.tm.get_word_count(row).sort_key
             selected_books[row] = {
                 'author': author,
                 'book_id': book_id,
