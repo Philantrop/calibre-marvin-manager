@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import os, sys, threading
+import atexit, os, sys, threading
 
 from functools import partial
 from lxml import etree, html
@@ -140,6 +140,9 @@ class MarvinManagerAction(InterfaceAction):
 
         # Compile .ui files as needed
         CompileUI(self)
+
+        # Hook exit in case we need to do cleanup
+        #atexit.register(self.onexit)
 
     def inflate_dialog_resources(self):
         '''
@@ -316,6 +319,12 @@ class MarvinManagerAction(InterfaceAction):
         self._log_location(command)
         if command in ['delete_books', 'upload_books']:
             self.marvin_content_updated = True
+
+    def onexit(self):
+        '''
+        Called as calibre is exiting.
+        '''
+        self._log_location()
 
     def on_device_connection_changed(self, is_connected):
         '''
