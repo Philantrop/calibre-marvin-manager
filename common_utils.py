@@ -201,8 +201,12 @@ class MyBlockingBusy(QDialog):
     REQUESTED = 1
     ACKNOWLEDGED = 2
 
-    def __init__(self, gui, msg, size=100, window_title='Marvin XD', show_cancel=False):
-        QDialog.__init__(self, gui, Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint)
+    def __init__(self, gui, msg, size=100, window_title='Marvin XD', show_cancel=False,
+                 on_top=True):
+        flags = Qt.FramelessWindowHint
+        if on_top:
+            flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+        QDialog.__init__(self, gui, flags)
 
         self._layout = QVBoxLayout()
         self.setLayout(self._layout)

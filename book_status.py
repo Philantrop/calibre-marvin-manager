@@ -1217,44 +1217,38 @@ class BookStatusDialog(SizePersistedDialog):
                 enabled.append(cfv)
         cols_to_refresh = ', '.join(sorted(enabled, key=sort_key))
 
-        pb = ProgressBar(parent=self.opts.gui, window_title="Refreshing {0}".format(cols_to_refresh),
-                         on_top=True)
-        pb.set_label('{:^100}'.format(" label goes here "))
-        pb.set_value(0)
-        pb.show()
+        self._busy_operation_setup("Refreshing %s for %s" %
+                                   (cols_to_refresh,
+                                    "1 book…" if len(self._selected_rows()) == 1 else
+                                    "%d books…" % len(self._selected_rows())),
+                                    on_top=False,
+                                    show_cancel=True)
 
-        if len(self._selected_rows()) < 2:
+        if False and len(self._selected_rows()) < 2:
+            # Process all books
             total_books = len(self.tm.all_rows())
-            pb.set_maximum(total_books)
-            pb.set_value(0)
-            pb.show()
 
             for i in range(len(self.tm.all_rows())):
                 self.tv.selectRow(i)
-                pb.set_label('{:^100}'.format(str(self.tm.get_title(i).text())))
                 self._fetch_annotations(update_gui=False)
                 self._apply_date_read(update_gui=False)
                 self._apply_progress(update_gui=False)
                 self._apply_word_count(update_gui=False)
-                pb.increment()
         else:
+            # Process selected books
             rows_to_refresh = sorted(self._selected_books())
-            total_books = len(rows_to_refresh)
-            pb.set_maximum(total_books)
-            pb.set_value(0)
-            pb.show()
-
             for row in rows_to_refresh:
+                if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                    self._log("user requested cancel")
+                    break
                 self.tv.selectRow(row)
-                pb.set_label('{:^100}'.format(self._selected_books()[row]['title']))
                 self._fetch_annotations(update_gui=False)
                 self._apply_date_read(update_gui=False)
                 self._apply_progress(update_gui=False)
                 self._apply_word_count(update_gui=False)
-                pb.increment()
 
-        pb.hide()
         updateCalibreGUIView()
+        self._busy_operation_teardown()
 
     def show_help(self):
         '''
@@ -1471,6 +1465,7 @@ class BookStatusDialog(SizePersistedDialog):
             response = results['response']
 
         if response:
+            # <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
             if re.match(self.UTF_8_BOM, response):
                 u_response = UnicodeDammit(response).unicode
                 response = self._inject_css(u_response).encode('utf-8')
@@ -2034,12 +2029,14 @@ class BookStatusDialog(SizePersistedDialog):
 
         return parameters_tag
 
-    def _busy_operation_setup(self, title, show_cancel=False):
+    def _busy_operation_setup(self, title, on_top=True, show_cancel=False):
         '''
         '''
         self._log_location()
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        self.busy_window = MyBlockingBusy(self, title, size=60, show_cancel=show_cancel)
+        self.busy_window = MyBlockingBusy(self, title, size=60,
+                                          on_top=on_top,
+                                          show_cancel=show_cancel)
         self.busy_window.start()
         self.busy_window.show()
 
@@ -2770,7 +2767,12 @@ class BookStatusDialog(SizePersistedDialog):
                             self._busy_operation_teardown()
                             return self._show_command_error("Fetch annotations", results)
                         else:
+                            # <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
                             response = results['response']
+                            if re.match(self.UTF_8_BOM, response):
+                                u_response = UnicodeDammit(response).unicode
+                                response = self._inject_css(u_response).encode('utf-8')
+                                response = "<?xml version='1.0' encoding='utf-8'?>" + response
 
                         if not response:
                             response = '\n'.join(self.installed_books[book_id].highlights)
@@ -3104,6 +3106,7 @@ class BookStatusDialog(SizePersistedDialog):
             self._busy_operation_setup("Generating Deep View for %s" %
                                      ("1 book…" if len(selected_books) == 1 else
                                       "%d books…" % len(selected_books)),
+                                      on_top=False,
                                       show_cancel=True)
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
