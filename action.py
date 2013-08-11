@@ -110,6 +110,7 @@ class MarvinManagerAction(InterfaceAction):
         self.indexed_library = None
         self.library_indexed = False
         self.library_last_modified = None
+        self.marvin_connected = False
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
 
         # Build a current opts object
@@ -331,73 +332,80 @@ class MarvinManagerAction(InterfaceAction):
         self.connected_device is the handle to the driver.
         '''
         self.plugin_device_connection_changed.emit(is_connected)
+
         if is_connected:
             self.connected_device = self.gui.device_manager.device
+            self.marvin_connected = (hasattr(self.connected_device, 'ios_reader_app') and
+                                     self.connected_device.ios_reader_app == 'Marvin')
+            if self.marvin_connected:
 
-            self._log_location(self.connected_device.gui_name)
+                self._log_location(self.connected_device.gui_name)
 
-            # Init libiMobileDevice
-            self.ios = libiMobileDevice(log=self._log,
-                                        verbose=self.prefs.get('debug_libimobiledevice', False))
-            self._log("mounting %s" % self.connected_device.app_id)
-            self.ios.mount_ios_app(app_id=self.connected_device.app_id)
+                # Init libiMobileDevice
+                self.ios = libiMobileDevice(log=self._log,
+                                            verbose=self.prefs.get('debug_libimobiledevice', False))
+                self._log("mounting %s" % self.connected_device.app_id)
+                self.ios.mount_ios_app(app_id=self.connected_device.app_id)
 
-            # Change our icon
-            self.qaction.setIcon(get_icon("images/connected.png"))
+                # Change our icon
+                self.qaction.setIcon(get_icon("images/connected.png"))
 
-            # Subscribe to Marvin driver change events
-            self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
-                self.marvin_status_changed)
+                # Subscribe to Marvin driver change events
+                self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
+                    self.marvin_status_changed)
 
-            # If we've already built the hash map and the library hasn't changed, don't rescan
-            if (hasattr(self.connected_device, 'ios_reader_app') and
-                    self.connected_device.ios_reader_app == 'Marvin'):
+                # If we've already built the hash map and the library hasn't changed, don't rescan
                 if self.indexed_library is not None and self.library_indexed:
                     self._log("library already indexed")
                 else:
                     self.launch_library_scanner()
 
-            # Explore connected.xml for <has_password>
-            connected_fs = getattr(self.connected_device, 'connected_fs', None)
-            if connected_fs and self.ios.exists(connected_fs):
+                # Explore connected.xml for <has_password>
+                connected_fs = getattr(self.connected_device, 'connected_fs', None)
+                if connected_fs and self.ios.exists(connected_fs):
 
-                # Wait for the driver to be silent to explore connected.xml
-                while self.connected_device.get_busy_flag():
-                    Application.processEvents()
-                self.connected_device.set_busy_flag(True)
+                    # Wait for the driver to be silent to explore connected.xml
+                    while self.connected_device.get_busy_flag():
+                        Application.processEvents()
+                    self.connected_device.set_busy_flag(True)
 
-                # connection.keys(): ['timestamp', 'marvin', 'device', 'system']
-                connection = etree.fromstring(self.ios.read(connected_fs))
-                #self._log(etree.tostring(connection, pretty_print=True))
-                self._log_location("%s running iOS %s" % (connection.get('device'), connection.get('system')))
+                    # connection.keys(): ['timestamp', 'marvin', 'device', 'system']
+                    connection = etree.fromstring(self.ios.read(connected_fs))
+                    #self._log(etree.tostring(connection, pretty_print=True))
+                    self._log_location("%s running iOS %s" % (connection.get('device'), connection.get('system')))
 
-                has_password = connection.find('has_password')
-                if has_password is not None:
-                    self.has_password = bool(has_password.text == "true")
-                    self._log("self.has_password: %s" % self.has_password)
+                    has_password = connection.find('has_password')
+                    if has_password is not None:
+                        self.has_password = bool(has_password.text == "true")
+                        self._log("self.has_password: %s" % self.has_password)
 
-                self.connected_device.set_busy_flag(False)
+                    self.connected_device.set_busy_flag(False)
+            else:
+                self._log("Marvin not connected")
 
         else:
-            self._log_location("device disconnected")
+            if self.marvin_connected:
+                self._log_location("device disconnected")
 
-            # Change our icon
-            self.qaction.setIcon(get_icon("images/disconnected.png"))
+                # Change our icon
+                self.qaction.setIcon(get_icon("images/disconnected.png"))
 
-            # Close libiMobileDevice connection, reset references to mounted device
-            self.ios.disconnect_idevice()
-            self.ios = None
-            self.connected_device.marvin_device_signals.reader_app_status_changed.disconnect()
-            self.connected_device = None
+                # Close libiMobileDevice connection, reset references to mounted device
+                self.ios.disconnect_idevice()
+                self.ios = None
+                self.connected_device.marvin_device_signals.reader_app_status_changed.disconnect()
+                self.connected_device = None
 
-            # Invalidate the library hash map, as library contents may change before reconnection
-            #self.library_scanner.hash_map = None
+                # Invalidate the library hash map, as library contents may change before reconnection
+                #self.library_scanner.hash_map = None
 
-            # Clear has_password
-            self.has_password = None
+                # Clear has_password
+                self.has_password = None
 
-            # Dump our saved copy of installed_books
-            self.installed_books = None
+                # Dump our saved copy of installed_books
+                self.installed_books = None
+
+                self.marvin_connected = False
 
         self.rebuild_menus()
 

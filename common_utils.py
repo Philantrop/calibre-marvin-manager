@@ -381,29 +381,30 @@ class IndexLibrary(QThread):
         return hash_map
 
     def index_by_title(self):
-        id = self.cdb.FIELD_MAP['id']
-        uuid = self.cdb.FIELD_MAP['uuid']
-        title = self.cdb.FIELD_MAP['title']
-        authors = self.cdb.FIELD_MAP['authors']
-
+        '''
+        By default, any search restrictions or virtual libraries are applied
+        calibre.db.view:search_getting_ids()
+        '''
         by_title = {}
-        for record in self.cdb.data.iterall():
-            by_title[record[title]] = {
-                'authors': record[authors].split(','),
-                'id': record[id],
-                'uuid': record[uuid],
-            }
+
+        cids = self.cdb.search_getting_ids('formats:EPUB', '')
+        for cid in cids:
+            title = self.cdb.title(cid, index_is_id=True)
+            by_title[title] = {
+                'authors': self.cdb.authors(cid, index_is_id=True).split(','),
+                'id': cid,
+                'uuid': self.cdb.uuid(cid, index_is_id=True)
+                }
         return by_title
 
     def index_by_uuid(self):
-        authors = self.cdb.FIELD_MAP['authors']
-        #formats = self.cdb.FIELD_MAP['formats']
-        id = self.cdb.FIELD_MAP['id']
-        title = self.cdb.FIELD_MAP['title']
-        uuid = self.cdb.FIELD_MAP['uuid']
+        '''
+        By default, any search restrictions or virtual libraries are applied
+        calibre.db.view:search_getting_ids()
+        '''
         by_uuid = {}
 
-        cids = self.cdb.search_getting_ids('formats:EPUB', '', False, False)
+        cids = self.cdb.search_getting_ids('formats:EPUB', '')
         for cid in cids:
             uuid = self.cdb.uuid(cid, index_is_id=True)
             by_uuid[uuid] = {
