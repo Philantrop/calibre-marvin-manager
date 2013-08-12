@@ -292,7 +292,7 @@ class ConfigWidget(QWidget):
 
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
-        Discover qualifying custom fields for reading progress
+        Discover qualifying custom fields for eligible_types[]
         '''
         #self._log_location(eligible_types)
 
@@ -405,26 +405,35 @@ class ConfigWidget(QWidget):
             self._log("ERROR: Can't import from '%s'" % klass)
 
     def populate_annotations(self):
-        self.eligible_annotations_fields = self.get_eligible_custom_fields(eligible_types=['comments'])
+        #self.eligible_annotations_fields = self.get_eligible_custom_fields(eligible_types=['comments'])
+        datatype = self.WIZARD_PROFILES['Annotations']['datatype']
+        self.eligible_annotations_fields = self.get_eligible_custom_fields([datatype])
         self.annotations_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_annotations_fields.keys(), key=lambda s: s.lower())
         self.annotations_field_comboBox.addItems(ecf)
 
     def populate_collections(self):
-        self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'],
+        #self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'],
+        #                                                                          is_multiple=True)
+        datatype = self.WIZARD_PROFILES['Collections']['datatype']
+        self.eligible_collection_fields = self.get_eligible_custom_fields([datatype],
                                                                           is_multiple=True)
         self.collection_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_collection_fields.keys(), key=lambda s: s.lower())
         self.collection_field_comboBox.addItems(ecf)
 
     def populate_date_read(self):
-        self.eligible_date_read_fields = self.get_eligible_custom_fields(['datetime'])
+        #self.eligible_date_read_fields = self.get_eligible_custom_fields(['datetime'])
+        datatype = self.WIZARD_PROFILES['Last read']['datatype']
+        self.eligible_date_read_fields = self.get_eligible_custom_fields([datatype])
         self.date_read_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_date_read_fields.keys(), key=lambda s: s.lower())
         self.date_read_field_comboBox.addItems(ecf)
 
     def populate_progress(self):
-        self.eligible_progress_fields = self.get_eligible_custom_fields(['float'])
+        #self.eligible_progress_fields = self.get_eligible_custom_fields(['float'])
+        datatype = self.WIZARD_PROFILES['Progress']['datatype']
+        self.eligible_progress_fields = self.get_eligible_custom_fields([datatype])
         self.progress_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_progress_fields.keys(), key=lambda s: s.lower())
         self.progress_field_comboBox.addItems(ecf)
