@@ -112,6 +112,7 @@ class MarvinManagerAction(InterfaceAction):
         self.library_last_modified = None
         self.marvin_connected = False
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
+        self.virtual_library = None
 
         # Build a current opts object
         self.opts = self.init_options()
@@ -267,16 +268,32 @@ class MarvinManagerAction(InterfaceAction):
         optimization disabled.
         After indexing, self.library_scanner.uuid_map and .title_map are populated
         '''
+
+        mdb = self.gui.library_view.model().db
+        current_vl = mdb.data.get_base_restriction_name()
+
         if (self.library_last_modified == self.gui.current_db.last_modified() and
                 self.indexed_library is self.gui.current_db and
                 self.library_indexed and
-                self.library_scanner is not None):
-            self._log_location("library index current")
+                self.library_scanner is not None and
+                self.virtual_library == current_vl):
+            self._log_location("library index current for virtual library %s" % repr(current_vl))
         else:
-            self._log_location("updating library index")
+            self._log_location("updating library index for virtual library %s" % repr(current_vl))
             self.library_scanner = IndexLibrary(self)
-            self.connect(self.library_scanner, self.library_scanner.signal, self.library_index_complete)
-            QTimer.singleShot(1, self.start_library_indexing)
+
+            if False:
+                self.connect(self.library_scanner, self.library_scanner.signal, self.library_index_complete)
+                QTimer.singleShot(1, self.start_library_indexing)
+
+                # Wait for indexing to complete
+                while not self.library_scanner.isFinished():
+                    Application.processEvents()
+            else:
+                self.start_library_indexing()
+                while not self.library_scanner.isFinished():
+                    Application.processEvents()
+                self.library_index_complete()
 
     # subclass override
     def library_changed(self, db):
@@ -291,6 +308,18 @@ class MarvinManagerAction(InterfaceAction):
         self.library_indexed = True
         self.indexed_library = self.gui.current_db
         self.library_last_modified = self.gui.current_db.last_modified()
+
+        # Save the virtual library name we ran the indexing against
+        mdb = self.gui.library_view.model().db
+        current_vl = mdb.data.get_base_restriction_name()
+        self.virtual_library = self.library_scanner.active_virtual_library = current_vl
+
+        # Reset the hash_map in case we had a prior instance from a different vl
+        self.library_scanner.hash_map = None
+
+        # Reset self.installed_books
+        self.installed_books = None
+
         self._busy_operation_teardown()
 
     def main_menu_button_clicked(self):
@@ -353,12 +382,6 @@ class MarvinManagerAction(InterfaceAction):
                 # Subscribe to Marvin driver change events
                 self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
                     self.marvin_status_changed)
-
-                # If we've already built the hash map and the library hasn't changed, don't rescan
-                if self.indexed_library is not None and self.library_indexed:
-                    self._log("library already indexed")
-                else:
-                    self.launch_library_scanner()
 
                 # Explore connected.xml for <has_password>
                 connected_fs = getattr(self.connected_device, 'connected_fs', None)
@@ -510,6 +533,8 @@ class MarvinManagerAction(InterfaceAction):
                 self.minimum_ios_driver_version[2])
             MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
         else:
+            self.launch_library_scanner()
+
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
             self._log_location("BookStatus initialized")

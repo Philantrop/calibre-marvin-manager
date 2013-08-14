@@ -2974,11 +2974,12 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
 
-        # Scan library books for hashes
-        if self.library_scanner.isRunning():
-            self._busy_operation_setup("Scanning calibre library…")
-            self.library_scanner.wait()
-            self._busy_operation_teardown()
+        if False:
+            # Scan library books for hashes
+            if self.library_scanner.isRunning():
+                self._busy_operation_setup("Scanning calibre library…")
+                self.library_scanner.wait()
+                self._busy_operation_teardown()
 
         # Save a reference to the title, uuid map
         self.library_title_map = self.library_scanner.title_map
@@ -3701,8 +3702,11 @@ class BookStatusDialog(SizePersistedDialog):
 
                     pb.hide()
 
-                # Remove orphan cover_hashes
-                _purge_cover_hash_orphans()
+                # Remove orphan cover_hashes, but only if we're dealing with entire library
+                mdb = self.opts.gui.library_view.model().db
+                current_vl = mdb.data.get_base_restriction_name()
+                if current_vl == '':
+                    _purge_cover_hash_orphans()
 
                 if self.opts.prefs.get('development_mode', False):
                     self._log("%d cached books from Marvin:" % len(cached_books))
@@ -3771,7 +3775,6 @@ class BookStatusDialog(SizePersistedDialog):
         self._busy_operation_teardown()
         if results['code']:
             self._log_location("ERROR: %s" % results)
-
 
     def _issue_command(self, command_name, update_soup,
                        get_response=None,
@@ -3855,8 +3858,11 @@ class BookStatusDialog(SizePersistedDialog):
         self.local_hash_cache = lhc
         self.remote_hash_cache = rhc
 
-        # Purge cache orphans
-        if cache_exists:
+        # Purge cache orphans, but only if we're looking at entire library.
+        mdb = self.opts.gui.library_view.model().db
+        current_vl = mdb.data.get_base_restriction_name()
+
+        if cache_exists and current_vl == '':
             self._purge_cached_orphans(cached_books)
 
     def _log(self, msg=None):

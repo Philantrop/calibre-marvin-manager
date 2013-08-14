@@ -347,6 +347,7 @@ class IndexLibrary(QThread):
         self.cdb = parent.opts.gui.current_db
         self.id_map = None
         self.hash_map = None
+        self.active_virtual_library = None
 
     def run(self):
         self.title_map = self.index_by_title()
