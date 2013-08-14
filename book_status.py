@@ -2034,7 +2034,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        self.busy_window = MyBlockingBusy(self, title, size=60,
+        self.busy_window = MyBlockingBusy(self.opts.gui, title, size=60,
                                           on_top=on_top,
                                           show_cancel=show_cancel)
         self.busy_window.start()
@@ -3662,7 +3662,7 @@ class BookStatusDialog(SizePersistedDialog):
                     book_count = len(rows)
                     pb.set_maximum(book_count)
                     pb.set_value(0)
-                    pb.set_label('{:^100}'.format("Performing Marvin metadata magic…"))
+                    pb.set_label('{:^100}'.format("Performing metadata magic…"))
                     pb.show()
 
                     for i, row in enumerate(rows):
