@@ -445,7 +445,7 @@ class MarvinManagerAction(InterfaceAction):
 
             # Add menu options for connected Marvin
             marvin_connected = False
-            if self.connected_device:
+            if self.connected_device and hasattr(self.connected_device, 'ios_reader_app'):
                 if (self.connected_device.ios_reader_app == 'Marvin' and
                         self.connected_device.ios_connection['connected'] is True):
                     self._log("Marvin connected")

@@ -1962,7 +1962,7 @@ class BookStatusDialog(SizePersistedDialog):
                 cover_tag.insert(0, base64.b64encode(cover[2]))
                 book_tag.insert(0, cover_tag)
             except:
-                self._log("error calculating cover_hash for cid %d (%s)" % (cid, book.title))
+                self._log("error calculating cover_hash for %s (cid %d)" % (book.title, cid))
                 import traceback
                 self._log(traceback.format_exc())
         else:
@@ -3427,7 +3427,11 @@ class BookStatusDialog(SizePersistedDialog):
                                                    {'cover_hash': cover_hash,
                                                     'cover_last_modified': cover_last_modified})
                 except:
-                    self._log("error calculating cover_hash for cid %d (%s)" % (this_book.cid, this_book.title))
+                    if mi.cover_data[1]:
+                        self._log_location("error calculating cover_hash for %s (cid %d)" %
+                        (this_book.title, this_book.cid))
+                    else:
+                        self._log_location("no cover available for %s" % this_book.title)
                 return cover_hash
 
             #self._log_location(row[b'Title'])
@@ -3947,7 +3951,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         uuid_map = library_scanner.uuid_map
         total_books = len(uuid_map)
-        self._log_location("%d epubs" % total_books)
+        self._log_location("%d" % total_books)
 
         pb.set_maximum(total_books)
         pb.set_label('{:^100}'.format("Identifying %d books in calibre library…" % (total_books)))
@@ -4042,7 +4046,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Create the initial dict of installed books with hash values
         '''
-        self._log_location()
+        self._log_location("%d" % len(cached_books))
 
         # Fetch pre-existing hash cache from device
         self._localize_hash_cache(cached_books)
