@@ -546,6 +546,13 @@ class MarkupTableModel(QAbstractTableModel):
             return self.arraydata[row][self.parent.AUTHOR_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.LAST_OPENED_COL:
             return self.arraydata[row][self.parent.LAST_OPENED_COL].text()
+        elif role == Qt.DisplayRole and col == self.parent.ANNOTATIONS_COL:
+            return self.arraydata[row][self.parent.ANNOTATIONS_COL].text()
+        elif role == Qt.DisplayRole and col == self.parent.VOCABULARY_COL:
+            return self.arraydata[row][self.parent.VOCABULARY_COL].text()
+        elif role == Qt.DisplayRole and col == self.parent.ARTICLES_COL:
+            return self.arraydata[row][self.parent.ARTICLES_COL].text()
+
         elif role == Qt.TextAlignmentRole and (col in self.centered_columns):
             return Qt.AlignHCenter
         elif role == Qt.TextAlignmentRole and (col in self.right_aligned_columns):
@@ -2340,6 +2347,23 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Populate the table data from self.installed_books
         '''
+        def _generate_articles(book_data):
+            '''
+            '''
+            article_count = 0
+            if 'Wiki' in book_data.articles:
+                article_count += len(book_data.articles['Wiki'])
+            if 'Pinned' in book_data.articles:
+                article_count += len(book_data.articles['Pinned'])
+
+            if article_count:
+                articles = SortableTableWidgetItem(
+                    "{0}".format(article_count),
+                    article_count)
+            else:
+                articles = SortableTableWidgetItem('', 0)
+            return articles
+
         def _generate_author(book_data):
             '''
             '''
@@ -2371,6 +2395,17 @@ class BookStatusDialog(SizePersistedDialog):
                                                          'icons', base_name),
                                             flagbits, self.FLAGS_COL)
             return flags
+
+        def _generate_highlights(book_data):
+            '''
+            '''
+            if len(book_data.highlights):
+                highlights = SortableTableWidgetItem(
+                    "{0}".format(len(book_data.highlights)),
+                    len(book_data.highlights))
+            else:
+                highlights = SortableTableWidgetItem('', 0)
+            return highlights
 
         def _generate_last_opened(book_data):
             '''
@@ -2477,6 +2512,15 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.title_sort.upper())
             return title
 
+        def _generate_vocabulary(book_data):
+            if len(book_data.vocabulary):
+                vocabulary = SortableTableWidgetItem(
+                    "{0}".format(len(book_data.vocabulary)),
+                    len(book_data.vocabulary))
+            else:
+                vocabulary = SortableTableWidgetItem('', 0)
+            return vocabulary
+
         def _generate_word_count(book_data):
             '''
             '''
@@ -2494,22 +2538,19 @@ class BookStatusDialog(SizePersistedDialog):
 
         for book in self.installed_books:
             book_data = self.installed_books[book]
+            articles = _generate_articles(book_data)
             author = _generate_author(book_data)
             collection_match = self._generate_collection_match(book_data)
             flags = _generate_flags_profile(book_data)
+            highlights = _generate_highlights(book_data)
             last_opened = _generate_last_opened(book_data)
             locked = _generate_locked_status(book_data)
             match_quality = _generate_match_quality(book_data)
             progress = self._generate_reading_progress(book_data)
             title = _generate_title(book_data)
             series = _generate_series(book_data)
+            vocabulary = _generate_vocabulary(book_data)
             word_count = _generate_word_count(book_data)
-
-            article_count = 0
-            if 'Wiki' in book_data.articles:
-                article_count += len(book_data.articles['Wiki'])
-            if 'Pinned' in book_data.articles:
-                article_count += len(book_data.articles['Pinned'])
 
             # List order matches self.LIBRARY_HEADER
             this_book = [
@@ -2526,10 +2567,10 @@ class BookStatusDialog(SizePersistedDialog):
                 last_opened,
                 collection_match,
                 flags,
-                len(book_data.highlights) if len(book_data.highlights) else '',
-                len(book_data.vocabulary) if len(book_data.vocabulary) else '',
+                highlights,
+                vocabulary,
                 self.CHECKMARK if book_data.deep_view_prepared else '',
-                article_count if article_count else '',
+                articles,
                 match_quality]
             tabledata.append(this_book)
         return tabledata
