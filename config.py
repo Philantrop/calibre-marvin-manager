@@ -199,7 +199,7 @@ class ConfigWidget(QWidget):
         self.cfg_runtime_options_qvl.addWidget(self.reading_progress_checkbox)
 
         # ~~~~~~~~ Debug logging checkbox ~~~~~~~~
-        self.debug_plugin_checkbox = QCheckBox('Enable debug logging for plugin')
+        self.debug_plugin_checkbox = QCheckBox('Enable debug logging for Marvin XD')
         self.debug_plugin_checkbox.setObjectName('debug_plugin_checkbox')
         self.debug_plugin_checkbox.setToolTip('Print plugin diagnostic messages to console')
         self.cfg_runtime_options_qvl.addWidget(self.debug_plugin_checkbox)

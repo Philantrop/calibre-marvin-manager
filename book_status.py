@@ -19,9 +19,12 @@ from xml.sax.saxutils import escape
 from PyQt4 import QtCore
 from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
-                      QColor, QCursor, QDialogButtonBox, QFont, QIcon,
-                      QItemSelectionModel, QLabel, QMenu, QModelIndex, QPainter, QPixmap,
-                      QProgressDialog, QString, QTableView, QTableWidgetItem, QTimer,
+                      QColor, QCursor, QDialogButtonBox, QFont, QGridLayout,
+                      QHBoxLayout, QIcon,
+                      QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
+                      QPainter, QPixmap, QProgressDialog,
+                      QSize, QString,
+                      QTableView, QTableWidgetItem, QTimer, QToolButton,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
 
@@ -755,6 +758,9 @@ class MarkupTableModel(QAbstractTableModel):
         self.arraydata[row][self.parent.PROGRESS_COL] = value
         #self.parent.repaint()
 
+    def get_series(self, row):
+        return self.arraydata[row][self.parent.SERIES_COL]
+
     def get_title(self, row):
         return self.arraydata[row][self.parent.TITLE_COL]
 
@@ -1035,10 +1041,46 @@ class BookStatusDialog(SizePersistedDialog):
 
     def esc(self, *args):
         '''
-        Clear any active selections
+        Clear any active selections, filter
         '''
         self._log_location()
         self._clear_selected_rows()
+        self.filter_clear()
+
+    def filter_clear(self):
+        '''
+        Clear the filter, show all rows
+        '''
+        self._log_location()
+        self.filter_le.clear()
+        total_books = len(self.tm.all_rows())
+        for i in range(total_books):
+            self.tv.showRow(i)
+
+    def filter_table_rows(self, qstr):
+        '''
+        Hide rows not matching filter
+        '''
+        pattern = str(qstr).strip()
+        if pattern == '':
+            self.filter_clear()
+            return
+
+        self._log_location(pattern)
+        total_books = len(self.tm.all_rows())
+        for i in range(total_books):
+            matched = False
+            if re.search(pattern, self.tm.get_title(i).text(), re.IGNORECASE):
+                matched = True
+            elif re.search(pattern, self.tm.get_author(i).text(), re.IGNORECASE):
+                matched = True
+            elif re.search(pattern, self.tm.get_series(i).text(), re.IGNORECASE):
+                matched = True
+
+            if matched:
+                self.tv.showRow(i)
+            else:
+                self.tv.hideRow(i)
 
     def initialize(self, parent):
         self.archived_cover_hashes = JSONConfig('plugins/Marvin_XD_resources/cover_hashes')
@@ -1073,17 +1115,47 @@ class BookStatusDialog(SizePersistedDialog):
         # ~~~~~~~~ Create the dialog ~~~~~~~~
         self.setWindowTitle(u'Marvin Library: %d books' % len(self.installed_books))
         self.setWindowIcon(self.icon)
-        self.l = QVBoxLayout(self)
+        self.l = QGridLayout(self)
         self.setLayout(self.l)
         self.perfect_width = 0
+        current_row = 0
+
+        # ~~~~~~~~ Create the filter ~~~~~~~~
+        self.filter_label = QLabel('')
+        self.filter_label.setMaximumSize(QSize(16,16))
+        self.filter_label.setScaledContents(True)
+        self.filter_label.setPixmap(QPixmap(I('search.png')))
+        self.l.addWidget(self.filter_label, current_row, 0, 1, 1)
+
+        self.filter_le = QLineEdit()
+        #self.filter_le.setFrame(False)
+        self.filter_le.textEdited.connect(self.filter_table_rows)
+        self.filter_le.setPlaceholderText("Filter books by Title, Author or Series")
+        self.filter_le.setToolTip("Filter books by Title, Author or Series")
+        self.l.addWidget(self.filter_le, current_row, 1, 1, 1)
+
+        self.filter_tb = QToolButton()
+        self.filter_tb.setIcon(QIcon(I('clear_left.png')))
+        self.filter_tb.setToolTip("Clear filter")
+        self.filter_tb.clicked.connect(self.filter_clear)
+        self.l.addWidget(self.filter_tb, current_row, 2, 1, 2)
+
+        saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', [1000])
+        spacer_width = sum(saved_column_widths) / 2
+        self.l.setColumnMinimumWidth(3, spacer_width)
+
+        current_row += 1
 
         # ~~~~~~~~ Create the Table ~~~~~~~~
         self.tv = MyTableView(self)
+        self.l.addWidget(self.tv, current_row, 0, 1, 4)
         self.tabledata = self._construct_table_data()
-        self._construct_table_view()
+        self._construct_table_view(current_row)
+        current_row += 1
 
         # ~~~~~~~~ Create the ButtonBox ~~~~~~~~
         self.dialogButtonBox = QDialogButtonBox(QDialogButtonBox.Help)
+        self.l.addWidget(self.dialogButtonBox, current_row, 0, 1, 4)
 
         # Delete button
         if False:
@@ -1171,13 +1243,13 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
 
-        self.l.addWidget(self.dialogButtonBox)
 
         # ~~~~~~~~ Connect signals ~~~~~~~~
         self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.dispatch_double_click)
         self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
 
         self.resize_dialog()
+        self.tv.setFocus()
 
     def launch_collections_scanner(self):
         '''
@@ -2575,12 +2647,10 @@ class BookStatusDialog(SizePersistedDialog):
             tabledata.append(this_book)
         return tabledata
 
-    def _construct_table_view(self):
+    def _construct_table_view(self, current_row):
         '''
         '''
-        #self.tv = QTableView(self)
         self._log_location()
-        self.l.addWidget(self.tv)
         self.tm = MarkupTableModel(self, centered_columns=self.CENTERED_COLUMNS,
                                    right_aligned_columns=self.RIGHT_ALIGNED_COLUMNS)
 
