@@ -23,7 +23,7 @@ from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QHBoxLayout, QIcon,
                       QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
                       QPainter, QPixmap, QProgressDialog,
-                      QSize, QString,
+                      QSize, QSizePolicy, QSpacerItem, QString,
                       QTableView, QTableWidgetItem, QTimer, QToolButton,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
@@ -1115,47 +1115,50 @@ class BookStatusDialog(SizePersistedDialog):
         # ~~~~~~~~ Create the dialog ~~~~~~~~
         self.setWindowTitle(u'Marvin Library: %d books' % len(self.installed_books))
         self.setWindowIcon(self.icon)
-        self.l = QGridLayout(self)
+        self.l = QVBoxLayout(self)
         self.setLayout(self.l)
         self.perfect_width = 0
-        current_row = 0
 
         # ~~~~~~~~ Create the filter ~~~~~~~~
-        self.filter_label = QLabel('')
-        self.filter_label.setMaximumSize(QSize(16,16))
-        self.filter_label.setScaledContents(True)
-        self.filter_label.setPixmap(QPixmap(I('search.png')))
-        self.l.addWidget(self.filter_label, current_row, 0, 1, 1)
+        self.filter_hb = QHBoxLayout()
 
+        # Line edit
         self.filter_le = QLineEdit()
         #self.filter_le.setFrame(False)
         self.filter_le.textEdited.connect(self.filter_table_rows)
         self.filter_le.setPlaceholderText("Filter books by Title, Author or Series")
         self.filter_le.setToolTip("Filter books by Title, Author or Series")
-        self.l.addWidget(self.filter_le, current_row, 1, 1, 1)
+        saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', [1000])
+        filter_width = 0
+        if self.parent.has_password:
+            filter_width += saved_column_widths[self.LOCKED_COL]
+        for index in [self.TITLE_COL, self.AUTHOR_COL, self.SERIES_COL]:
+            filter_width += saved_column_widths[index]
+        self.filter_le.setFixedWidth(filter_width)
+        self.filter_hb.addWidget(self.filter_le)
 
+        # Clear button
         self.filter_tb = QToolButton()
         self.filter_tb.setIcon(QIcon(I('clear_left.png')))
         self.filter_tb.setToolTip("Clear filter")
         self.filter_tb.clicked.connect(self.filter_clear)
-        self.l.addWidget(self.filter_tb, current_row, 2, 1, 2)
+        self.filter_hb.addWidget(self.filter_tb)
 
-        saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', [1000])
-        spacer_width = sum(saved_column_widths) / 2
-        self.l.setColumnMinimumWidth(3, spacer_width)
+        # Spacer
+        self.filter_spacer = QSpacerItem(16, 16, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self.filter_hb.addItem(self.filter_spacer)
 
-        current_row += 1
+        self.l.addLayout(self.filter_hb)
 
         # ~~~~~~~~ Create the Table ~~~~~~~~
         self.tv = MyTableView(self)
-        self.l.addWidget(self.tv, current_row, 0, 1, 4)
+        self.l.addWidget(self.tv)
         self.tabledata = self._construct_table_data()
-        self._construct_table_view(current_row)
-        current_row += 1
+        self._construct_table_view()
 
         # ~~~~~~~~ Create the ButtonBox ~~~~~~~~
         self.dialogButtonBox = QDialogButtonBox(QDialogButtonBox.Help)
-        self.l.addWidget(self.dialogButtonBox, current_row, 0, 1, 4)
+        self.l.addWidget(self.dialogButtonBox)
 
         # Delete button
         if False:
@@ -1174,38 +1177,6 @@ class BookStatusDialog(SizePersistedDialog):
         self.show_match_colors_button.setObjectName('match_colors_button')
         self.show_match_colors = not self.show_match_colors
         self.toggle_match_colors()
-
-        # Word count
-        if False:
-            self.wc_button = self.dialogButtonBox.addButton('Calculate word count', QDialogButtonBox.ActionRole)
-            self.wc_button.setObjectName('calculate_word_count_button')
-            self.wc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                      'icons',
-                                                      'word_count.png')))
-
-        # Generate DV content
-        if False:
-            self.gdv_button = self.dialogButtonBox.addButton('Generate Deep View', QDialogButtonBox.ActionRole)
-            self.gdv_button.setObjectName('generate_deep_view_button')
-            self.gdv_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                       'icons',
-                                                       'deep_view.png')))
-
-        # View metadata
-        if False:
-            self.vm_button = self.dialogButtonBox.addButton('View metadata', QDialogButtonBox.ActionRole)
-            self.vm_button.setObjectName('view_metadata_button')
-            self.vm_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                      'icons',
-                                                      'update_metadata.png')))
-
-        # View collections
-        if False:
-            self.vc_button = self.dialogButtonBox.addButton('View collection assignments', QDialogButtonBox.ActionRole)
-            self.vc_button.setObjectName('view_collections_button')
-            self.vc_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                      'icons',
-                                                      'update_metadata.png')))
 
         # Manage collections
         if True:
@@ -2647,7 +2618,7 @@ class BookStatusDialog(SizePersistedDialog):
             tabledata.append(this_book)
         return tabledata
 
-    def _construct_table_view(self, current_row):
+    def _construct_table_view(self):
         '''
         '''
         self._log_location()
