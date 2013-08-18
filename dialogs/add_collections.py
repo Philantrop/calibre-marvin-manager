@@ -5,7 +5,7 @@ from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 __license__ = 'GPL v3'
-__copyright__ = '2010, Gregory Riker'
+__copyright__ = '2013, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
 import sys
@@ -15,8 +15,8 @@ from calibre.gui2 import warning_dialog
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
-from PyQt4.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap,
-                      QSize)
+from PyQt4.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap, QSize,
+                      pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -27,6 +27,8 @@ if True:
 class AddCollectionsDialog(QDialog, Ui_Dialog):
 
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
+    marvin_device_status_changed = pyqtSignal(str)
 
     def __init__(self, parent, connected_device):
         QDialog.__init__(self, parent.opts.gui)
