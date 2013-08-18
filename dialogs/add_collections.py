@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import sys
+import os, sys
 
 from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import warning_dialog
@@ -76,7 +76,9 @@ class AddCollectionsDialog(QDialog, Ui_Dialog):
         self.icon.setText('')
         self.icon.setMaximumSize(QSize(40, 40))
         self.icon.setScaledContents(True)
-        self.icon.setPixmap(QPixmap(I('plus.png')))
+        self.icon.setPixmap(QPixmap(os.path.join(self.parent.opts.resources_path,
+                                    'icons',
+                                    'star.png')))
 
         # Add the Accept button
         self.accept_button = self.bb.addButton('Add', QDialogButtonBox.AcceptRole)

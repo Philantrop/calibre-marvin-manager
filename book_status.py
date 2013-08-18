@@ -114,7 +114,7 @@ class MyTableView(QTableView):
             cfl = self.parent.prefs.get('collection_field_lookup', '')
 
             ac = menu.addAction("Add collection assignments")
-            ac.setIcon(QIcon(I('plus.png')))
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'star.png')))
             ac.triggered.connect(self.parent.show_add_collections_dialog)
 
             ac = menu.addAction("View collection assignments")
@@ -1329,7 +1329,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
                 selected_books = self._selected_books()
-                for row in selected_books:
+                for row in sorted(selected_books):
                     self.tv.selectRow(row)
                     book_id = selected_books[row]['book_id']
                     original_collections = self._get_marvin_collections(book_id)
@@ -1349,7 +1349,6 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("User cancelled Add collections dialog")
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
-
 
     def show_help(self):
         '''
