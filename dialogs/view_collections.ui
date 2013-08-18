@@ -119,6 +119,13 @@
           </widget>
          </item>
          <item>
+          <widget class="QToolButton" name="add_collection_tb">
+           <property name="text">
+            <string>...</string>
+           </property>
+          </widget>
+         </item>
+         <item>
           <widget class="QToolButton" name="remove_assignment_tb">
            <property name="toolTip">
             <string/>

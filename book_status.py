@@ -112,6 +112,11 @@ class MyTableView(QTableView):
 
         elif col == self.parent.COLLECTIONS_COL:
             cfl = self.parent.prefs.get('collection_field_lookup', '')
+
+            ac = menu.addAction("Add collection assignments")
+            ac.setIcon(QIcon(I('plus.png')))
+            ac.triggered.connect(self.parent.show_add_collections_dialog)
+
             ac = menu.addAction("View collection assignments")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'update_metadata.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "show_collections", row))
@@ -1299,6 +1304,52 @@ class BookStatusDialog(SizePersistedDialog):
 
         updateCalibreGUIView()
         self._busy_operation_teardown()
+
+    def show_add_collections_dialog(self):
+        '''
+        Get a new collection name(s), add to selected books in Marvin
+        '''
+        self._log_location()
+
+        klass = os.path.join(dialog_resources_path, 'add_collections.py')
+        if os.path.exists(klass):
+            #self._log("importing metadata dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('add_collections')
+            sys.path.remove(dialog_resources_path)
+            dlg = this_dc.AddCollectionsDialog(self, self.parent.connected_device)
+            dlg.initialize()
+            dlg.exec_()
+            if dlg.result() == dlg.Accepted:
+                raw = str(dlg.new_collection_le.text())
+                raw = raw.replace(',', ', ')
+                added_collections = raw.split(', ')
+
+                # Save the selection
+                self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+
+                selected_books = self._selected_books()
+                for row in selected_books:
+                    self.tv.selectRow(row)
+                    book_id = selected_books[row]['book_id']
+                    original_collections = self._get_marvin_collections(book_id)
+                    updated_collections = sorted(original_collections + added_collections, key=sort_key)
+                    self._update_marvin_collections(book_id, updated_collections)
+                    self._update_collection_match(self.installed_books[book_id], row)
+
+                # Restore the selection
+                for rect in self.saved_selection_region.rects():
+                    self.tv.setSelection(rect, QItemSelectionModel.Select)
+                self.saved_selection_region = None
+
+                # Update local_db for all changes
+                #self._localize_marvin_database()
+
+            else:
+                self._log("User cancelled Add collections dialog")
+        else:
+            self._log("ERROR: Can't import from '%s'" % klass)
+
 
     def show_help(self):
         '''

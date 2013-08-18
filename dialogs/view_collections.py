@@ -28,8 +28,9 @@ if True:
     from view_collections_ui import Ui_Dialog
     sys.path.remove(dialog_resources_path)
 
-RENAMING_ENABLED = False
 
+ADD_NEW_COLLECTION_ENABLED = True
+RENAMING_ENABLED = False
 
 class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -49,6 +50,17 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         }
 
         super(CollectionsViewerDialog, self).accept()
+
+    def add_collection_assignment(self):
+        '''
+        Always add to Marvin, user can sync if they want
+        '''
+        self._log_location()
+        ma = 'new collection assignment'
+        self.marvin_lw.addItem(ma)
+        item = self.marvin_lw.item(self.marvin_lw.count() - 1)
+        item.setFlags(item.flags() | Qt.ItemIsEditable)
+        self.marvin_lw.editItem(item)
 
     def close(self):
         self._log_location()
@@ -121,6 +133,13 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
                                                 'sync_collections.png')))
         self.merge_collections_tb.setToolTip("Merge collection assignments")
         self.merge_collections_tb.clicked.connect(self._merge_collections)
+
+        if ADD_NEW_COLLECTION_ENABLED:
+            self.add_collection_tb.setIcon(QIcon(I('plus.png')))
+            self.add_collection_tb.setToolTip("Add a collection assignment")
+            self.add_collection_tb.clicked.connect(self.add_collection_assignment)
+        else:
+            self.add_collection_tb.setVisible(False)
 
         # ~~~~~~~~Remove collection assignment button ~~~~~~~~
         self.remove_assignment_tb.setIcon(QIcon(I('trash.png')))
@@ -235,6 +254,7 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
 
     def _import_from_marvin(self):
         '''
+        Copy Marvin collections to calibre
         '''
         self._log_location()
         self.calibre_lw.clear()
@@ -297,9 +317,15 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.calibre_lw.clicked.connect(self._clear_marvin_selection)
         self.marvin_lw.clicked.connect(self._clear_calibre_selection)
 
+        # Hook double-click events
         if RENAMING_ENABLED:
             self.calibre_lw.doubleClicked.connect(self.rename_calibre_tag)
             self.marvin_lw.doubleClicked.connect(self.rename_marvin_tag)
+
+        # Enable sorting
+        if self.calibre_collections is not None:
+            self.calibre_lw.setSortingEnabled(True)
+        self.marvin_lw.setSortingEnabled(True)
 
     def _log(self, msg=None):
         '''

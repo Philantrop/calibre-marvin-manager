@@ -138,22 +138,21 @@
 <! ~~~~~~~~~~~~~~~ Overview ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="overview" id="overview"></a>1. <a href="#toc">Overview</a></h3>
-<p>Marvin XD is an extended driver, offering  advanced remote management of your Marvin library. </p><p><img src="images/marvin_library.png" alt=""/></p>
+<p>Marvin XD is an extended driver, offering  advanced remote management of your Marvin library. Think of Marvin XD as a remote control for Marvin. </p><p><img src="images/marvin_library.png" alt=""/></p>
   <div class="list_with_header">
     <p>Features:</p>
     <ul>
 		  <li>Synchronize metadata between Marvin and calibre.</li>
 		  <li>Identify duplicates.</li>
-		  <li>Add books from Marvin library to calibre library.</li>
-		  <li>Delete books from Marvin library.</li>
-		  <li>Calculate word counts.</li>
+		  <li>Add books from your Marvin library to your calibre library.</li>
+		  <li>Delete books from your Marvin library.</li>
+		  <li>Calculate word counts for one or multiple books.</li>
 		  <li>Generate Deep View  lists of names, dates, events and places.</li>
 		  <li>Show reading progress, date last read.</li>
 		  <li>Manage <strong>New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags.</li>
 		  <li>View annotations, vocabulary words, Deep View content and pinned articles.</li>
-		  <li>Manage collection assignments.</li>
-		  <li>Create, rename and delete collections.</li>
-		  <li>Transfer annotations, reading progress,  last readand word counts to calibre custom columns.</li>
+		  <li>Manage collection assignments, including creating, renaming and deleting collections.</li>
+		  <li>Transfer annotations, reading progress,  last read and word counts from Marvin to calibre custom columns.</li>
 	  </ul>
 	</div>
   <hr />
@@ -162,10 +161,10 @@
 <! ~~~~~~~~~~~~~~~ Configuration Options ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="configuration" id="configuration"></a>2. <a href="#toc">Configuration</a></h3>
-<p>Click the down arrow next to the Marvin XD icon, then Customize plugin to display the <strong>Customize Marvin XD</strong> dialog.</p>
+<p>Open the context menu for the Marvin XD icon (right-click the icon or click the down arrow), then click <strong>Customize plugin</strong> to display the <strong>Customize Marvin XD</strong> dialog.</p>
 <p>&nbsp;</p>
 <img src="images/custom_columns.png" alt="" class="inline" />
-<p>The <strong>Custom columns</strong> assignments section connects  Marvin XD columns with calibre custom columns. For example, you can select a custom column in calibre for Collections, which then allows you to synchronize collection assignments between calibre and Marvin. You may  specify custom columns for Annotations, Collections, Last read,   Progress and Word count, enabling you to save those Marvin details in calibre.</p>
+<p>The <strong>Custom columns</strong> assignments section connects  Marvin  details to custom columns in calibre. For example, by selecting a custom column in calibre for Collections, you can synchronize collection assignments between calibre and Marvin. You may  specify custom columns for Annotations, Collections, Last read,   Progress and Word count, enabling you to transfer those Marvin details to calibre.</p>
 <p>Clicking the combo box presents a list of existing custom columns eligible for use with the associated Marvin details.</p>
 <p>Clicking the Wizard button leads you through the steps to create a new custom column, or renames an existing custom column.</p>
 <p style="clear:left;">&nbsp;</p>
@@ -173,8 +172,8 @@
 <p>&nbsp;</p>
 <img src="images/general_options.png" alt="" class="inline" />
 <p><strong>Show reading progress as percentage: </strong>When checked<strong>,</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p>
-<p><strong>Enable debug logging for Marvin XD, </strong><strong>Enable debug logging for libiMobileDevice</strong>: If you are having a problem with the plugin, the developer may ask you to enable one or both of these check boxes, then restart calibre in debug mode from a terminal window to generate a debug log. To start calibre in debug mode, type <tt>calibre-debug -g</tt> in a terminal window.</p>
-<p><strong>CSS</strong>: When viewing Annotations, Articles, Deep View content or Vocabulary, the content is packaged in HTML which can be formatted with CSS. The style directives from this edit control are applied to the retrieved HTML content before it is displayed.</p>
+<p><strong>Enable debug logging for Marvin XD, </strong><strong>Enable debug logging for libiMobileDevice</strong>: If you are having a problem with the plugin, you may be asked to enable one or both of these checkboxes, then restart calibre in debug mode from a terminal window to generate a debug log. To start calibre in debug mode, type <tt>calibre-debug -g</tt> in a terminal window.</p>
+<p><strong>CSS</strong>: When viewing Annotations, Articles, Deep View  or Vocabulary content, the displayed HTML may be formatted with CSS. </p>
 <p style="clear:left;">&nbsp;</p>
 
 </div>
@@ -223,7 +222,7 @@
 <h3><a name="scenarios" id="scenarios"></a>4. <a href="#toc">Usage scenarios</a></h3>
 <div class="usage">
   <p class="usage-topic">How does the Marvin XD plugin relate to the iOS reader applications driver? Do I still need it?</p>
-<p class="usage-explanation">Yes, you still need the iOS reader applications driver configured with Marvin as your preferred iOS reader application. Marvin XD communicates with the driver to accomplish its tasks. Marvin XD offers many more features than a conventional device driver. You should be able to accomplish all Marvin tasks through Marvin XD.</p>
+<p class="usage-explanation">Yes, you still need the iOS reader applications driver configured with Marvin as your preferred iOS reader application. Marvin XD communicates with the regular driver to accomplish its tasks. Marvin XD offers many more features than a conventional device driver. You should be able to accomplish all Marvin tasks through Marvin XD.</p>
 </div>
 <hr />
 
@@ -242,13 +241,13 @@
 
 <div class="usage">
 <p class="usage-topic">Why can't I see all of my calibre books in Marvin XD?</p>
-<p class="usage-explanation">Books listed in Marvin XD are those installed in your Marvin library. Books also in your calibre library are shown with green, yellow or orange backgrounds when match quality is enabled.</p>
+<p class="usage-explanation">Books listed in Marvin XD are only those installed in your Marvin library. Books which also happen to be in your calibre library are shown with green, yellow or orange backgrounds when match quality is enabled.</p>
 </div>
 <hr />
 
 <div class="usage">
 <p class="usage-topic">Why does it take so long to generate Deep View content?</p>
-<p class="usage-explanation">Marvin needs to scan the entire text of the book to index all names, dates, events and locations. Older iDevices take longer than newer iDevices. But once it's done for a book, you never have to do it again. Go get a cup of coffee.</p>
+<p class="usage-explanation">Marvin scans the entire text of your book to index all names, dates, events and locations. Older iDevices take longer than newer iDevices. But once Deep View has been created for a book, you'll never have to do it again. Go get a cup of coffee.</p>
 </div>
 <hr />
 
