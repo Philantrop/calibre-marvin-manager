@@ -138,7 +138,7 @@
 <! ~~~~~~~~~~~~~~~ Overview ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="overview" id="overview"></a>1. <a href="#toc">Overview</a></h3>
-<p>Marvin XD is an extended driver, offering  advanced remote management of your Marvin library. </p><p><img src="images/marvin_library.png" alt="" width="1080" height="386" /></p>
+<p>Marvin XD is an extended driver, offering  advanced remote management of your Marvin library. </p><p><img src="images/marvin_library.png" alt=""/></p>
   <div class="list_with_header">
     <p>Features:</p>
     <ul>
@@ -163,16 +163,16 @@
 <div class="topic">
 <h3><a name="configuration" id="configuration"></a>2. <a href="#toc">Configuration</a></h3>
 <p>Click the down arrow next to the Marvin XD icon, then Customize plugin to display the <strong>Customize Marvin XD</strong> dialog.</p>
-<h4>Custom column assignments</h4>
+<p>&nbsp;</p>
 <img src="images/custom_columns.png" alt="" class="inline" />
 <p>The <strong>Custom columns</strong> assignments section connects  Marvin XD columns with calibre custom columns. For example, you can select a custom column in calibre for Collections, which then allows you to synchronize collection assignments between calibre and Marvin. You may  specify custom columns for Annotations, Collections, Last read,   Progress and Word count, enabling you to save those Marvin details in calibre.</p>
 <p>Clicking the combo box presents a list of existing custom columns eligible for use with the associated Marvin details.</p>
 <p>Clicking the Wizard button leads you through the steps to create a new custom column, or renames an existing custom column.</p>
 <p style="clear:left;">&nbsp;</p>
 
-<h4>General options</h4>
+<p>&nbsp;</p>
 <img src="images/general_options.png" alt="" class="inline" />
-<p><strong>Show reading progress as percentage: When checked,</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p>
+<p><strong>Show reading progress as percentage: </strong>When checked<strong>,</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p>
 <p><strong>Enable debug logging for Marvin XD, </strong><strong>Enable debug logging for libiMobileDevice</strong>: If you are having a problem with the plugin, the developer may ask you to enable one or both of these check boxes, then restart calibre in debug mode from a terminal window to generate a debug log. To start calibre in debug mode, type <tt>calibre-debug -g</tt> in a terminal window.</p>
 <p><strong>CSS</strong>: When viewing Annotations, Articles, Deep View content or Vocabulary, the content is packaged in HTML which can be formatted with CSS. The style directives from this edit control are applied to the retrieved HTML content before it is displayed.</p>
 <p style="clear:left;">&nbsp;</p>
@@ -229,7 +229,7 @@
 
 <div class="usage">
 <p class="usage-topic">I see lots of books with yellow backgrounds when showing match status. Is that bad?</p>
-<p class="usage-explanation">No, that's good! Yellow means that the book content is the same between calibre and Marvin, but there are some metadata differences. The differences could be as minor as a difference in the title, or perhaps you have selected a new cover in Marvin. </p>
+<p class="usage-explanation">No, that's good! Yellow means that the book content is the same between calibre and Marvin, but there are some metadata differences. The differences could be as minor as a difference in the title, or perhaps you have applied a new cover in Marvin. </p>
 <p class="usage-explanation">To compare the metadata, double-click the title to open the Metadata window. To make the books match exactly, choose which metadata you want to use, and apply it. The changes are applied immediately.</p>
 </div>
 <hr />
@@ -241,8 +241,26 @@
 <hr />
 
 <div class="usage">
+<p class="usage-topic">Why can't I see all of my calibre books in Marvin XD?</p>
+<p class="usage-explanation">Books listed in Marvin XD are those installed in your Marvin library. Books also in your calibre library are shown with green, yellow or orange backgrounds when match quality is enabled.</p>
+</div>
+<hr />
+
+<div class="usage">
 <p class="usage-topic">Why does it take so long to generate Deep View content?</p>
 <p class="usage-explanation">Marvin needs to scan the entire text of the book to index all names, dates, events and locations. Older iDevices take longer than newer iDevices. But once it's done for a book, you never have to do it again. Go get a cup of coffee.</p>
+</div>
+<hr />
+
+<div class="usage">
+<p class="usage-topic">I have a large calibre library. How can I used calibre's virtual libraries feature to speed things up?</p>
+<p class="usage-explanation">Before launching Marvin XD, create a virtual library in calibre. For example, you can limit a virtual library to books by a certain author. Type <tt>author:Lewis Carroll</tt> in calibre's search box, then click the Virtual Library button to open the Virtual Library menu, then select <strong>*current search</strong>. When you launch Marvin XD, only the books in the virtual library will be scanned.</p>
+</div>
+<hr />
+
+<div class="usage">
+<p class="usage-topic">What's going on under the hood?</p>
+<p class="usage-explanation">When Marvin XD is initially launched on your computer, it creates caches to speed up subsequent sessions. First, your calibre library is scanned, generating 'hash' values for every book. Next, Marvin's library is scanned, generating hash values for every book. These hash values allow Marvin XD to identify books as being the same when the <em>content</em> matches, even when the <em>metadata</em> differs. After Marvin XD has identified your books, it compares metadata to see which books match completely or partially. This match quality is shown as background colors when show match quality is enabled.</p>
 </div>
 <hr />
 

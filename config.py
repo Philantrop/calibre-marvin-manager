@@ -290,6 +290,10 @@ class ConfigWidget(QWidget):
         # Restore/init the stored CSS
         self.cfg_css_pte.setPlainText(self.prefs.get('injected_css', ''))
 
+        # Hook changes to diagnostic checkboxes
+        self.debug_plugin_checkbox.stateChanged.connect(self.set_restart_required)
+        self.debug_libimobiledevice_checkbox.stateChanged.connect(self.set_restart_required)
+
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
         Discover qualifying custom fields for eligible_types[]
@@ -445,6 +449,12 @@ class ConfigWidget(QWidget):
         self.word_count_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_word_count_fields.keys(), key=lambda s: s.lower())
         self.word_count_field_comboBox.addItems(ecf)
+
+    def set_restart_required(self, state):
+        '''
+        Set restart_required flag to show show dialog when closing dialog
+        '''
+        self.restart_required = True
 
     def save_settings(self):
         self._log_location()

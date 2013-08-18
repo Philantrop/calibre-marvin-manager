@@ -2084,7 +2084,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        self.busy_window = MyBlockingBusy(self.opts.gui, title, size=60,
+        self.busy_window = MyBlockingBusy(self, title, size=60,
                                           on_top=on_top,
                                           show_cancel=show_cancel)
         self.busy_window.start()
@@ -3189,7 +3189,7 @@ class BookStatusDialog(SizePersistedDialog):
             self._busy_operation_setup("Generating Deep View for %s" %
                                      ("1 book…" if len(selected_books) == 1 else
                                       "%d books…" % len(selected_books)),
-                                      on_top=False,
+                                      on_top=True,
                                       show_cancel=True)
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
