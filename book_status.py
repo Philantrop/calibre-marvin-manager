@@ -56,6 +56,10 @@ class MyTableView(QTableView):
         super(MyTableView, self).__init__(parent)
         self.parent = parent
 
+        # Hook header context menu events separately
+        self.horizontalHeader().setContextMenuPolicy(Qt.CustomContextMenu)
+        self.horizontalHeader().customContextMenuRequested.connect(self.header_event)
+
     def contextMenuEvent(self, event):
 
         index = self.indexAt(event.pos())
@@ -406,6 +410,67 @@ class MyTableView(QTableView):
 
         menu.exec_(event.globalPos())
 
+    def header_event(self, pos):
+        '''
+        Context menu event handler for header
+        Allow user to toggle column visibility
+        '''
+
+        # Columns shown in header context menu
+        user_controlled_columns = [
+            (self.parent.AUTHOR_COL, 'Author'),
+            (self.parent.SERIES_COL, 'Series'),
+            (self.parent.WORD_COUNT_COL, 'Word count'),
+            (self.parent.DATE_ADDED_COL, 'Date added'),
+            (self.parent.PROGRESS_COL, 'Progress'),
+            (self.parent.LAST_OPENED_COL, 'Last read'),
+            (self.parent.SUBJECTS_COL, 'Subjects'),
+            (self.parent.COLLECTIONS_COL, 'Collections'),
+            (self.parent.FLAGS_COL, 'Flags'),
+            (self.parent.ANNOTATIONS_COL, 'Annotations'),
+            (self.parent.VOCABULARY_COL, 'Vocabulary'),
+            (self.parent.DEEP_VIEW_COL, 'Deep View'),
+            (self.parent.ARTICLES_COL, 'Articles'),
+            ]
+
+        menu = QMenu(self)
+
+        for col, title in user_controlled_columns:
+            visible = not self.isColumnHidden(col) and self.columnWidth(col) > 0
+            ac = menu.addAction(title)
+            ac.setCheckable(True)
+            ac.setChecked(visible)
+            ac.triggered.connect(partial(self.toggle_column_visibility, col))
+
+        action = menu.exec_(self.mapToGlobal(pos))
+
+    def toggle_column_visibility(self, col):
+        '''
+        Toggle visible state of col, resize to contents
+        '''
+        invisible = self.isColumnHidden(col) or self.columnWidth(col) == 0
+        if invisible:
+            self.showColumn(col)
+
+            # Set width of shown column
+            if col in [self.parent.AUTHOR_COL]:
+                self.setColumnWidth(col, self.columnWidth(self.parent.TITLE_COL))
+            elif col in [self.parent.WORD_COUNT_COL, self.parent.COLLECTIONS_COL]:
+                width = self.columnWidth(self.parent.LAST_OPENED_COL)
+                if not width:
+                    width = 87
+                self.setColumnWidth(col, width)
+            elif col in [self.parent.ANNOTATIONS_COL, self.parent.VOCABULARY_COL,
+                         self.parent.DEEP_VIEW_COL, self.parent.ARTICLES_COL]:
+                width = self.columnWidth(self.parent.FLAGS_COL)
+                if not width:
+                    width = 53
+                self.setColumnWidth(col, width)
+            else:
+                self.resizeColumnToContents(col)
+        else:
+            self.hideColumn(col)
+
 
 class _SortableImageWidgetItem(QLabel):
     def __init__(self, parent, path, sort_key, column):
@@ -552,8 +617,12 @@ class MarkupTableModel(QAbstractTableModel):
             return self.arraydata[row][self.parent.TITLE_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.AUTHOR_COL:
             return self.arraydata[row][self.parent.AUTHOR_COL].text()
+        elif role == Qt.DisplayRole and col == self.parent.DATE_ADDED_COL:
+            return self.arraydata[row][self.parent.DATE_ADDED_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.LAST_OPENED_COL:
             return self.arraydata[row][self.parent.LAST_OPENED_COL].text()
+        elif role == Qt.DisplayRole and col == self.parent.SUBJECTS_COL:
+            return self.arraydata[row][self.parent.SUBJECTS_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.ANNOTATIONS_COL:
             return self.arraydata[row][self.parent.ANNOTATIONS_COL].text()
         elif role == Qt.DisplayRole and col == self.parent.VOCABULARY_COL:
@@ -766,6 +835,9 @@ class MarkupTableModel(QAbstractTableModel):
     def get_series(self, row):
         return self.arraydata[row][self.parent.SERIES_COL]
 
+    def get_subjects(self, row):
+        return self.arraydata[row][self.parent.SUBJECTS_COL]
+
     def get_title(self, row):
         return self.arraydata[row][self.parent.TITLE_COL]
 
@@ -815,8 +887,9 @@ class BookStatusDialog(SizePersistedDialog):
     # Column assignments. When changing order here, also change in _construct_table_data
     if True:
         LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path', MATH_TIMES,
-                          'Title', 'Author', 'Series', 'Word count', 'Progress', 'Last read',
-                          'Collections', 'Flags',
+                          'Title', 'Author', 'Series',
+                          'Word count', 'Date added', 'Progress','Last read',
+                          'Subjects', 'Collections', 'Flags',
                           'Ann', 'Voc', 'DV', 'Art',
                           'Match Quality']
         ANNOTATIONS_COL = LIBRARY_HEADER.index('Ann')
@@ -825,6 +898,7 @@ class BookStatusDialog(SizePersistedDialog):
         BOOK_ID_COL = LIBRARY_HEADER.index('mid')
         CALIBRE_ID_COL = LIBRARY_HEADER.index('cid')
         COLLECTIONS_COL = LIBRARY_HEADER.index('Collections')
+        DATE_ADDED_COL = LIBRARY_HEADER.index('Date added')
         DEEP_VIEW_COL = LIBRARY_HEADER.index('DV')
         FLAGS_COL = LIBRARY_HEADER.index('Flags')
         LAST_OPENED_COL = LIBRARY_HEADER.index('Last read')
@@ -834,6 +908,7 @@ class BookStatusDialog(SizePersistedDialog):
         PROGRESS_COL = LIBRARY_HEADER.index('Progress')
         TITLE_COL = LIBRARY_HEADER.index('Title')
         SERIES_COL = LIBRARY_HEADER.index('Series')
+        SUBJECTS_COL = LIBRARY_HEADER.index('Subjects')
         UUID_COL = LIBRARY_HEADER.index('uuid')
         VOCABULARY_COL = LIBRARY_HEADER.index('Voc')
         WORD_COUNT_COL = LIBRARY_HEADER.index('Word count')
@@ -1081,6 +1156,8 @@ class BookStatusDialog(SizePersistedDialog):
                 matched = True
             elif re.search(pattern, self.tm.get_series(i).text(), re.IGNORECASE):
                 matched = True
+            elif re.search(pattern, self.tm.get_subjects(i).text(), re.IGNORECASE):
+                matched = True
 
             if matched:
                 self.tv.showRow(i)
@@ -1131,15 +1208,8 @@ class BookStatusDialog(SizePersistedDialog):
         self.filter_le = QLineEdit()
         #self.filter_le.setFrame(False)
         self.filter_le.textEdited.connect(self.filter_table_rows)
-        self.filter_le.setPlaceholderText("Filter books by Title, Author or Series")
-        self.filter_le.setToolTip("Filter books by Title, Author or Series")
-        saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', [1000])
-        filter_width = 0
-        if self.parent.has_password:
-            filter_width += saved_column_widths[self.LOCKED_COL]
-        for index in [self.TITLE_COL, self.AUTHOR_COL, self.SERIES_COL]:
-            filter_width += saved_column_widths[index]
-        self.filter_le.setFixedWidth(filter_width)
+        self.filter_le.setPlaceholderText("Filter books by Title, Author, Series or Subject")
+        self.filter_le.setToolTip("Filter books by Title, Author, Series or Subject")
         self.filter_hb.addWidget(self.filter_le)
 
         # Clear button
@@ -1160,6 +1230,15 @@ class BookStatusDialog(SizePersistedDialog):
         self.l.addWidget(self.tv)
         self.tabledata = self._construct_table_data()
         self._construct_table_view()
+
+        # Set the width of the filter control after we know the size of the other cols
+        saved_column_widths = self.opts.prefs.get('marvin_library_column_widths')
+        filter_width = 0
+        if self.parent.has_password:
+            filter_width += saved_column_widths[self.LOCKED_COL]
+        for index in [self.TITLE_COL, self.AUTHOR_COL, self.SERIES_COL]:
+            filter_width += saved_column_widths[index]
+        self.filter_le.setFixedWidth(filter_width)
 
         # ~~~~~~~~ Create the ButtonBox ~~~~~~~~
         self.dialogButtonBox = QDialogButtonBox(QDialogButtonBox.Help)
@@ -1200,6 +1279,7 @@ class BookStatusDialog(SizePersistedDialog):
                 cfv = self.parent.prefs.get(cfn, None)
                 if cfv:
                     enabled.append(cfv)
+
             if enabled:
                 button_title = 'Refresh %s' % ', '.join(sorted(enabled, key=sort_key))
 
@@ -2467,6 +2547,21 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.author_sort.upper())
             return author
 
+        def _generate_date_added(book_data):
+            '''
+            Date added sorts by timestamp
+            '''
+            date_added_ts = ''
+            date_added_sort = 0
+            if book_data.date_added:
+                date_added_ts = time.strftime("%Y-%m-%d",
+                                               time.localtime(book_data.date_added))
+                date_added_sort = book_data.date_added
+            date_added = SortableTableWidgetItem(
+                date_added_ts,
+                date_added_sort)
+            return date_added
+
         def _generate_flags_profile(book_data):
             '''
             Figure out which flags image to use, assign sort value
@@ -2594,6 +2689,14 @@ class BookStatusDialog(SizePersistedDialog):
             series = SortableTableWidgetItem(series_ts, series_sort)
             return series
 
+        def _generate_subjects(book_data):
+            '''
+            '''
+            subjects = SortableTableWidgetItem(
+                ', '.join(book_data.tags),
+                ', '.join(book_data.tags))
+            return subjects
+
         def _generate_title(book_data):
             '''
             '''
@@ -2634,6 +2737,7 @@ class BookStatusDialog(SizePersistedDialog):
             articles = _generate_articles(book_data)
             author = _generate_author(book_data)
             collection_match = self._generate_collection_match(book_data)
+            date_added = _generate_date_added(book_data)
             flags = _generate_flags_profile(book_data)
             highlights = _generate_highlights(book_data)
             last_opened = _generate_last_opened(book_data)
@@ -2642,6 +2746,7 @@ class BookStatusDialog(SizePersistedDialog):
             progress = self._generate_reading_progress(book_data)
             title = _generate_title(book_data)
             series = _generate_series(book_data)
+            subjects = _generate_subjects(book_data)
             vocabulary = _generate_vocabulary(book_data)
             word_count = _generate_word_count(book_data)
 
@@ -2656,8 +2761,10 @@ class BookStatusDialog(SizePersistedDialog):
                 author,
                 series,
                 word_count,
+                date_added,
                 progress,
                 last_opened,
+                subjects,
                 collection_match,
                 flags,
                 highlights,
@@ -2710,6 +2817,11 @@ class BookStatusDialog(SizePersistedDialog):
         if not self.parent.has_password:
             self.HIDDEN_COLUMNS.append(self.LOCKED_COL)
 
+        # If initial run, hide DATE_ADDED_COL and SUBJECTS_COL
+        if not self.opts.prefs.get('marvin_library_column_widths'):
+            self.HIDDEN_COLUMNS.append(self.DATE_ADDED_COL)
+            self.HIDDEN_COLUMNS.append(self.SUBJECTS_COL)
+
         # Hide hidden columns
         for index in self.HIDDEN_COLUMNS:
             self.tv.hideColumn(index)
@@ -2726,7 +2838,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Restore saved widths if available
         saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', False)
-        if saved_column_widths:
+        if saved_column_widths and (len(saved_column_widths) == len(self.LIBRARY_HEADER)):
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
         else:
@@ -2739,6 +2851,7 @@ class BookStatusDialog(SizePersistedDialog):
             for col in [self.ANNOTATIONS_COL, self.VOCABULARY_COL,
                         self.DEEP_VIEW_COL, self.ARTICLES_COL]:
                 self.tv.setColumnWidth(col, fixed_width)
+            self._save_column_widths()
 
         # Show/hide the Locked column depending on restrictions
         if self.parent.has_password:
@@ -3771,6 +3884,7 @@ class BookStatusDialog(SizePersistedDialog):
                                     CalibreSeriesIndex,
                                     CalibreTitleSort,
                                     CoverFile,
+                                    DateAdded,
                                     DateOpened,
                                     DatePublished,
                                     DeepViewPrepared,
@@ -3812,8 +3926,9 @@ class BookStatusDialog(SizePersistedDialog):
                         this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
                         this_book.comments = row[b'Description']
                         this_book.cover_file = row[b'CoverFile']
-                        this_book.device_collections = _get_collections(cur, book_id)
+                        this_book.date_added = row[b'DateAdded']
                         this_book.date_opened = row[b'DateOpened']
+                        this_book.device_collections = _get_collections(cur, book_id)
                         this_book.deep_view_prepared = row[b'DeepViewPrepared']
                         this_book.flags = _get_flags(cur, row)
                         this_book.hash = hashes[row[b'FileName']]['hash']
@@ -4056,7 +4171,8 @@ class BookStatusDialog(SizePersistedDialog):
                 widths.append(self.tv.columnWidth(i))
             self.opts.prefs.set('marvin_library_column_widths', widths)
         except:
-            pass
+            import traceback
+            self._log(traceback.format_exc())
 
     def _scan_library_books(self, library_scanner):
         '''
