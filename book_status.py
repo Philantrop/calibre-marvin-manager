@@ -453,7 +453,7 @@ class MyTableView(QTableView):
             self.showColumn(col)
 
             # Set width of shown column
-            if col in [self.parent.AUTHOR_COL]:
+            if col in [self.parent.AUTHOR_COL, self.parent.SUBJECTS_COL]:
                 self.setColumnWidth(col, self.columnWidth(self.parent.TITLE_COL))
             elif col in [self.parent.WORD_COUNT_COL, self.parent.COLLECTIONS_COL]:
                 width = self.columnWidth(self.parent.LAST_OPENED_COL)
@@ -470,6 +470,9 @@ class MyTableView(QTableView):
                 self.resizeColumnToContents(col)
         else:
             self.hideColumn(col)
+
+        # Update Refresh button label based upon column visibility
+        self.parent._update_refresh_button()
 
 
 class _SortableImageWidgetItem(QLabel):
@@ -710,35 +713,41 @@ class MarkupTableModel(QAbstractTableModel):
         if role == Qt.ToolTipRole:
             if orientation == Qt.Horizontal:
                 if col == self.parent.ANNOTATIONS_COL:
-                    tip = "Annotations"
+                    tip = "<p>Annotations and Highlights.<br/>"
                 elif col == self.parent.ARTICLES_COL:
-                    tip = "Articles"
+                    tip = "<p>Pinned articles.<br/>"
                 elif col == self.parent.AUTHOR_COL:
-                    tip = "Author"
+                    tip = "<p>Book author.<br/>"
                 elif col == self.parent.COLLECTIONS_COL:
-                    tip = "Collection assignments"
-
+                    tip = "<p>Collection assignments.<br/>"
+                elif col == self.parent.DATE_ADDED_COL:
+                    tip = "<p>Date added to Marvin.<br/>"
                 elif col == self.parent.DEEP_VIEW_COL:
-                    tip = "Deep View items"
+                    tip = "<p>Deep View items.<br/>"
                 elif col == self.parent.FLAGS_COL:
-                    tip = "Flags"
+                    tip = "<p><i>New</i>, <i>Reading</i> and <i>Read</i> flags.<br/>"
                 elif col == self.parent.LAST_OPENED_COL:
-                    tip = "Last read"
+                    tip = "<p>Last opened in Marvin.<br/>"
                 elif col == self.parent.LOCKED_COL:
-                    tip = "Locked status"
+                    tip = "<p>Locked status.<br/>"
                 elif col == self.parent.PROGRESS_COL:
-                    tip = "Reading progress"
+                    tip = "<p>Reading progress.<br/>"
                 elif col == self.parent.SERIES_COL:
-                    tip = "Series"
+                    tip = "<p>Book series.<br/>"
+                elif col == self.parent.SUBJECTS_COL:
+                    tip = "<p>Book subjects.<br/>"
                 elif col == self.parent.TITLE_COL:
-                    tip = "Title"
+                    tip = "<p>Book title.<br/>"
                 elif col == self.parent.VOCABULARY_COL:
-                    tip = "Vocabulary words"
+                    tip = "<p>Vocabulary words.<br/>"
                 elif col == self.parent.WORD_COUNT_COL:
-                    tip = "Word count"
+                    tip = "<p>Word count.<br/>"
                 else:
                     tip = ''
-                return QString(tip)
+
+                suffix = "Right-click to show or hide columns.</p>"
+
+                return QString(tip + suffix)
 
         return QVariant()
 
@@ -861,6 +870,8 @@ class BookStatusDialog(SizePersistedDialog):
     UTF_8_BOM = r'\xef\xbb\xbf'
     CHECKMARK = u"\u2713"
     CIRCLE_SLASH = u"\u20E0"
+    DEFAULT_REFRESH_TEXT = 'Refresh custom columns'
+    DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom columns in calibre.<br/>Custom column mappings assigned in Customization dialog.</p>"
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
 
@@ -1270,26 +1281,18 @@ class BookStatusDialog(SizePersistedDialog):
                                                       'icons',
                                                       'edit_collections.png')))
 
-        # Refresh custom columns
-        if True:
-            # Get a list of the active custom columns
-            enabled = []
-            for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
-                        'progress_field_comboBox', 'word_count_field_comboBox']:
-                cfv = self.parent.prefs.get(cfn, None)
-                if cfv:
-                    enabled.append(cfv)
+        # Create the Refresh button
+        button_title = self.DEFAULT_REFRESH_TEXT
+        self.refresh_button = self.dialogButtonBox.addButton(button_title, QDialogButtonBox.ActionRole)
+        self.refresh_button.setObjectName('refresh_custom_columns_button')
+        self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                                       'icons',
+                                                       'from_marvin.png')))
+        self.refresh_button.setToolTip(self.DEFAULT_REFRESH_TOOLTIP)
+        self.refresh_button.setEnabled(False)
 
-            if enabled:
-                button_title = 'Refresh %s' % ', '.join(sorted(enabled, key=sort_key))
-
-                self.refresh_button = self.dialogButtonBox.addButton(button_title, QDialogButtonBox.ActionRole)
-                self.refresh_button.setObjectName('refresh_custom_columns_button')
-                self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                                               'icons',
-                                                               'from_marvin.png')))
-                tooltip = "Refresh custom columns %s in calibre" % ', '.join(sorted(enabled, key=sort_key))
-                self.refresh_button.setToolTip(tooltip)
+        # Apply proper text to Refresh button
+        self._update_refresh_button()
 
         # View Global vocabulary
         if True:
@@ -1298,7 +1301,6 @@ class BookStatusDialog(SizePersistedDialog):
             self.gv_button.setIcon(QIcon(I('books_in_series.png')))
 
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
-
 
         # ~~~~~~~~ Connect signals ~~~~~~~~
         self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.dispatch_double_click)
@@ -2694,7 +2696,7 @@ class BookStatusDialog(SizePersistedDialog):
             '''
             subjects = SortableTableWidgetItem(
                 ', '.join(book_data.tags),
-                ', '.join(book_data.tags))
+                ', '.join(book_data.tags).lower())
             return subjects
 
         def _generate_title(book_data):
@@ -2821,6 +2823,7 @@ class BookStatusDialog(SizePersistedDialog):
         if not self.opts.prefs.get('marvin_library_column_widths'):
             self.HIDDEN_COLUMNS.append(self.DATE_ADDED_COL)
             self.HIDDEN_COLUMNS.append(self.SUBJECTS_COL)
+            self.HIDDEN_COLUMNS.append(self.LAST_OPENED_COL)
 
         # Hide hidden columns
         for index in self.HIDDEN_COLUMNS:
@@ -2844,6 +2847,8 @@ class BookStatusDialog(SizePersistedDialog):
         else:
             # Set narrow cols to width of FLAGS
             fixed_width = self.tv.columnWidth(self.LAST_OPENED_COL)
+            if not fixed_width:
+                fixed_width = 87
             for col in [self.WORD_COUNT_COL, self.COLLECTIONS_COL]:
                 self.tv.setColumnWidth(col, fixed_width)
 
@@ -5290,6 +5295,32 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
         progress = self._generate_reading_progress(book)
         self.tm.set_progress(row, progress)
+
+    def _update_refresh_button(self):
+        '''
+        '''
+        self._log_location()
+
+        # Get a list of the active custom columns
+        enabled = []
+        for cfn, col in [
+                         ('annotations_field_comboBox', self.ANNOTATIONS_COL),
+                         ('date_read_field_comboBox', self.LAST_OPENED_COL),
+                         ('progress_field_comboBox', self.PROGRESS_COL),
+                         ('word_count_field_comboBox', self.WORD_COUNT_COL)
+                        ]:
+            cfv = self.parent.prefs.get(cfn, None)
+            visible = not self.tv.isColumnHidden(col) and self.tv.columnWidth(col) > 0
+            if cfv and visible:
+                enabled.append(cfv)
+
+        if enabled:
+            button_title = 'Refresh %s' % ', '.join(sorted(enabled, key=sort_key))
+        else:
+            button_title = self.DEFAULT_REFRESH_TEXT
+
+        self.refresh_button.setText(button_title)
+        self.refresh_button.setEnabled(bool(enabled))
 
     def _update_remote_hash_cache(self):
         '''
