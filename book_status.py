@@ -19,12 +19,12 @@ from xml.sax.saxutils import escape
 from PyQt4 import QtCore
 from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
-                      QColor, QCursor, QDialogButtonBox, QFont, QGridLayout,
+                      QColor, QCursor, QDialogButtonBox, QFont, QFontMetrics, QGridLayout,
                       QHeaderView, QHBoxLayout, QIcon,
                       QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
                       QPainter, QPixmap, QProgressDialog,
                       QSize, QSizePolicy, QSpacerItem, QString,
-                      QTableView, QTableWidgetItem, QTimer, QToolButton,
+                      QTableView, QTableWidget, QTableWidgetItem, QTimer, QToolButton,
                       QVariant, QVBoxLayout, QWidget,
                       SIGNAL, pyqtSignal)
 
@@ -475,7 +475,7 @@ class MyTableView(QTableView):
         self.parent._update_refresh_button()
 
 
-class _SortableImageWidgetItem(QLabel):
+class _SortableImageWidgetItem(QTableWidget):
     def __init__(self, parent, path, sort_key, column):
         super(SortableImageWidgetItem, self).__init__(parent=parent.tv)
         self.column = column
@@ -483,9 +483,24 @@ class _SortableImageWidgetItem(QLabel):
         self.picture = QPixmap(path)
         self.sort_key = sort_key
         self.width = self.picture.width()
-        self.setAlignment(Qt.AlignCenter)
-        self.setPixmap(self.picture)
 
+    def __lt__(self, other):
+        return self.sort_key < other.sort_key
+
+    """
+    def _paintEvent(self, event):
+        #painter = QPainter(self.viewport())
+        #print(dir(self.viewport()))
+        #print("event.pos().x(): %s" % self.viewport().x())
+        #print("event.pos().y(): %s" % self.viewport().y())
+        #col_width = self.parent.columnWidth(self.column)
+        #x_off = self.viewport().x()
+        #if col_width > self.width:
+        #    x_off += int((col_width - self.width) / 2)
+        #painter.drawPixmap(x_off, self.viewport().y(), self.picture)
+        #painter.end()
+        QTableWidget.paintEvent(self, event)
+    """
 
 class SortableImageWidgetItem(QWidget):
     def __init__(self, parent, path, sort_key, column):
@@ -499,6 +514,7 @@ class SortableImageWidgetItem(QWidget):
     def __lt__(self, other):
         return self.sort_key < other.sort_key
 
+    """
     def _paintEvent(self, event):
         #print("column_width: %s" % (repr(self.parent_tv.columnWidth(self.column))))
         #print("picture_width: %s" % repr(self.width))
@@ -522,7 +538,31 @@ class SortableImageWidgetItem(QWidget):
         painter.drawPixmap(event.region().boundingRect(), self.picture)
         painter.end()
         #QWidget.paintEvent(self, event)
+    """
 
+    def paintEvent(self, event):
+        if False and self.column == 9:
+            #print("dir(event): %s" % dir(event))
+            print("column: %d" % self.column)
+            print("region().boundingRect(): %s" % repr(event.region().boundingRect()))
+            print("getCoords: %s" % repr(event.region().boundingRect().getCoords()))
+            print("getRect: %s" % repr(event.region().boundingRect().getRect()))
+            #print("row_viewport_position: %d" % self.parent_tv.rowViewportPosition(event.row()))
+            print("column_viewport_position: %d" % self.parent_tv.columnViewportPosition(self.column))
+            print("visibleRegion().boundingRect(): %s" % repr(self.visibleRegion().boundingRect()))
+            print("event.rect(): %s" % repr(event.rect()))
+            #print("indexAt: %s" % self.parent_tv.indexAt(event.rect()))
+        painter = QPainter(self)
+
+        col_width = self.parent_tv.columnWidth(self.column)
+        x_off = self.parent_tv.columnViewportPosition(self.column)
+        x_off = 0
+        y_off = event.region().boundingRect().getCoords()[1]
+        y_off = 100
+        if col_width > self.width:
+            x_off += int((col_width - self.width) / 2)
+        painter.drawPixmap(x_off, y_off, self.picture)
+        #QWidget.paintEvent(self, event)
 
 class SortableTableWidgetItem(QTableWidgetItem):
     """
@@ -2794,11 +2834,6 @@ class BookStatusDialog(SizePersistedDialog):
         self.tv.setModel(self.tm)
         self.tv.setShowGrid(False)
         if self.parent.prefs.get('use_monospace_font', False):
-            # Set row height
-            nrows = len(self.tabledata)
-            for row in xrange(nrows):
-                self.tv.setRowHeight(row, 16)
-
             if isosx:
                 FONT = QFont('Monaco', 11)
             elif iswindows:
@@ -2808,10 +2843,13 @@ class BookStatusDialog(SizePersistedDialog):
                 FONT.setStyleHint(QFont.TypeWriter)
             self.tv.setFont(FONT)
         else:
-            # Set row height
-            nrows = len(self.tabledata)
-            for row in xrange(nrows):
-                self.tv.setRowHeight(row, 18)
+            FONT = self.tv.font()
+
+        # Set row height
+        fm = QFontMetrics(FONT)
+        nrows = len(self.tabledata)
+        for row in xrange(nrows):
+            self.tv.setRowHeight(row, fm.height() + 4)
 
         self.tvSelectionModel = self.tv.selectionModel()
         self.tv.setAlternatingRowColors(not self.show_match_colors)
