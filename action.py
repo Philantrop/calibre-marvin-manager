@@ -76,7 +76,7 @@ class MarvinManagerAction(InterfaceAction):
         remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
         '''
         self._log_location(action)
-        if action in ['Delete calibre hashes', 'Delete Marvin hashes']:
+        if action in ['Delete calibre hashes', 'Delete Marvin hashes', 'Reset column widths']:
             if action == 'Delete Marvin hashes':
                 hash_cache = 'content_hashes.zip'
                 remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
@@ -90,7 +90,10 @@ class MarvinManagerAction(InterfaceAction):
                 self._log("cached epub hashes deleted")
                 # Invalidate the library hash map, as library contents may change before reconnection
                 self.library_scanner.hash_map = None
-
+            elif action == 'Reset column widths':
+                self._log("deleting marvin_library_column_widths")
+                self.prefs.pop('marvin_library_column_widths')
+                self.prefs.commit()
         else:
             self._log("unrecognized action")
 
@@ -496,6 +499,10 @@ class MarvinManagerAction(InterfaceAction):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(marvin_connected)
+
+                action = 'Reset column widths'
+                ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
+                ac.triggered.connect(partial(self.developer_utilities, action))
 
     def reset_marvin_library(self):
         self._log_location("not implemented")

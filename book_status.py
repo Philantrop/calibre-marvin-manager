@@ -20,7 +20,7 @@ from PyQt4 import QtCore
 from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
                       QColor, QCursor, QDialogButtonBox, QFont, QGridLayout,
-                      QHBoxLayout, QIcon,
+                      QHeaderView, QHBoxLayout, QIcon,
                       QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
                       QPainter, QPixmap, QProgressDialog,
                       QSize, QSizePolicy, QSpacerItem, QString,
@@ -743,7 +743,7 @@ class MarkupTableModel(QAbstractTableModel):
                 elif col == self.parent.WORD_COUNT_COL:
                     tip = "<p>Word count.<br/>"
                 else:
-                    tip = ''
+                    tip = '<p>'
 
                 suffix = "Right-click to show or hide columns.</p>"
 
@@ -897,12 +897,12 @@ class BookStatusDialog(SizePersistedDialog):
 
     # Column assignments. When changing order here, also change in _construct_table_data
     if True:
-        LIBRARY_HEADER = ['uuid', 'cid', 'mid', 'path', MATH_TIMES,
+        LIBRARY_HEADER = [
                           'Title', 'Author', 'Series',
-                          'Word count', 'Date added', 'Progress','Last read',
-                          'Subjects', 'Collections', 'Flags',
+                          'Word count', 'Date added', 'Progress', 'Last read',
+                          'Subjects', 'Collections', MATH_TIMES, 'Flags',
                           'Ann', 'Voc', 'DV', 'Art',
-                          'Match Quality']
+                          'Match Quality', 'uuid', 'cid', 'mid', 'path']
         ANNOTATIONS_COL = LIBRARY_HEADER.index('Ann')
         ARTICLES_COL = LIBRARY_HEADER.index('Art')
         AUTHOR_COL = LIBRARY_HEADER.index('Author')
@@ -933,9 +933,9 @@ class BookStatusDialog(SizePersistedDialog):
         ]
         CENTERED_COLUMNS = [
             ANNOTATIONS_COL,
+            ARTICLES_COL,
             COLLECTIONS_COL,
             DEEP_VIEW_COL,
-            ARTICLES_COL,
             LAST_OPENED_COL,
             VOCABULARY_COL,
         ]
@@ -1148,6 +1148,9 @@ class BookStatusDialog(SizePersistedDialog):
         for i in range(total_books):
             self.tv.showRow(i)
 
+        # Restore clickability
+        self.tv.horizontalHeader().setClickable(True)
+
     def filter_table_rows(self, qstr):
         '''
         Hide rows not matching filter
@@ -1174,6 +1177,9 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tv.showRow(i)
             else:
                 self.tv.hideRow(i)
+
+        # Prevent sorting on cols, because we'll lose reference to the matched rows
+        self.tv.horizontalHeader().setClickable(False)
 
     def initialize(self, parent):
         self.archived_cover_hashes = JSONConfig('plugins/Marvin_XD_resources/cover_hashes')
@@ -1219,7 +1225,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.filter_le = QLineEdit()
         #self.filter_le.setFrame(False)
         self.filter_le.textEdited.connect(self.filter_table_rows)
-        self.filter_le.setPlaceholderText("Filter books by Title, Author, Series or Subject")
+        self.filter_le.setPlaceholderText("Filter by Title, Author, Series or Subject")
         self.filter_le.setToolTip("Filter books by Title, Author, Series or Subject")
         self.filter_hb.addWidget(self.filter_le)
 
@@ -2754,11 +2760,6 @@ class BookStatusDialog(SizePersistedDialog):
 
             # List order matches self.LIBRARY_HEADER
             this_book = [
-                book_data.uuid,
-                book_data.cid,
-                book_data.mid,
-                book_data.path,
-                locked,
                 title,
                 author,
                 series,
@@ -2768,12 +2769,18 @@ class BookStatusDialog(SizePersistedDialog):
                 last_opened,
                 subjects,
                 collection_match,
+                locked,
                 flags,
                 highlights,
                 vocabulary,
                 self.CHECKMARK if book_data.deep_view_prepared else '',
                 articles,
-                match_quality]
+                match_quality,
+                book_data.uuid,
+                book_data.cid,
+                book_data.mid,
+                book_data.path
+                ]
             tabledata.append(this_book)
         return tabledata
 
@@ -2825,15 +2832,15 @@ class BookStatusDialog(SizePersistedDialog):
             self.HIDDEN_COLUMNS.append(self.SUBJECTS_COL)
             self.HIDDEN_COLUMNS.append(self.LAST_OPENED_COL)
 
+        # Set column width to fit contents
+        self.tv.resizeColumnsToContents()
+
         # Hide hidden columns
         for index in self.HIDDEN_COLUMNS:
             self.tv.hideColumn(index)
 
         # Set horizontal self.header props
         #self.tv.horizontalHeader().setStretchLastSection(True)
-
-        # Set column width to fit contents
-        self.tv.resizeColumnsToContents()
 
         # Clip Author, Title to 250
         self.tv.setColumnWidth(self.TITLE_COL, 250)
@@ -2861,7 +2868,8 @@ class BookStatusDialog(SizePersistedDialog):
         # Show/hide the Locked column depending on restrictions
         if self.parent.has_password:
             self.tv.showColumn(self.LOCKED_COL)
-            self.tv.setColumnWidth(self.LOCKED_COL, 24)
+            self.tv.setColumnWidth(self.LOCKED_COL, 28)
+            #self.tv.horizontalHeader().setResizeMode(self.LOCKED_COL, QHeaderView.Fixed) # observed crash
 
         self.tv.setSortingEnabled(True)
 
