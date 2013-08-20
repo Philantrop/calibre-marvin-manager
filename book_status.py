@@ -416,26 +416,9 @@ class MyTableView(QTableView):
         Allow user to toggle column visibility
         '''
 
-        # Columns shown in header context menu
-        user_controlled_columns = [
-            (self.parent.AUTHOR_COL, 'Author'),
-            (self.parent.SERIES_COL, 'Series'),
-            (self.parent.WORD_COUNT_COL, 'Word count'),
-            (self.parent.DATE_ADDED_COL, 'Date added'),
-            (self.parent.PROGRESS_COL, 'Progress'),
-            (self.parent.LAST_OPENED_COL, 'Last read'),
-            (self.parent.SUBJECTS_COL, 'Subjects'),
-            (self.parent.COLLECTIONS_COL, 'Collections'),
-            (self.parent.FLAGS_COL, 'Flags'),
-            (self.parent.ANNOTATIONS_COL, 'Annotations'),
-            (self.parent.VOCABULARY_COL, 'Vocabulary'),
-            (self.parent.DEEP_VIEW_COL, 'Deep View'),
-            (self.parent.ARTICLES_COL, 'Articles'),
-            ]
-
         menu = QMenu(self)
 
-        for col, title in user_controlled_columns:
+        for col, title in self.parent.USER_CONTROLLED_COLUMNS:
             visible = not self.isColumnHidden(col) and self.columnWidth(col) > 0
             ac = menu.addAction(title)
             ac.setCheckable(True)
@@ -502,6 +485,7 @@ class _SortableImageWidgetItem(QTableWidget):
         QTableWidget.paintEvent(self, event)
     """
 
+
 class SortableImageWidgetItem(QWidget):
     def __init__(self, parent, path, sort_key, column):
         super(SortableImageWidgetItem, self).__init__(parent=parent.tv)
@@ -514,55 +498,6 @@ class SortableImageWidgetItem(QWidget):
     def __lt__(self, other):
         return self.sort_key < other.sort_key
 
-    """
-    def _paintEvent(self, event):
-        #print("column_width: %s" % (repr(self.parent_tv.columnWidth(self.column))))
-        #print("picture_width: %s" % repr(self.width))
-        #print("event: %s" % dir(event))
-        #print("region: %s" % dir(event.region()))
-        #print("region().boundingRect(): %s" % repr(event.region().boundingRect()))
-        #print("boundingRect: %s" % dir(event.region().boundingRect()))
-        #print("getCoords: %s" % repr(event.region().boundingRect().getCoords()))
-        #print("getRect: %s" % repr(event.region().boundingRect().getRect()))
-        #print("column_viewport_position: %d" % self.parent_tv.columnViewportPosition(self.column))
-        #print("dir(self.parent_tv): %s" % dir(self.parent_tv))
-        #cvp = self.parent_tv.columnViewportPosition(self.column)
-        #painter = QPainter(self.parent_tv.viewport())
-        painter = QPainter(self)
-        #x_off = 0
-        #col_width = self.parent_tv.columnWidth(self.column)
-        #if col_width > self.width:
-        #    x_off = int((col_width - self.width) / 2)
-        #print("x_off: %d" % x_off)
-        #painter.drawPixmap(x_off, 0, self.picture)
-        painter.drawPixmap(event.region().boundingRect(), self.picture)
-        painter.end()
-        #QWidget.paintEvent(self, event)
-    """
-
-    def paintEvent(self, event):
-        if False and self.column == 9:
-            #print("dir(event): %s" % dir(event))
-            print("column: %d" % self.column)
-            print("region().boundingRect(): %s" % repr(event.region().boundingRect()))
-            print("getCoords: %s" % repr(event.region().boundingRect().getCoords()))
-            print("getRect: %s" % repr(event.region().boundingRect().getRect()))
-            #print("row_viewport_position: %d" % self.parent_tv.rowViewportPosition(event.row()))
-            print("column_viewport_position: %d" % self.parent_tv.columnViewportPosition(self.column))
-            print("visibleRegion().boundingRect(): %s" % repr(self.visibleRegion().boundingRect()))
-            print("event.rect(): %s" % repr(event.rect()))
-            #print("indexAt: %s" % self.parent_tv.indexAt(event.rect()))
-        painter = QPainter(self)
-
-        col_width = self.parent_tv.columnWidth(self.column)
-        x_off = self.parent_tv.columnViewportPosition(self.column)
-        x_off = 0
-        y_off = event.region().boundingRect().getCoords()[1]
-        y_off = 100
-        if col_width > self.width:
-            x_off += int((col_width - self.width) / 2)
-        painter.drawPixmap(x_off, y_off, self.picture)
-        #QWidget.paintEvent(self, event)
 
 class SortableTableWidgetItem(QTableWidgetItem):
     """
@@ -983,6 +918,24 @@ class BookStatusDialog(SizePersistedDialog):
             PROGRESS_COL,
             WORD_COUNT_COL
         ]
+
+    # User-controlled columns. Text is displayed in header context menu
+    if True:
+        USER_CONTROLLED_COLUMNS = [
+            (AUTHOR_COL, 'Author'),
+            (SERIES_COL, 'Series'),
+            (WORD_COUNT_COL, 'Word count'),
+            (DATE_ADDED_COL, 'Date added'),
+            (PROGRESS_COL, 'Progress'),
+            (LAST_OPENED_COL, 'Last read'),
+            (SUBJECTS_COL, 'Subjects'),
+            (COLLECTIONS_COL, 'Collections'),
+            (FLAGS_COL, 'Flags'),
+            (ANNOTATIONS_COL, 'Annotations'),
+            (VOCABULARY_COL, 'Vocabulary'),
+            (DEEP_VIEW_COL, 'Deep View'),
+            (ARTICLES_COL, 'Articles'),
+            ]
 
     # Marvin XML command template
     if True:
@@ -2860,21 +2813,30 @@ class BookStatusDialog(SizePersistedDialog):
         # Hide the vertical self.header
         self.tv.verticalHeader().setVisible(False)
 
+        columns_to_hide = list(self.HIDDEN_COLUMNS)
+
         # Check whether we're showing LOCKED_COL
         if not self.parent.has_password:
-            self.HIDDEN_COLUMNS.append(self.LOCKED_COL)
+            columns_to_hide.append(self.LOCKED_COL)
 
-        # If initial run, hide DATE_ADDED_COL and SUBJECTS_COL
-        if not self.opts.prefs.get('marvin_library_column_widths'):
-            self.HIDDEN_COLUMNS.append(self.DATE_ADDED_COL)
-            self.HIDDEN_COLUMNS.append(self.SUBJECTS_COL)
-            self.HIDDEN_COLUMNS.append(self.LAST_OPENED_COL)
+        # If initial run, hide DATE_ADDED_COL, LAST_OPENED_COL, and SUBJECTS_COL
+        saved_column_widths = self.opts.prefs.get('marvin_library_column_widths', None)
+        if not saved_column_widths or (len(saved_column_widths) != len(self.LIBRARY_HEADER)):
+            columns_to_hide.append(self.DATE_ADDED_COL)
+            columns_to_hide.append(self.SUBJECTS_COL)
+            columns_to_hide.append(self.LAST_OPENED_COL)
+        else:
+            for col, name in self.USER_CONTROLLED_COLUMNS:
+                #self._log("%s: %d" % (name, saved_column_widths[col]))
+                if saved_column_widths[col] == 0:
+                    columns_to_hide.append(col)
 
         # Set column width to fit contents
         self.tv.resizeColumnsToContents()
 
         # Hide hidden columns
-        for index in self.HIDDEN_COLUMNS:
+        for index in sorted(columns_to_hide):
+            #self._log("hiding %s" % index)
             self.tv.hideColumn(index)
 
         # Set horizontal self.header props
@@ -4221,6 +4183,7 @@ class BookStatusDialog(SizePersistedDialog):
             for (i, c) in enumerate(self.LIBRARY_HEADER):
                 widths.append(self.tv.columnWidth(i))
             self.opts.prefs.set('marvin_library_column_widths', widths)
+            self.opts.prefs.commit()
         except:
             import traceback
             self._log(traceback.format_exc())
