@@ -192,7 +192,8 @@ class MarvinManagerAction(InterfaceAction):
         help_resources = []
         with ZipFile(self.plugin_path, 'r') as zf:
             for candidate in zf.namelist():
-                if candidate == 'help/help.html' or candidate.startswith('help/images/'):
+                if (candidate.startswith('help/') and candidate.endswith('.html') or
+                    candidate.startswith('help/images/')):
                     help_resources.append(candidate)
 
         rd = self.load_resources(help_resources)

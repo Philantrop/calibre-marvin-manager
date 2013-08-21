@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import importlib, os, sys
+import hashlib, importlib, os, sys
 from functools import partial
 
 from calibre.constants import islinux, isosx, iswindows
@@ -13,11 +13,14 @@ from calibre.gui2 import show_restart_warning
 from calibre.gui2.ui import get_gui
 from calibre.utils.config import JSONConfig
 
+from calibre_plugins.marvin_manager.appearance import (AnnotationsAppearance,
+    default_elements, default_timestamp)
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
+from calibre_plugins.marvin_manager.common_utils import get_icon
 
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
                       QGridLayout, QGroupBox, QIcon,
-                      QLabel, QPlainTextEdit,
+                      QLabel, QPlainTextEdit, QPushButton,
                       QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout, QWidget)
 
 plugin_prefs = JSONConfig('plugins/Marvin XD')
@@ -64,17 +67,20 @@ class ConfigWidget(QWidget):
     }
 
     def __init__(self, plugin_action):
+        QWidget.__init__(self)
+        self.parent = plugin_action
+
         self.gui = get_gui()
         self.icon = plugin_action.icon
-        self.parent = plugin_action
+        self.opts = plugin_action.opts
         self.prefs = plugin_prefs
         self.resources_path = plugin_action.resources_path
-        self.restart_required = False
         self.verbose = plugin_action.verbose
+
+        self.restart_required = False
 
         self._log_location()
 
-        QWidget.__init__(self)
         self.l = QVBoxLayout()
         self.setLayout(self.l)
 
@@ -216,8 +222,14 @@ class ConfigWidget(QWidget):
         self.cfg_hl_1.setObjectName("cfg_hl_1")
         self.cfg_runtime_options_qvl.addWidget(self.cfg_hl_1)
 
+        # ~~~~~~~~ Annotations appearance ~~~~~~~~
+        self.annotations_icon = QIcon(os.path.join(self.resources_path, 'icons', 'annotations_hiliter.png'))
+        self.cfg_annotations_appearance_pushbutton = QPushButton(self.annotations_icon, "Annotations appearance")
+        self.cfg_annotations_appearance_pushbutton.clicked.connect(self.configure_appearance)
+        self.cfg_runtime_options_qvl.addWidget(self.cfg_annotations_appearance_pushbutton)
+
         # ~~~~~~~~ Injected CSS ~~~~~~~~
-        self.cfg_css_label = QLabel("CSS")
+        self.cfg_css_label = QLabel("CSS for Deep View and Vocabulary")
         self.cfg_runtime_options_qvl.addWidget(self.cfg_css_label)
 
         self.cfg_css_pte = QPlainTextEdit("CSS goes here")
@@ -293,6 +305,56 @@ class ConfigWidget(QWidget):
         # Hook changes to diagnostic checkboxes
         self.debug_plugin_checkbox.stateChanged.connect(self.set_restart_required)
         self.debug_libimobiledevice_checkbox.stateChanged.connect(self.set_restart_required)
+
+    def configure_appearance(self):
+        '''
+        '''
+        self._log_location()
+        appearance_settings = {
+                                'appearance_css': default_elements,
+                                'appearance_hr_checkbox': False,
+                                'appearance_timestamp_format': default_timestamp
+                              }
+
+        # Save, hash the original settings
+        original_settings = {}
+        osh = hashlib.md5()
+        for setting in appearance_settings:
+            original_settings[setting] = plugin_prefs.get(setting, appearance_settings[setting])
+            osh.update(repr(plugin_prefs.get(setting, appearance_settings[setting])))
+
+        # Display the Annotations appearance dialog
+        aa = AnnotationsAppearance(self, self.annotations_icon, plugin_prefs)
+        cancelled = False
+        if aa.exec_():
+            # appearance_hr_checkbox and appearance_timestamp_format changed live to prefs during previews
+            plugin_prefs.set('appearance_css', aa.elements_table.get_data())
+            # Generate a new hash
+            nsh = hashlib.md5()
+            for setting in appearance_settings:
+                nsh.update(repr(plugin_prefs.get(setting, appearance_settings[setting])))
+        else:
+            for setting in appearance_settings:
+                plugin_prefs.set(setting, original_settings[setting])
+            nsh = osh
+
+        self._log_location(" *** THIS CODE NEEDS TO BE REVIEWED ***")
+
+        # If there were changes, and there are existing annotations, offer to re-render
+        field = plugin_prefs.get("cfg_annotations_destination_field", None)
+        if osh.digest() != nsh.digest() and existing_annotations(self.opts.parent, field):
+            title = 'Update annotations?'
+            msg = '<p>Update existing annotations to new appearance settings?</p>'
+            d = MessageBox(MessageBox.QUESTION,
+                           title, msg,
+                           show_copy_button=False)
+            self._log_location("QUESTION: %s" % msg)
+            if d.exec_():
+                self._log_location("Updating existing annotations to modified appearance")
+                if self.annotated_books_scanner.isRunning():
+                    self.annotated_books_scanner.wait()
+                move_annotations(self, self.annotated_books_scanner.annotation_map,
+                    field, field, window_title="Updating appearance")
 
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
