@@ -1450,143 +1450,22 @@ class BookStatusDialog(SizePersistedDialog):
     def show_annotations(self, row):
         '''
         '''
-        self._log_location(row)
-
         book_id = self._selected_book_id(row)
         title = self.installed_books[book_id].title
+        self._log_location(title)
+
         refresh = None
 
         if not self.installed_books[book_id].highlights:
             self._log("No annotations available for %s" % repr(title))
             return
 
-        #self._busy_operation_setup("Retrieving %s…" % group_box_title)
-
         header = None
         group_box_title = 'Annotations'
-        if self.installed_books[book_id].highlights:
-            #default_content = '\n'.join(self.installed_books[book_id].highlights)
-
-            # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
-            local_db_path = getattr(self.parent.connected_device, "local_db_path")
-            self._log("local_db_path: %s" % local_db_path)
-
-            template = "Marvin_{0}_books"
-            books_db = template.format(re.sub(' ', '_', self.ios.device_name))
-            self._log("books_db: %s" % books_db)
-
-            # Create the books table as needed (#272)
-            self.opts.db.create_books_table(books_db)
-
-            # Populate a BookStuct
-            b_mi = BookStruct()
-            b_mi.active = True
-            b_mi.author = ', '.join(self.installed_books[book_id].author)
-            b_mi.author_sort = self.installed_books[book_id].author_sort
-            b_mi.book_id = book_id
-            b_mi.title = title
-            b_mi.title_sort = self.installed_books[book_id].title_sort
-            b_mi.uuid = self.installed_books[book_id].uuid
-
-            # Add to books_db (#330)
-            self.opts.db.add_to_books_db(books_db, b_mi)
-
-            # Get the toc_entries (#344)
-            path = '/'.join(['/Documents', self.installed_books[book_id].path])
-            self.tocs = {}
-            self.tocs[book_id] = self._get_epub_toc(path)
-
-            # Update the timestamp (#347)
-            self.opts.db.update_timestamp(books_db)
-            self.opts.db.commit()
-
-            # ~~~~~~~~~~ Emulating get_active_annotations() ~~~~~~~~~~
-            template = "Marvin_{0}_annotations"
-            cached_db = template.format(re.sub(' ', '_', self.ios.device_name))
-            self._log("cached_db: %s" % cached_db)
-
-            # Create annotations table as needed (#153)
-            self.opts.db.create_annotations_table(cached_db)
-
-            # Fetch the annotations (#158)
-            con = sqlite3.connect(local_db_path)
-
-            with con:
-                con.row_factory = sqlite3.Row
-                cur = con.cursor()
-                cur.execute('''
-                               SELECT * FROM Highlights
-                               WHERE BookId = '{0}'
-                               ORDER BY NoteDateTime
-                            '''.format(book_id))
-                rows = cur.fetchall()
-                for row in rows:
-                    # Sanitize text, note to unicode
-                    highlight_text = re.sub('\xa0', ' ', row[b'Text'])
-                    highlight_text = UnicodeDammit(highlight_text).unicode
-                    highlight_text = highlight_text.rstrip('\n').split('\n')
-                    while highlight_text.count(''):
-                        highlight_text.remove('')
-                    highlight_text = [line.strip() for line in highlight_text]
-
-                    note_text = None
-                    if row[b'Note']:
-                        note_text = UnicodeDammit(row[b'Note']).unicode
-                        note_text = note_text.rstrip('\n').split('\n')[0]
-
-                    # Populate an AnnotationStruct
-                    a_mi = AnnotationStruct()
-                    a_mi.annotation_id = row[b'UUID']
-                    a_mi.book_id = book_id
-                    a_mi.highlight_color = self.HIGHLIGHT_COLORS[row[b'Colour']]
-                    a_mi.highlight_text = '\n'.join(highlight_text)
-                    a_mi.last_modification = row[b'NoteDateTime']
-
-                    section = str(int(row[b'Section']) - 1)
-                    try:
-                        a_mi.location = self.tocs[book_id][section]
-                    except:
-                        a_mi.location = "Section %s" % row[b'Section']
-
-                    a_mi.note_text = note_text
-
-                    # If empty highlight_text and empty note_text, not a useful annotation
-                    if not highlight_text and not note_text:
-                        continue
-
-                    # Generate location_sort
-                    interior = self._generate_interior_location_sort(row[b'StartXPath'])
-                    if not interior:
-                        self._log("Marvin: unable to parse xpath:")
-                        self._log(row[b'StartXPath'])
-                        self._log(a_mi)
-                        continue
-
-                    a_mi.location_sort = "%04d.%s.%04d" % (
-                        int(row[b'Section']),
-                        interior,
-                        int(row[b'StartOffset']))
-
-                    # Add annotation
-                    self.opts.db.add_to_annotations_db(cached_db, a_mi)
-
-                    # Update last_annotation in books_db
-                    self.opts.db.update_book_last_annotation(books_db, row[b'NoteDateTime'], book_id)
-
-                # Update the timestamp
-                self.opts.db.update_timestamp(cached_db)
-                self.opts.db.commit()
-
-            book_mi = BookStruct()
-            book_mi.book_id = book_id
-            book_mi.reader_app = 'Marvin'
-            book_mi.title = self.installed_books[book_id].title
-            response = self.opts.db.annotations_to_html(cached_db, book_mi)
-        else:
-            response = "<p>No annotations</p>"
+        annotations = self._get_formatted_annotations(book_id)
 
         footer = (
-            '<p>Control Annotations appearance in the Customize plugin dialog.</p>')
+            '<p>Annotations appearance may be customized in the Customize plugin dialog.</p>')
         afn = self.parent.prefs.get('annotations_field_comboBox', None)
         if afn:
             refresh = {
@@ -1594,17 +1473,14 @@ class BookStatusDialog(SizePersistedDialog):
                 'method': "_fetch_annotations"
                 }
 
-
         content_dict = {
             'footer': footer,
             'group_box_title': group_box_title,
             'header': header,
-            'html_content': response,
+            'html_content': annotations,
             'title': title,
             'refresh': refresh
             }
-
-        #self._busy_operation_teardown()
 
         klass = os.path.join(dialog_resources_path, 'html_viewer.py')
         if os.path.exists(klass):
@@ -3161,8 +3037,7 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _fetch_annotations(self, update_gui=True):
         '''
-        A lightweight version of fetch annotations
-        Request HTML annotations from Marvin, add to custom column specified in config
+        Retrieve formatted annotations
         '''
         lookup = self.parent.prefs.get('annotations_field_lookup', None)
         if lookup:
@@ -3173,32 +3048,7 @@ class BookStatusDialog(SizePersistedDialog):
                     if book['has_annotations']:
                         self._log("row %d has annotations" % row)
                         book_id = book['book_id']
-
-                        # Build the command
-                        command_name = "command"
-                        command_type = "GetAnnotationsHTML"
-                        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                            command_type, time.mktime(time.localtime())))
-                        parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
-                        update_soup.command.insert(0, parameters_tag)
-
-                        results = self._issue_command(command_name, update_soup,
-                                                      get_response="html_response.html",
-                                                      update_local_db=False)
-
-                        if results['code']:
-                            self._busy_operation_teardown()
-                            return self._show_command_error("Fetch annotations", results)
-                        else:
-                            # <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-                            response = results['response']
-                            if re.match(self.UTF_8_BOM, response):
-                                u_response = UnicodeDammit(response).unicode
-                                response = self._inject_css(u_response).encode('utf-8')
-                                response = "<?xml version='1.0' encoding='utf-8'?>" + response
-
-                        if not response:
-                            response = '\n'.join(self.installed_books[book_id].highlights)
+                        formatted_annotations = self._get_formatted_annotations(book_id)
 
                         # Apply to custom column
                         # Get the current value from the lookup field
@@ -3208,7 +3058,7 @@ class BookStatusDialog(SizePersistedDialog):
                         #self._log("Updating old value: %s" % repr(old_value))
 
                         um = mi.metadata_for_field(lookup)
-                        um['#value#'] = response
+                        um['#value#'] = formatted_annotations
                         mi.set_user_metadata(lookup, um)
                         db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                         commit=True)
@@ -3750,6 +3600,127 @@ class BookStatusDialog(SizePersistedDialog):
             self._log("{:~^80}".format(" end traceback "))
 
         return toc
+
+    def _get_formatted_annotations(self, book_id):
+        '''
+        '''
+        # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
+        local_db_path = getattr(self.parent.connected_device, "local_db_path")
+        #self._log("local_db_path: %s" % local_db_path)
+
+        template = "Marvin_{0}_books"
+        books_db = template.format(re.sub(' ', '_', self.ios.device_name))
+        #self._log("books_db: %s" % books_db)
+
+        # Create the books table as needed (#272)
+        self.opts.db.create_books_table(books_db)
+
+        # Populate a BookStuct
+        b_mi = BookStruct()
+        b_mi.active = True
+        b_mi.author = ', '.join(self.installed_books[book_id].author)
+        b_mi.author_sort = self.installed_books[book_id].author_sort
+        b_mi.book_id = book_id
+        b_mi.title = self.installed_books[book_id].title
+        b_mi.title_sort = self.installed_books[book_id].title_sort
+        b_mi.uuid = self.installed_books[book_id].uuid
+
+        # Add to books_db (#330)
+        self.opts.db.add_to_books_db(books_db, b_mi)
+
+        # Get the toc_entries (#344)
+        path = '/'.join(['/Documents', self.installed_books[book_id].path])
+        self.tocs = {}
+        self.tocs[book_id] = self._get_epub_toc(path)
+
+        # Update the timestamp (#347)
+        self.opts.db.update_timestamp(books_db)
+        self.opts.db.commit()
+
+        # ~~~~~~~~~~ Emulating get_active_annotations() ~~~~~~~~~~
+        template = "Marvin_{0}_annotations"
+        cached_db = template.format(re.sub(' ', '_', self.ios.device_name))
+        self._log("cached_db: %s" % cached_db)
+
+        # Create annotations table as needed (#153)
+        self.opts.db.create_annotations_table(cached_db)
+
+        # Fetch the annotations (#158)
+        con = sqlite3.connect(local_db_path)
+
+        with con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            cur.execute('''
+                           SELECT * FROM Highlights
+                           WHERE BookId = '{0}'
+                           ORDER BY NoteDateTime
+                        '''.format(book_id))
+            rows = cur.fetchall()
+            for row in rows:
+                # Sanitize text, note to unicode
+                highlight_text = re.sub('\xa0', ' ', row[b'Text'])
+                highlight_text = UnicodeDammit(highlight_text).unicode
+                highlight_text = highlight_text.rstrip('\n').split('\n')
+                while highlight_text.count(''):
+                    highlight_text.remove('')
+                highlight_text = [line.strip() for line in highlight_text]
+
+                note_text = None
+                if row[b'Note']:
+                    note_text = UnicodeDammit(row[b'Note']).unicode
+                    note_text = note_text.rstrip('\n').split('\n')[0]
+
+                # Populate an AnnotationStruct
+                a_mi = AnnotationStruct()
+                a_mi.annotation_id = row[b'UUID']
+                a_mi.book_id = book_id
+                a_mi.highlight_color = self.HIGHLIGHT_COLORS[row[b'Colour']]
+                a_mi.highlight_text = '\n'.join(highlight_text)
+                a_mi.last_modification = row[b'NoteDateTime']
+
+                section = str(int(row[b'Section']) - 1)
+                try:
+                    a_mi.location = self.tocs[book_id][section]
+                except:
+                    a_mi.location = "Section %s" % row[b'Section']
+
+                a_mi.note_text = note_text
+
+                # If empty highlight_text and empty note_text, not a useful annotation
+                if not highlight_text and not note_text:
+                    continue
+
+                # Generate location_sort
+                interior = self._generate_interior_location_sort(row[b'StartXPath'])
+                if not interior:
+                    self._log("Marvin: unable to parse xpath:")
+                    self._log(row[b'StartXPath'])
+                    self._log(a_mi)
+                    continue
+
+                a_mi.location_sort = "%04d.%s.%04d" % (
+                    int(row[b'Section']),
+                    interior,
+                    int(row[b'StartOffset']))
+
+                # Add annotation
+                self.opts.db.add_to_annotations_db(cached_db, a_mi)
+
+                # Update last_annotation in books_db
+                self.opts.db.update_book_last_annotation(books_db, row[b'NoteDateTime'], book_id)
+
+            # Update the timestamp
+            self.opts.db.update_timestamp(cached_db)
+            self.opts.db.commit()
+
+        book_mi = BookStruct()
+        book_mi.book_id = book_id
+        book_mi.reader_app = 'Marvin'
+        book_mi.title = self.installed_books[book_id].title
+        formatted_annotations = self.opts.db.annotations_to_html(cached_db, book_mi)
+
+        return formatted_annotations
 
     def _get_marvin_collections(self, book_id):
         return sorted(self.installed_books[book_id].device_collections, key=sort_key)

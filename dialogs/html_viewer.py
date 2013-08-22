@@ -17,7 +17,7 @@ from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
 from PyQt4.Qt import (QAction, QApplication, QDialogButtonBox, QIcon, QKeySequence,
-                      QPalette,
+                      QPalette, QSizePolicy,
                       pyqtSignal)
 from PyQt4.QtWebKit import QWebPage, QWebView
 
@@ -76,7 +76,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
     def esc(self, *args):
         self.close()
 
-    def initialize(self, parent, content, book_id, installed_book, marvin_db_path):
+    def initialize(self, parent, content, book_id, installed_book, marvin_db_path, use_qwv=True):
         '''
         __init__ is called on SizePersistedDialog()
         '''
@@ -114,12 +114,20 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         palette.setColor(QPalette.Base, bgcolor)
 
         # Initialize the window content
-        if True:
+        if use_qwv:
             # Add a QWebView to layout
             self.html_wv = QWebView()
+            #self.html_wv.setMinimumHeight(200)
+            #self.html_wv.setMaximumHeight(400)
+            #self.html_wv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.html_wv.setHtml(content['html_content'])
             self.html_wv.page().setLinkDelegationPolicy(QWebPage.DelegateAllLinks)
             self.html_wv.linkClicked.connect(self.link_clicked)
+            #frame = self.html_wv.page().mainFrame()
+            #self.html_wv.page().setViewportSize(frame.contentsSize())
+            #self.html_wv.resize(frame.contentsSize())
+            #self._log("contentsSize(): %s" % frame.contentsSize())
+
             #self.html_wv.setPalette(palette)
 
             self.html_gb_vl.addWidget(self.html_wv)
