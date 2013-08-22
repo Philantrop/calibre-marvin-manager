@@ -17,7 +17,7 @@ from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
 from PyQt4.Qt import (QAction, QApplication, QDialogButtonBox, QIcon, QKeySequence,
-                      QPalette, QSizePolicy,
+                      QPalette, QSize, QSizePolicy,
                       pyqtSignal)
 from PyQt4.QtWebKit import QWebPage, QWebView
 
@@ -113,22 +113,17 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         palette = QPalette()
         palette.setColor(QPalette.Base, bgcolor)
 
+        #self._log(repr(content['html_content']))
+
         # Initialize the window content
         if use_qwv:
             # Add a QWebView to layout
             self.html_wv = QWebView()
-            #self.html_wv.setMinimumHeight(200)
-            #self.html_wv.setMaximumHeight(400)
-            #self.html_wv.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             self.html_wv.setHtml(content['html_content'])
+            self.html_wv.sizeHint = self.wv_sizeHint
+            self.html_wv.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
             self.html_wv.page().setLinkDelegationPolicy(QWebPage.DelegateAllLinks)
             self.html_wv.linkClicked.connect(self.link_clicked)
-            #frame = self.html_wv.page().mainFrame()
-            #self.html_wv.page().setViewportSize(frame.contentsSize())
-            #self.html_wv.resize(frame.contentsSize())
-            #self._log("contentsSize(): %s" % frame.contentsSize())
-
-            #self.html_wv.setPalette(palette)
 
             self.html_gb_vl.addWidget(self.html_wv)
             self.html_tb.setVisible(False)
@@ -137,7 +132,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.html_tb.setText(content['html_content'])
             #self.html_tb.setPalette(palette)
 
-        # Set or hide the footer, footer_spacer
+        # Set or hide the footer
         if content['footer']:
             self.footer.setText(content['footer'])
         else:
@@ -205,6 +200,12 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self._log_location(command)
         self.stored_command = command
         self.close()
+
+    def wv_sizeHint(self):
+        '''
+        QWebVew apparently has a default size of 800, 600
+        '''
+        return QSize(400,200)
 
     def _log(self, msg=None):
         '''

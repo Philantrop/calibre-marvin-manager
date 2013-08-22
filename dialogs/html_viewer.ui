@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>636</width>
-    <height>294</height>
+    <height>286</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -114,6 +114,9 @@ p, li { white-space: pre-wrap; }
       <spacer name="footer_spacer">
        <property name="orientation">
         <enum>Qt::Vertical</enum>
+       </property>
+       <property name="sizeType">
+        <enum>QSizePolicy::Fixed</enum>
        </property>
        <property name="sizeHint" stdset="0">
         <size>

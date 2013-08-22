@@ -1450,6 +1450,17 @@ class BookStatusDialog(SizePersistedDialog):
     def show_annotations(self, row):
         '''
         '''
+        HTML_TEMPLATE = (
+            '<?xml version=\'1.0\' encoding=\'utf-8\'?>' +
+            '<html xmlns="http://www.w3.org/1999/xhtml">' +
+            '<head>' +
+            '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>' +
+            '<title>Annotations</title>' +
+            '</head>' +
+            '<body>{0}</body>' +
+            '</html>'
+            )
+
         book_id = self._selected_book_id(row)
         title = self.installed_books[book_id].title
         self._log_location(title)
@@ -1477,7 +1488,7 @@ class BookStatusDialog(SizePersistedDialog):
             'footer': footer,
             'group_box_title': group_box_title,
             'header': header,
-            'html_content': annotations,
+            'html_content': HTML_TEMPLATE.format(annotations),
             'title': title,
             'refresh': refresh
             }
@@ -1717,7 +1728,8 @@ class BookStatusDialog(SizePersistedDialog):
                            content_dict,
                            book_id,
                            self.installed_books[book_id],
-                           self.parent.connected_device.local_db_path)
+                           self.parent.connected_device.local_db_path
+                           )
             dlg.exec_()
 
         else:
