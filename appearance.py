@@ -464,7 +464,7 @@ class AnnotationsAppearance(SizePersistedDialog):
         self.hr_checkbox = QCheckBox('Add horizontal rule between annotations')
         self.hr_checkbox.stateChanged.connect(self.hr_checkbox_changed)
         self.hr_checkbox.setCheckState(
-            JSONConfig('plugins/annotations').get('appearance_hr_checkbox', False))
+            prefs.get('appearance_hr_checkbox', False))
         self.options_gl.addWidget(self.hr_checkbox, current_row, 0, 1, 4)
         current_row += 1
 
@@ -473,7 +473,7 @@ class AnnotationsAppearance(SizePersistedDialog):
         self.options_gl.addWidget(self.timestamp_fmt_label, current_row, 0)
 
         self.timestamp_fmt_le = QLineEdit(
-            JSONConfig('plugins/annotations').get('appearance_timestamp_format', default_timestamp),
+            prefs.get('appearance_timestamp_format', default_timestamp),
             parent=self)
         self.timestamp_fmt_le.textEdited.connect(self.timestamp_fmt_changed)
         self.timestamp_fmt_le.setFont(self.FONT)
@@ -515,6 +515,7 @@ class AnnotationsAppearance(SizePersistedDialog):
 
     def hr_checkbox_changed(self, state):
         self.prefs.set('appearance_hr_checkbox', state)
+        self.prefs.commit()
         self.elements_table.preview_css()
 
     def reset_timestamp_to_default(self):
@@ -539,4 +540,5 @@ class AnnotationsAppearance(SizePersistedDialog):
 
     def timestamp_fmt_changed(self):
         self.prefs.set('appearance_timestamp_format', str(self.timestamp_fmt_le.text()))
+        self.prefs.commit()
         self.elements_table.preview_css()

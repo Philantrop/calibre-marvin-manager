@@ -352,8 +352,6 @@ class ConfigWidget(QWidget):
                 plugin_prefs.set(setting, original_settings[setting])
             nsh = osh
 
-        self._log_location(" *** THIS CODE NEEDS TO BE REVIEWED ***")
-
         # If there were changes, and there are existing annotations, offer to re-render
         field = plugin_prefs.get("annotations_field_lookup", None)
         if osh.digest() != nsh.digest() and existing_annotations(self.parent, field):
@@ -369,9 +367,6 @@ class ConfigWidget(QWidget):
                 # Wait for indexing to complete
                 while not self.annotated_books_scanner.isFinished():
                     Application.processEvents()
-
-#                 if self.annotated_books_scanner.isRunning():
-#                     self.annotated_books_scanner.wait()
 
                 move_annotations(self, self.annotated_books_scanner.annotation_map,
                     field, field, window_title="Updating appearance")

@@ -1472,7 +1472,7 @@ class BookStatusDialog(SizePersistedDialog):
         annotations = self._get_formatted_annotations(book_id)
 
         footer = (
-            '<p>Annotations appearance may be customized in the Customize plugin dialog.</p>')
+            '<p>Annotations appearance may be fine-tuned in the <b>Customize plugin…</b> dialog.</p>')
         afn = self.parent.prefs.get('annotations_field_comboBox', None)
         if afn:
             refresh = {
@@ -3616,8 +3616,8 @@ class BookStatusDialog(SizePersistedDialog):
         local_db_path = getattr(self.parent.connected_device, "local_db_path")
         #self._log("local_db_path: %s" % local_db_path)
 
-        template = "Marvin_{0}_books"
-        books_db = template.format(re.sub(' ', '_', self.ios.device_name))
+        template = "{0}_books"
+        books_db = template.format(re.sub('\W', '_', self.ios.device_name))
         #self._log("books_db: %s" % books_db)
 
         # Create the books table as needed (#272)
@@ -3646,8 +3646,8 @@ class BookStatusDialog(SizePersistedDialog):
         self.opts.db.commit()
 
         # ~~~~~~~~~~ Emulating get_active_annotations() ~~~~~~~~~~
-        template = "Marvin_{0}_annotations"
-        cached_db = template.format(re.sub(' ', '_', self.ios.device_name))
+        template = "{0}_annotations"
+        cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
         self._log("cached_db: %s" % cached_db)
 
         # Create annotations table as needed (#153)

@@ -318,8 +318,8 @@ class AnnotationsDB():
         """
 
         self.conn.executescript('''
-            DROP TABLE IF EXISTS {0};
-            CREATE TABLE {0}
+            DROP TABLE IF EXISTS "{0}";
+            CREATE TABLE "{0}"
                 (
                 annotation_id TEXT UNIQUE,
                 book_id TEXT,
@@ -337,8 +337,8 @@ class AnnotationsDB():
 
         """
         self.conn.executescript('''
-            DROP TABLE IF EXISTS {0};
-            CREATE TABLE {0}
+            DROP TABLE IF EXISTS "{0}";
+            CREATE TABLE "{0}"
                 (
                  book_id TEXT UNIQUE,
                  title TEXT,
@@ -357,8 +357,8 @@ class AnnotationsDB():
         Used to temporarily store annotations when moving or re-rendering
         '''
         self.conn.executescript('''
-            DROP TABLE IF EXISTS {0};
-            CREATE TABLE {0}
+            DROP TABLE IF EXISTS "{0}";
+            CREATE TABLE "{0}"
                 (
                 book_id TEXT,
                 genre TEXT,

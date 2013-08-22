@@ -601,7 +601,7 @@ def existing_annotations(parent, field, return_all=False):
     Return count of existing annotations, or existence of any
     '''
     #import calibre_plugins.marvin_manager.config as cfg
-    debug_print("existing_annotations(%s)" % repr(field))
+    debug_print("common_utils:existing_annotations(%s)" % repr(field))
     annotation_map = []
     if field:
         db = parent.opts.gui.current_db
@@ -623,7 +623,7 @@ def existing_annotations(parent, field, return_all=False):
             debug_print(" Identified %d annotated books of %d total books" %
                 (len(annotation_map), len(db.data)))
 
-        debug_print("annotation_map: %s" % repr(annotation_map))
+        debug_print(" annotation_map: %s" % repr(annotation_map))
         return annotation_map
 
 
@@ -684,7 +684,7 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
     '''
     import calibre_plugins.marvin_manager.config as cfg
 
-    debug_print("move_annotations(%s)" % repr(annotation_map))
+    debug_print("common_utils:move_annotations(%s)" % repr(annotation_map))
     debug_print(" %s -> %s" % (old_destination_field, new_destination_field))
 
     db = parent.opts.gui.current_db
