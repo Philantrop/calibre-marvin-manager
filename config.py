@@ -15,7 +15,7 @@ from calibre.utils.config import JSONConfig
 
 from calibre_plugins.marvin_manager.appearance import (AnnotationsAppearance,
     default_elements, default_timestamp)
-from calibre_plugins.marvin_manager.book_status import dialog_resources_path
+
 from calibre_plugins.marvin_manager.common_utils import get_icon
 
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
@@ -395,6 +395,8 @@ class ConfigWidget(QWidget):
             idx = cb.findText(destination)
             if idx > -1:
                 cb.setCurrentIndex(idx)
+
+        from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
         klass = os.path.join(dialog_resources_path, 'cc_wizard.py')
         if os.path.exists(klass):

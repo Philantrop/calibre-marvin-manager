@@ -107,6 +107,45 @@ class Struct(dict):
         return '\n'.join([" %s: %s" % (key, repr(self[key])) for key in sorted(self.keys())])
 
 
+class AnnotationStruct(Struct):
+    """
+    Populate an empty annotation structure with fields for all possible values
+    """
+    def __init__(self):
+        super(AnnotationStruct, self).__init__(
+            annotation_id=None,
+            book_id=None,
+            epubcfi=None,
+            genre=None,
+            highlight_color=None,
+            highlight_text=None,
+            last_modification=None,
+            location=None,
+            location_sort=None,
+            note_text=None,
+            reader=None,
+            )
+
+
+class BookStruct(Struct):
+    """
+    Populate an empty book structure with fields for all possible values
+    """
+    def __init__(self):
+        super(BookStruct, self).__init__(
+            active=None,
+            author=None,
+            author_sort=None,
+            book_id=None,
+            genre='',
+            last_annotation=None,
+            path=None,
+            title=None,
+            title_sort=None,
+            uuid=None
+            )
+
+
 class SizePersistedDialog(QDialog):
     '''
     This dialog is a base class for any dialogs that want their size/position
