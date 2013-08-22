@@ -5,10 +5,14 @@ from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 import hashlib, importlib, os, sys
+from datetime import datetime
 from functools import partial
+from time import mktime
 
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.driver import debug_print
+from calibre.ebooks.BeautifulSoup import BeautifulSoup
+from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2 import show_restart_warning
 from calibre.gui2.ui import get_gui
 from calibre.utils.config import JSONConfig
@@ -16,12 +20,15 @@ from calibre.utils.config import JSONConfig
 from calibre_plugins.marvin_manager.appearance import (AnnotationsAppearance,
     default_elements, default_timestamp)
 
-from calibre_plugins.marvin_manager.common_utils import get_icon
+from calibre_plugins.marvin_manager.common_utils import (existing_annotations,
+    get_icon, move_annotations)
 
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
                       QGridLayout, QGroupBox, QIcon,
                       QLabel, QPlainTextEdit, QPushButton,
-                      QSizePolicy, QSpacerItem, QToolButton, QVBoxLayout, QWidget)
+                      QSizePolicy, QSpacerItem, QThread, QTimer, QToolButton,
+                      QVBoxLayout, QWidget,
+                      SIGNAL)
 
 plugin_prefs = JSONConfig('plugins/Marvin XD')
 
@@ -306,6 +313,13 @@ class ConfigWidget(QWidget):
         self.debug_plugin_checkbox.stateChanged.connect(self.set_restart_required)
         self.debug_libimobiledevice_checkbox.stateChanged.connect(self.set_restart_required)
 
+        # Launch the annotated_books_scanner
+        field = plugin_prefs.get('annotations_field_lookup', None)
+        self.annotated_books_scanner = InventoryAnnotatedBooks(self.gui, field)
+        self.connect(self.annotated_books_scanner, self.annotated_books_scanner.signal,
+            self.inventory_complete)
+        QTimer.singleShot(1, self.start_inventory)
+
     def configure_appearance(self):
         '''
         '''
@@ -341,8 +355,8 @@ class ConfigWidget(QWidget):
         self._log_location(" *** THIS CODE NEEDS TO BE REVIEWED ***")
 
         # If there were changes, and there are existing annotations, offer to re-render
-        field = plugin_prefs.get("cfg_annotations_destination_field", None)
-        if osh.digest() != nsh.digest() and existing_annotations(self.opts.parent, field):
+        field = plugin_prefs.get("annotations_field_lookup", None)
+        if osh.digest() != nsh.digest() and existing_annotations(self.parent, field):
             title = 'Update annotations?'
             msg = '<p>Update existing annotations to new appearance settings?</p>'
             d = MessageBox(MessageBox.QUESTION,
@@ -351,8 +365,14 @@ class ConfigWidget(QWidget):
             self._log_location("QUESTION: %s" % msg)
             if d.exec_():
                 self._log_location("Updating existing annotations to modified appearance")
-                if self.annotated_books_scanner.isRunning():
-                    self.annotated_books_scanner.wait()
+
+                # Wait for indexing to complete
+                while not self.annotated_books_scanner.isFinished():
+                    Application.processEvents()
+
+#                 if self.annotated_books_scanner.isRunning():
+#                     self.annotated_books_scanner.wait()
+
                 move_annotations(self, self.annotated_books_scanner.annotation_map,
                     field, field, window_title="Updating appearance")
 
@@ -375,6 +395,9 @@ class ConfigWidget(QWidget):
                 else:
                     eligible_custom_fields[cfn] = cf
         return eligible_custom_fields
+
+    def inventory_complete(self, msg):
+        self._log_location(msg)
 
     def launch_cc_wizard(self, column_type):
         '''
@@ -578,6 +601,10 @@ class ConfigWidget(QWidget):
             if do_restart:
                 self.gui.quit(restart=True)
 
+    def start_inventory(self):
+        self._log_location()
+        self.annotated_books_scanner.start()
+
     def _log(self, msg=None):
         '''
         Print msg to console
@@ -608,6 +635,72 @@ class ConfigWidget(QWidget):
                     func=sys._getframe(1).f_code.co_name,
                     arg1=arg1, arg2=arg2))
 
+
+class InventoryAnnotatedBooks(QThread):
+
+    def __init__(self, gui, field, get_date_range=False):
+        QThread.__init__(self, gui)
+        self.annotation_map = []
+        self.cdb = gui.current_db
+        self.get_date_range = get_date_range
+        self.newest_annotation = 0
+        self.oldest_annotation = mktime(datetime.today().timetuple())
+        self.field = field
+        self.signal = SIGNAL("inventory_complete")
+
+    def run(self):
+        self.find_all_annotated_books()
+        if self.get_date_range:
+            self.get_annotations_date_range()
+        self.emit(self.signal, "inventory complete: %d annotated books" % len(self.annotation_map))
+
+    def find_all_annotated_books(self):
+        '''
+        Find all annotated books in library
+        '''
+        cids = self.cdb.search_getting_ids('formats:EPUB', '')
+        for cid in cids:
+            mi = self.cdb.get_metadata(cid, index_is_id=True)
+            if self.field == 'Comments':
+                if mi.comments:
+                    soup = BeautifulSoup(mi.comments)
+                else:
+                    continue
+            else:
+                raw = mi.get_user_metadata(self.field, False)
+                if raw['#value#']:
+                    soup = BeautifulSoup(raw['#value#'])
+                    if soup.find('div', 'user_annotations') is not None:
+                        self.annotation_map.append(mi.id)
+
+    def get_annotations_date_range(self):
+        '''
+        Find oldest, newest annotation in annotated books
+        initial values of self.oldest, self.newest are reversed to allow update comparisons
+        if no annotations, restore to correct values
+        '''
+        annotations_found = False
+
+        for cid in self.annotation_map:
+            mi = self.cdb.get_metadata(cid, index_is_id=True)
+            if self.field == 'Comments':
+                soup = BeautifulSoup(mi.comments)
+            else:
+                soup = BeautifulSoup(mi.get_user_metadata(self.field, False)['#value#'])
+
+            uas = soup.findAll('div', 'annotation')
+            for ua in uas:
+                annotations_found = True
+                timestamp = float(ua.find('td', 'timestamp')['uts'])
+                if timestamp < self.oldest_annotation:
+                    self.oldest_annotation = timestamp
+                if timestamp > self.newest_annotation:
+                    self.newest_annotation = timestamp
+
+        if not annotations_found:
+            temp = self.newest_annotation
+            self.newest_annotation = self.oldest_annotation
+            self.oldest_annotation = temp
 
 # For testing ConfigWidget, run from command line:
 # cd ~/Documents/calibredev/Marvin_Manager

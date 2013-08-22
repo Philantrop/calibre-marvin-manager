@@ -44,7 +44,6 @@ from calibre.utils.magick.draw import thumbnail
 from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
-from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
     MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
@@ -1063,12 +1062,14 @@ class BookStatusDialog(SizePersistedDialog):
         elif action in ['show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
-                        'show_highlights', 'show_vocabulary']:
+                        'show_vocabulary']:
             self.show_html_dialog(action, row)
         elif action == 'show_collections':
             self.show_view_collections_dialog(row)
         elif action == 'show_global_vocabulary':
             self.show_html_dialog('show_global_vocabulary', row)
+        elif action == 'show_highlights':
+            self.show_annotations(row)
         elif action == 'show_metadata':
             self.show_view_metadata_dialog(row)
         else:
@@ -1212,11 +1213,6 @@ class BookStatusDialog(SizePersistedDialog):
             self.marvin_status_changed)
 
         self._log_location()
-
-        # Instantiate the Annotations database
-        db = AnnotationsDB(self.opts, path=os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'annotations.db'))
-        self.opts.conn = db.connect()
-        self.opts.db = db
 
         self.installed_books = self._generate_booklist()
 
@@ -1509,7 +1505,6 @@ class BookStatusDialog(SizePersistedDialog):
 
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
-
 
     def show_help(self):
         '''
@@ -3058,7 +3053,8 @@ class BookStatusDialog(SizePersistedDialog):
                 cid = book['cid']
                 if cid is not None:
                     if book['has_annotations']:
-                        self._log("row %d has annotations" % row)
+                        self._log("%s (row %d): %d annotations" %
+                                  (repr(book['title']), row, self.tm.get_annotations(row).sort_key))
                         book_id = book['book_id']
                         formatted_annotations = self._get_formatted_annotations(book_id)
 
@@ -3076,7 +3072,7 @@ class BookStatusDialog(SizePersistedDialog):
                                         commit=True)
 
                     else:
-                        self._log("'%s' has no annotations" % book['title'])
+                        self._log("%s has no annotations" % repr(book['title']))
 
             if update_gui:
                 updateCalibreGUIView()
@@ -4610,10 +4606,10 @@ class BookStatusDialog(SizePersistedDialog):
             author = str(self.tm.get_author(row).text())
             book_id = self.tm.get_book_id(row)
             cid = self.tm.get_calibre_id(row)
-            has_annotations = bool(self.tm.get_annotations(row))
-            has_articles = bool(self.tm.get_articles(row))
+            has_annotations = self.tm.get_annotations(row).sort_key
+            has_articles = self.tm.get_articles(row).sort_key
             has_dv_content = bool(self.tm.get_deep_view(row))
-            has_vocabulary = bool(self.tm.get_vocabulary(row))
+            has_vocabulary = self.tm.get_vocabulary(row).sort_key
             last_opened = str(self.tm.get_last_opened(row).text())
             locked = self.tm.get_locked(row).sort_key
             path = self.tm.get_path(row)

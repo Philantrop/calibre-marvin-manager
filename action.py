@@ -19,6 +19,7 @@ from PyQt4.Qt import (Qt, QCursor, QIcon, QMenu, QTimer, QUrl,
 
 from calibre.constants import DEBUG
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
+from calibre.ebooks.BeautifulSoup import BeautifulSoup
 from calibre.gui2 import Application, open_url
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
@@ -27,10 +28,11 @@ from calibre.devices.usbms.driver import debug_print
 from calibre.utils.config import config_dir
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
+from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
     CompileUI, IndexLibrary, MyBlockingBusy, ProgressBar, Struct,
-    get_icon, set_plugin_icon_resources)
+    get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
 
 # The first icon is the plugin icon, referenced by position.
@@ -76,7 +78,8 @@ class MarvinManagerAction(InterfaceAction):
         remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
         '''
         self._log_location(action)
-        if action in ['Delete calibre hashes', 'Delete Marvin hashes', 'Reset column widths']:
+        if action in ['Delete calibre hashes', 'Delete Marvin hashes',
+                      'Nuke annotations', 'Reset column widths']:
             if action == 'Delete Marvin hashes':
                 hash_cache = 'content_hashes.zip'
                 remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
@@ -90,6 +93,8 @@ class MarvinManagerAction(InterfaceAction):
                 self._log("cached epub hashes deleted")
                 # Invalidate the library hash map, as library contents may change before reconnection
                 self.library_scanner.hash_map = None
+            elif action == 'Nuke annotations':
+                self.nuke_annotations()
             elif action == 'Reset column widths':
                 self._log("deleting marvin_library_column_widths")
                 self.prefs.pop('marvin_library_column_widths')
@@ -119,6 +124,10 @@ class MarvinManagerAction(InterfaceAction):
 
         # Build a current opts object
         self.opts = self.init_options()
+        # Instantiate the Annotations database
+        db = AnnotationsDB(self.opts, path=os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'annotations.db'))
+        self.opts.conn = db.connect()
+        self.opts.db = db
 
         # Read the plugin icons and store for potential sharing with the config widget
         icon_resources = self.load_resources(PLUGIN_ICONS)
@@ -148,6 +157,7 @@ class MarvinManagerAction(InterfaceAction):
 
         # Hook exit in case we need to do cleanup
         #atexit.register(self.onexit)
+
 
     def inflate_dialog_resources(self):
         '''
@@ -354,6 +364,105 @@ class MarvinManagerAction(InterfaceAction):
         if command in ['delete_books', 'upload_books']:
             self.marvin_content_updated = True
 
+    def nuke_annotations(self):
+        db = self.gui.current_db
+        id = db.FIELD_MAP['id']
+
+        # Get all eligible custom fields
+        all_custom_fields = db.custom_field_keys()
+        custom_fields = {}
+        for custom_field in all_custom_fields:
+            field_md = db.metadata_for_field(custom_field)
+            if field_md['datatype'] in ['comments']:
+                custom_fields[field_md['name']] = {'field': custom_field,
+                                                        'datatype': field_md['datatype']}
+
+        fields = ['Comments']
+        for cfn in custom_fields:
+            fields.append(cfn)
+        fields.sort()
+
+        # Warn the user that we're going to do it
+        title = 'Remove annotations?'
+        msg = ("<p>All existing annotations will be removed from %s.</p>" %
+               ', '.join(fields) +
+               "<p>Proceed?</p>")
+        d = MessageBox(MessageBox.QUESTION,
+                       title, msg,
+                       show_copy_button=False)
+        if not d.exec_():
+            return
+        self._log_location("QUESTION: %s" % msg)
+
+        # Show progress
+        pb = ProgressBar(parent=self.gui, window_title="Removing annotations", on_top=True)
+        total_books = len(db.data)
+        pb.set_maximum(total_books)
+        pb.set_value(0)
+        pb.set_label('{:^100}'.format("Scanning 0 of %d" % (total_books)))
+        pb.show()
+
+        for i, record in enumerate(db.data.iterall()):
+            mi = db.get_metadata(record[id], index_is_id=True)
+            pb.set_label('{:^100}'.format("Scanning %d of %d" % (i, total_books)))
+
+            # Remove user_annotations from Comments
+            if mi.comments:
+                soup = BeautifulSoup(mi.comments)
+                uas = soup.find('div', 'user_annotations')
+                if uas:
+                    uas.extract()
+
+                # Remove comments_divider from Comments
+                cd = soup.find('div', 'comments_divider')
+                if cd:
+                    cd.extract()
+
+                # Save stripped Comments
+                mi.comments = unicode(soup)
+
+                # Update the record
+                db.set_metadata(record[id], mi, set_title=False, set_authors=False,
+                                commit=True, force_changes=True, notify=True)
+
+            # Removed user_annotations from custom fields
+            for cfn in custom_fields:
+                cf = custom_fields[cfn]['field']
+                if True:
+                    soup = BeautifulSoup(mi.get_user_metadata(cf, False)['#value#'])
+                    uas = soup.findAll('div', 'user_annotations')
+                    if uas:
+                        # Remove user_annotations from originating custom field
+                        for ua in uas:
+                            ua.extract()
+
+                        # Save stripped custom field data
+                        um = mi.metadata_for_field(cf)
+                        stripped = unicode(soup)
+                        if stripped == u'':
+                            stripped = None
+                        um['#value#'] = stripped
+                        mi.set_user_metadata(cf, um)
+
+                        # Update the record
+                        db.set_metadata(record[id], mi, set_title=False, set_authors=False,
+                                        commit=True, force_changes=True, notify=True)
+                else:
+                    um = mi.metadata_for_field(cf)
+                    um['#value#'] = None
+                    mi.set_user_metadata(cf, um)
+                    # Update the record
+                    db.set_metadata(record[id], mi, set_title=False, set_authors=False,
+                                    commit=True, force_changes=True, notify=True)
+
+            pb.increment()
+
+        # Hide the progress bar
+        pb.hide()
+
+        # Update the UI
+        updateCalibreGUIView()
+
     def onexit(self):
         '''
         Called as calibre is exiting.
@@ -500,6 +609,10 @@ class MarvinManagerAction(InterfaceAction):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(marvin_connected)
+
+                action = 'Nuke annotations'
+                ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
+                ac.triggered.connect(partial(self.developer_utilities, action))
 
                 action = 'Reset column widths'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
