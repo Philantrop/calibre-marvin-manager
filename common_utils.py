@@ -8,19 +8,6 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-"""
-import re, os, shutil, sys, tempfile, time, urlparse, zipfile
-from collections import defaultdict
-
-from calibre.constants import iswindows
-from calibre.ebooks.BeautifulSoup import BeautifulSoup
-from calibre.ebooks.metadata import MetaInformation
-from calibre.gui2 import Application
-from calibre.gui2.dialogs.message_box import MessageBox
-from calibre.utils.config import config_dir
-from calibre.utils.ipc import RC
-from calibre.utils.logging import Log
-"""
 import cStringIO, os, re
 
 from collections import defaultdict
@@ -28,8 +15,9 @@ from time import sleep
 
 from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
-from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup
+from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup
 from calibre.gui2 import Application
+from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.utils.config import config_dir
@@ -105,6 +93,45 @@ class Struct(dict):
 
     def __repr__(self):
         return '\n'.join([" %s: %s" % (key, repr(self[key])) for key in sorted(self.keys())])
+
+
+class AnnotationStruct(Struct):
+    """
+    Populate an empty annotation structure with fields for all possible values
+    """
+    def __init__(self):
+        super(AnnotationStruct, self).__init__(
+            annotation_id=None,
+            book_id=None,
+            epubcfi=None,
+            genre=None,
+            highlight_color=None,
+            highlight_text=None,
+            last_modification=None,
+            location=None,
+            location_sort=None,
+            note_text=None,
+            reader=None,
+            )
+
+
+class BookStruct(Struct):
+    """
+    Populate an empty book structure with fields for all possible values
+    """
+    def __init__(self):
+        super(BookStruct, self).__init__(
+            active=None,
+            author=None,
+            author_sort=None,
+            book_id=None,
+            genre='',
+            last_annotation=None,
+            path=None,
+            title=None,
+            title_sort=None,
+            uuid=None
+            )
 
 
 class SizePersistedDialog(QDialog):
@@ -569,6 +596,39 @@ class CompileUI():
 
 '''     Helper functions   '''
 
+def existing_annotations(parent, field, return_all=False):
+    '''
+    Return count of existing annotations, or existence of any
+    '''
+    #import calibre_plugins.marvin_manager.config as cfg
+    debug_print("common_utils:existing_annotations(%s)" % repr(field))
+    annotation_map = []
+    if field:
+        db = parent.opts.gui.current_db
+        id = db.FIELD_MAP['id']
+        for i, record in enumerate(db.data.iterall()):
+            mi = db.get_metadata(record[id], index_is_id=True)
+            if field == 'Comments':
+                if mi.comments:
+                    soup = BeautifulSoup(mi.comments)
+                else:
+                    continue
+            else:
+                soup = BeautifulSoup(mi.get_user_metadata(field, False)['#value#'])
+            if soup.find('div', 'user_annotations') is not None:
+                annotation_map.append(mi.id)
+                if not return_all:
+                    break
+        if return_all:
+            debug_print(" Identified %d annotated books of %d total books" %
+                (len(annotation_map), len(db.data)))
+
+        debug_print(" annotation_map: %s" % repr(annotation_map))
+    else:
+        debug_print(" no active field")
+
+    return annotation_map
+
 
 def get_icon(icon_name):
     '''
@@ -618,6 +678,241 @@ def get_pixmap(icon_name):
         return pixmap
     return None
 
+
+def move_annotations(parent, annotation_map, old_destination_field, new_destination_field,
+                     window_title="Moving annotations"):
+    '''
+    Move annotations from old_destination_field to new_destination_field
+    annotation_map precalculated in thread in config.py
+    '''
+    import calibre_plugins.marvin_manager.config as cfg
+
+    debug_print("common_utils:move_annotations(%s)" % repr(annotation_map))
+    debug_print(" %s -> %s" % (old_destination_field, new_destination_field))
+
+    db = parent.opts.gui.current_db
+    id = db.FIELD_MAP['id']
+
+    # Show progress
+    pb = ProgressBar(parent=parent, window_title=window_title, on_top=True)
+    total_books = len(annotation_map)
+    pb.set_maximum(total_books)
+    pb.set_value(1)
+    pb.set_label('{:^100}'.format('Moving annotations for %d books' % total_books))
+    pb.show()
+
+    transient_db = 'transient'
+
+    # Prepare a new COMMENTS_DIVIDER
+    comments_divider = '<div class="comments_divider"><p style="text-align:center;margin:1em 0 1em 0">{0}</p></div>'.format(
+        cfg.plugin_prefs.get('COMMENTS_DIVIDER', '&middot;  &middot;  &bull;  &middot;  &#x2726;  &middot;  &bull;  &middot; &middot;'))
+
+    for cid in annotation_map:
+        mi = db.get_metadata(cid, index_is_id=True)
+
+        # Comments -> custom
+        if old_destination_field == 'Comments' and new_destination_field.startswith('#'):
+            if mi.comments:
+                old_soup = BeautifulSoup(mi.comments)
+                uas = old_soup.find('div', 'user_annotations')
+                if uas:
+                    # Remove user_annotations from Comments
+                    uas.extract()
+
+                    # Remove comments_divider from Comments
+                    cd = old_soup.find('div', 'comments_divider')
+                    if cd:
+                        cd.extract()
+
+                    # Save stripped Comments
+                    mi.comments = unicode(old_soup)
+
+                    # Capture content
+                    parent.opts.db.capture_content(uas, cid, transient_db)
+
+                    # Regurgitate content with current CSS style
+                    new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+
+                    # Add user_annotations to destination
+                    um = mi.metadata_for_field(new_destination_field)
+                    um['#value#'] = unicode(new_soup)
+                    mi.set_user_metadata(new_destination_field, um)
+
+                    # Update the record with stripped Comments, populated custom field
+                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                    commit=True, force_changes=True, notify=True)
+                    pb.increment()
+
+        # custom -> Comments
+        elif old_destination_field.startswith('#') and new_destination_field == 'Comments':
+            if mi.get_user_metadata(old_destination_field, False)['#value#'] is not None:
+                old_soup = BeautifulSoup(mi.get_user_metadata(old_destination_field, False)['#value#'])
+                uas = old_soup.find('div', 'user_annotations')
+                if uas:
+                    # Remove user_annotations from custom field
+                    uas.extract()
+
+                    # Capture content
+                    parent.opts.db.capture_content(uas, cid, transient_db)
+
+                    # Regurgitate content with current CSS style
+                    new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+
+                    # Save stripped custom field data
+                    um = mi.metadata_for_field(old_destination_field)
+                    um['#value#'] = unicode(old_soup)
+                    mi.set_user_metadata(old_destination_field, um)
+
+                    # Add user_annotations to Comments
+                    if mi.comments is None:
+                        mi.comments = unicode(new_soup)
+                    else:
+                        mi.comments = mi.comments + \
+                                      unicode(comments_divider) + \
+                                      unicode(new_soup)
+
+                    # Update the record with stripped custom field, updated Comments
+                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                    commit=True, force_changes=True, notify=True)
+                    pb.increment()
+
+        # custom -> custom
+        elif old_destination_field.startswith('#') and new_destination_field.startswith('#'):
+
+            if mi.get_user_metadata(old_destination_field, False)['#value#'] is not None:
+                old_soup = BeautifulSoup(mi.get_user_metadata(old_destination_field, False)['#value#'])
+                uas = old_soup.find('div', 'user_annotations')
+                if uas:
+                    # Remove user_annotations from originating custom field
+                    uas.extract()
+
+                    # Capture content
+                    parent.opts.db.capture_content(uas, cid, transient_db)
+
+                    # Regurgitate content with current CSS style
+                    new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+
+                    # Save stripped custom field data
+                    um = mi.metadata_for_field(old_destination_field)
+                    um['#value#'] = unicode(old_soup)
+                    mi.set_user_metadata(old_destination_field, um)
+
+                    # Add new_soup to destination field
+                    um = mi.metadata_for_field(new_destination_field)
+                    um['#value#'] = unicode(new_soup)
+                    mi.set_user_metadata(new_destination_field, um)
+
+                    # Update the record
+                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                    commit=True, force_changes=True, notify=True)
+                    pb.increment()
+
+        # same field -> same field - called from config:configure_appearance()
+        elif (old_destination_field == new_destination_field):
+            pb.set_label('{:^100}'.format('Updating annotations for %d books' % total_books))
+
+            if new_destination_field == 'Comments':
+                if mi.comments:
+                    old_soup = BeautifulSoup(mi.comments)
+                    uas = old_soup.find('div', 'user_annotations')
+                    if uas:
+                        # Remove user_annotations from Comments
+                        uas.extract()
+
+                        # Remove comments_divider from Comments
+                        cd = old_soup.find('div', 'comments_divider')
+                        if cd:
+                            cd.extract()
+
+                        # Save stripped Comments
+                        mi.comments = unicode(old_soup)
+
+                        # Capture content
+                        parent.opts.db.capture_content(uas, cid, transient_db)
+
+                        # Regurgitate content with current CSS style
+                        new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+
+                        # Add user_annotations to Comments
+                        if mi.comments is None:
+                            mi.comments = unicode(new_soup)
+                        else:
+                            mi.comments = mi.comments + \
+                                          unicode(comments_divider) + \
+                                          unicode(new_soup)
+
+                        # Update the record with stripped custom field, updated Comments
+                        db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                        commit=True, force_changes=True, notify=True)
+                        pb.increment()
+
+            else:
+                # Update custom field
+                old_soup = BeautifulSoup(mi.get_user_metadata(old_destination_field, False)['#value#'])
+                uas = old_soup.find('div', 'user_annotations')
+                if uas:
+                    # Remove user_annotations from originating custom field
+                    uas.extract()
+
+                    # Capture content
+                    parent.opts.db.capture_content(uas, cid, transient_db)
+
+                    # Regurgitate content with current CSS style
+                    new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+
+                    # Add stripped old_soup plus new_soup to destination field
+                    um = mi.metadata_for_field(new_destination_field)
+                    um['#value#'] = unicode(old_soup) + unicode(new_soup)
+                    mi.set_user_metadata(new_destination_field, um)
+
+                    # Update the record
+                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                    commit=True, force_changes=True, notify=True)
+                    pb.increment()
+
+    # Hide the progress bar
+    pb.hide()
+
+    # Get the eligible custom fields
+    all_custom_fields = db.custom_field_keys()
+    custom_fields = {}
+    for cf in all_custom_fields:
+        field_md = db.metadata_for_field(cf)
+        if field_md['datatype'] in ['comments']:
+            custom_fields[field_md['name']] = {'field': cf,
+                                               'datatype': field_md['datatype']}
+
+    # Change field value to friendly name
+    if old_destination_field.startswith('#'):
+        for cf in custom_fields:
+            if custom_fields[cf]['field'] == old_destination_field:
+                old_destination_field = cf
+                break
+    if new_destination_field.startswith('#'):
+        for cf in custom_fields:
+            if custom_fields[cf]['field'] == new_destination_field:
+                new_destination_field = cf
+                break
+
+    # Report what happened
+    if old_destination_field == new_destination_field:
+        msg = "<p>Annotations updated to new appearance settings for %d {0}.</p>" % len(annotation_map)
+    else:
+        msg = ("<p>Annotations for %d {0} moved from <b>%s</b> to <b>%s</b>.</p>" %
+                (len(annotation_map), old_destination_field, new_destination_field))
+    if len(annotation_map) == 1:
+        msg = msg.format('book')
+    else:
+        msg = msg.format('books')
+    MessageBox(MessageBox.INFO,
+               '',
+               msg=msg,
+               show_copy_button=False,
+               parent=parent.gui).exec_()
+    debug_print(" INFO: %s" % msg)
+
+    # Update the UI
+    updateCalibreGUIView()
 
 def inventory_controls(ui, dump_controls=False):
     '''

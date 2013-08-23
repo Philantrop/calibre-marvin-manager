@@ -17,7 +17,7 @@ from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
 from PyQt4.Qt import (QAction, QApplication, QDialogButtonBox, QIcon, QKeySequence,
-                      QPalette,
+                      QPalette, QSize, QSizePolicy,
                       pyqtSignal)
 from PyQt4.QtWebKit import QWebPage, QWebView
 
@@ -76,7 +76,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
     def esc(self, *args):
         self.close()
 
-    def initialize(self, parent, content, book_id, installed_book, marvin_db_path):
+    def initialize(self, parent, content, book_id, installed_book, marvin_db_path, use_qwv=True):
         '''
         __init__ is called on SizePersistedDialog()
         '''
@@ -107,20 +107,25 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         # Set the titles
         self.setWindowTitle(content['title'])
         self.html_gb.setTitle(content['group_box_title'])
+        if content['toolTip']:
+            self.html_gb.setToolTip(content['toolTip'])
 
         # Set the bg color of the content to the dialog bg color
         bgcolor = self.palette().color(QPalette.Background)
         palette = QPalette()
         palette.setColor(QPalette.Base, bgcolor)
 
+        #self._log(repr(content['html_content']))
+
         # Initialize the window content
-        if True:
+        if use_qwv:
             # Add a QWebView to layout
             self.html_wv = QWebView()
             self.html_wv.setHtml(content['html_content'])
+            self.html_wv.sizeHint = self.wv_sizeHint
+            self.html_wv.setSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.MinimumExpanding)
             self.html_wv.page().setLinkDelegationPolicy(QWebPage.DelegateAllLinks)
             self.html_wv.linkClicked.connect(self.link_clicked)
-            #self.html_wv.setPalette(palette)
 
             self.html_gb_vl.addWidget(self.html_wv)
             self.html_tb.setVisible(False)
@@ -129,21 +134,11 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
             self.html_tb.setText(content['html_content'])
             #self.html_tb.setPalette(palette)
 
-        # Set or hide the footer, footer_spacer
+        # Set or hide the footer
         if content['footer']:
             self.footer.setText(content['footer'])
         else:
             self.footer.setVisible(False)
-
-        # Add Refresh button if enabled
-        if content['refresh']:
-            self.refresh_method = content['refresh']['method']
-            self.refresh_button = self.bb.addButton("Refresh '%s'" % content['refresh']['name'],
-                                                    self.bb.ActionRole)
-            self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                              'icons',
-                                              'from_marvin.png')))
-            self.refresh_button.setObjectName('refresh_button')
 
         # Add Copy to Clipboard button
         self.ctc_button = self.bb.addButton('&Copy to clipboard',
@@ -156,6 +151,16 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.addAction(self.copy_action)
         self.copy_action.setShortcuts(QKeySequence.Copy)
         self.copy_action.triggered.connect(self.copy_to_clipboard)
+
+        # Add Refresh button if enabled
+        if content['refresh']:
+            self.refresh_method = content['refresh']['method']
+            self.refresh_button = self.bb.addButton("Refresh '%s'" % content['refresh']['name'],
+                                                    self.bb.ActionRole)
+            self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                              'icons',
+                                              'from_marvin.png')))
+            self.refresh_button.setObjectName('refresh_button')
 
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)
@@ -185,9 +190,11 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         If enabled, pass window content to custom column
         '''
-        func = getattr(self.parent, self.refresh_method, None)
-        if func is not None:
-            func()
+        refresh = getattr(self.parent, self.refresh_method, None)
+        if refresh is not None:
+            refresh()
+            self.refresh_button.setText('Refreshed')
+            self.refresh_button.setIcon(QIcon(I('ok.png')))
         else:
             self._log_location("ERROR: Can't execute '%s'" % self.refresh_method)
 
@@ -197,6 +204,12 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self._log_location(command)
         self.stored_command = command
         self.close()
+
+    def wv_sizeHint(self):
+        '''
+        QWebVew apparently has a default size of 800, 600
+        '''
+        return QSize(400,200)
 
     def _log(self, msg=None):
         '''

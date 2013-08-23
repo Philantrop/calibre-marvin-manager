@@ -7,7 +7,8 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import base64, hashlib, importlib, inspect, json, locale, operator, os, re, sqlite3, sys, time
+import base64, cStringIO, hashlib, importlib, inspect, json
+import locale, operator, os, re, sqlite3, sys, time
 
 from collections import OrderedDict
 from datetime import datetime
@@ -44,7 +45,7 @@ from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, Book, InventoryCollections,
+    AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
     MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
     get_icon, updateCalibreGUIView)
 
@@ -847,8 +848,10 @@ class BookStatusDialog(SizePersistedDialog):
     CIRCLE_SLASH = u"\u20E0"
     DEFAULT_REFRESH_TEXT = 'Refresh custom columns'
     DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom columns in calibre.<br/>Custom column mappings assigned in Customization dialog.</p>"
+    HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
+    MAX_ELEMENT_DEPTH = 6
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -1048,7 +1051,7 @@ class BookStatusDialog(SizePersistedDialog):
         elif action in ['export_metadata', 'import_metadata']:
             self._update_metadata(action)
         elif action == 'fetch_annotations':
-            self._fetch_annotations()
+            self._fetch_annotations(report_results=True)
         elif action == 'generate_deep_view':
             self._generate_deep_view()
         elif action == 'manage_collections':
@@ -1059,12 +1062,14 @@ class BookStatusDialog(SizePersistedDialog):
         elif action in ['show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
-                        'show_highlights', 'show_vocabulary']:
+                        'show_vocabulary']:
             self.show_html_dialog(action, row)
         elif action == 'show_collections':
             self.show_view_collections_dialog(row)
         elif action == 'show_global_vocabulary':
             self.show_html_dialog('show_global_vocabulary', row)
+        elif action == 'show_highlights':
+            self.show_annotations(row)
         elif action == 'show_metadata':
             self.show_view_metadata_dialog(row)
         else:
@@ -1087,7 +1092,6 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         asset_actions = {
-            self.ANNOTATIONS_COL: 'show_highlights',
             self.ARTICLES_COL: 'show_deep_view_articles',
             self.DEEP_VIEW_COL: 'show_deep_view_by_importance',
             self.VOCABULARY_COL: 'show_vocabulary'
@@ -1098,9 +1102,13 @@ class BookStatusDialog(SizePersistedDialog):
 
         if column in [self.TITLE_COL, self.AUTHOR_COL]:
             self.show_view_metadata_dialog(row)
-        elif column in [self.ANNOTATIONS_COL,
-                        self.ARTICLES_COL, self.VOCABULARY_COL]:
+
+        elif column in [self.ARTICLES_COL, self.VOCABULARY_COL]:
             self.show_html_dialog(asset_actions[column], row)
+
+        elif column == self.ANNOTATIONS_COL:
+            self.show_annotations(row)
+
         elif column == self.DEEP_VIEW_COL:
             # If no DV content, generate DV content, else show it
             has_dv_content = self._selected_books()[row]['has_dv_content']
@@ -1111,15 +1119,19 @@ class BookStatusDialog(SizePersistedDialog):
 
         elif column == self.COLLECTIONS_COL:
             self.show_view_collections_dialog(row)
+
         elif column in [self.FLAGS_COL]:
             title = "Flag options"
             msg = "<p>Right-click in the Flags column for flag management options.</p>"
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
+
         elif column == self.LOCKED_COL:
             self._toggle_locked_status(row)
+
         elif column == self.WORD_COUNT_COL:
             self._calculate_word_count()
+
         else:
             self._log("no double-click handler for %s" % self.LIBRARY_HEADER[column])
 
@@ -1345,6 +1357,8 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
 
+        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+
         enabled = []
         for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
                     'progress_field_comboBox', 'word_count_field_comboBox']:
@@ -1385,6 +1399,23 @@ class BookStatusDialog(SizePersistedDialog):
 
         updateCalibreGUIView()
         self._busy_operation_teardown()
+
+        # Restore selection
+        if self.saved_selection_region:
+            for rect in self.saved_selection_region.rects():
+                self.tv.setSelection(rect, QItemSelectionModel.Select)
+            self.saved_selection_region = None
+
+        # Report results
+        title = 'Custom columns refreshed'
+        refreshed = ''
+        for col in enabled[0:-1]:
+            refreshed += '<b>%s</b>, ' % col
+        refreshed += '<b>%s</b> ' % enabled[-1]
+        msg = "<p>%s refreshed for %s.</p>" % (refreshed,
+                                       "1 book" if len(rows_to_refresh) == 1 else
+                                       "%d books" % len(rows_to_refresh))
+        MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def show_add_collections_dialog(self):
         '''
@@ -1431,6 +1462,69 @@ class BookStatusDialog(SizePersistedDialog):
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
+    def show_annotations(self, row):
+        '''
+        '''
+        HTML_TEMPLATE = (
+            '<?xml version=\'1.0\' encoding=\'utf-8\'?>' +
+            '<html xmlns="http://www.w3.org/1999/xhtml">' +
+            '<head>' +
+            '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>' +
+            '<title>Annotations</title>' +
+            '</head>' +
+            '<body>{0}</body>' +
+            '</html>'
+            )
+
+        book_id = self._selected_book_id(row)
+        title = self.installed_books[book_id].title
+        self._log_location(title)
+
+        refresh = None
+
+        if not self.installed_books[book_id].highlights:
+            self._log("No annotations available for %s" % repr(title))
+            return
+
+        header = None
+        group_box_title = 'Annotations'
+        annotations = self._get_formatted_annotations(book_id)
+
+        footer = None
+        afn = self.parent.prefs.get('annotations_field_comboBox', None)
+        if afn:
+            refresh = {
+                'name': afn,
+                'method': "_fetch_annotations"
+                }
+
+        content_dict = {
+            'footer': footer,
+            'group_box_title': group_box_title,
+            'header': header,
+            'html_content': HTML_TEMPLATE.format(annotations),
+            'title': title,
+            'toolTip': '<p>Annotations appearance may be fine-tuned in the <b>Customize plugin…</b> dialog</p>',
+            'refresh': refresh
+            }
+
+        klass = os.path.join(dialog_resources_path, 'html_viewer.py')
+        if os.path.exists(klass):
+            #self._log("importing metadata dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('html_viewer')
+            sys.path.remove(dialog_resources_path)
+            dlg = this_dc.HTMLViewerDialog(self, 'html_viewer')
+            dlg.initialize(self,
+                           content_dict,
+                           book_id,
+                           self.installed_books[book_id],
+                           self.parent.connected_device.local_db_path)
+            dlg.exec_()
+
+        else:
+            self._log("ERROR: Can't import from '%s'" % klass)
+
     def show_help(self):
         '''
         Display help file
@@ -1440,7 +1534,7 @@ class BookStatusDialog(SizePersistedDialog):
     def show_html_dialog(self, action, row):
         '''
         Display assets associated with book
-        Articles, Annotations, Deep View, Vocabulary
+        Articles, Deep View, Vocabulary
         profile = {'title': <dlg title>,
                    'group_box_title':<gb title>,
                    'header': <header text>,
@@ -1571,7 +1665,6 @@ class BookStatusDialog(SizePersistedDialog):
                 else:
                     return
 
-
         elif action == 'show_global_vocabulary':
             command_name = "command"
             command_type = "GetGlobalVocabularyHTML"
@@ -1583,33 +1676,6 @@ class BookStatusDialog(SizePersistedDialog):
             group_box_title = "Vocabulary words by book"
             default_content = "<p>No Global vocabulary list returned by Marvin.</p>"
             footer = None
-
-        elif action == 'show_highlights':
-            if not self.installed_books[book_id].highlights:
-                return
-
-            command_name = "command"
-            command_type = "GetAnnotationsHTML"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
-            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
-            update_soup.command.insert(0, parameters_tag)
-
-            header = None
-            group_box_title = 'Annotations'
-            if self.installed_books[book_id].highlights:
-                default_content = '\n'.join(self.installed_books[book_id].highlights)
-            else:
-                default_content = "<p>No annotations</p>"
-            footer = (
-                '<p>For finer control of annotation layout and formatting, consider installing the <a href="http://www.mobileread.com/forums/showthread.php?t=205062" target="_blank">' +
-                'Annotations plugin</a>.</p>')
-            afn = self.parent.prefs.get('annotations_field_comboBox', None)
-            if afn:
-                refresh = {
-                    'name': afn,
-                    'method': "_fetch_annotations"
-                    }
 
         elif action == 'show_vocabulary':
             if not self.installed_books[book_id].vocabulary:
@@ -1660,6 +1726,7 @@ class BookStatusDialog(SizePersistedDialog):
             'header': header,
             'html_content': response,
             'title': title,
+            'toolTip': None,
             'refresh': refresh
             }
 
@@ -1676,7 +1743,8 @@ class BookStatusDialog(SizePersistedDialog):
                            content_dict,
                            book_id,
                            self.installed_books[book_id],
-                           self.parent.connected_device.local_db_path)
+                           self.parent.connected_device.local_db_path
+                           )
             dlg.exec_()
 
         else:
@@ -2994,46 +3062,22 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
-    def _fetch_annotations(self, update_gui=True):
+    def _fetch_annotations(self, update_gui=True, report_results=False):
         '''
-        A lightweight version of fetch annotations
-        Request HTML annotations from Marvin, add to custom column specified in config
+        Retrieve formatted annotations
         '''
         lookup = self.parent.prefs.get('annotations_field_lookup', None)
         if lookup:
             self._log_location()
+            updated = 0
             for row, book in self._selected_books().items():
                 cid = book['cid']
                 if cid is not None:
                     if book['has_annotations']:
-                        self._log("row %d has annotations" % row)
+                        self._log("%s (row %d): %d annotations" %
+                                  (repr(book['title']), row, self.tm.get_annotations(row).sort_key))
                         book_id = book['book_id']
-
-                        # Build the command
-                        command_name = "command"
-                        command_type = "GetAnnotationsHTML"
-                        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                            command_type, time.mktime(time.localtime())))
-                        parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
-                        update_soup.command.insert(0, parameters_tag)
-
-                        results = self._issue_command(command_name, update_soup,
-                                                      get_response="html_response.html",
-                                                      update_local_db=False)
-
-                        if results['code']:
-                            self._busy_operation_teardown()
-                            return self._show_command_error("Fetch annotations", results)
-                        else:
-                            # <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-                            response = results['response']
-                            if re.match(self.UTF_8_BOM, response):
-                                u_response = UnicodeDammit(response).unicode
-                                response = self._inject_css(u_response).encode('utf-8')
-                                response = "<?xml version='1.0' encoding='utf-8'?>" + response
-
-                        if not response:
-                            response = '\n'.join(self.installed_books[book_id].highlights)
+                        formatted_annotations = self._get_formatted_annotations(book_id)
 
                         # Apply to custom column
                         # Get the current value from the lookup field
@@ -3043,16 +3087,22 @@ class BookStatusDialog(SizePersistedDialog):
                         #self._log("Updating old value: %s" % repr(old_value))
 
                         um = mi.metadata_for_field(lookup)
-                        um['#value#'] = response
+                        um['#value#'] = formatted_annotations
                         mi.set_user_metadata(lookup, um)
                         db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                         commit=True)
-
+                        updated += 1
                     else:
-                        self._log("'%s' has no annotations" % book['title'])
+                        self._log("%s has no annotations" % repr(book['title']))
 
             if update_gui:
                 updateCalibreGUIView()
+
+            if report_results:
+                title = 'Annotations refreshed'
+                msg = ("<p>Annotations refreshed for %s.</p>" %
+                    ("1 book" if updated == 1 else "%d books" % updated))
+                MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def _fetch_deep_view_status(self, book_ids):
         '''
@@ -3386,6 +3436,23 @@ class BookStatusDialog(SizePersistedDialog):
                 updated = self.CHECKMARK if dpv_status[book_id] else ''
                 self.tm.set_deep_view(row, updated)
 
+    def _generate_interior_location_sort(self, xpath):
+        try:
+            match = re.match(r'\/x:html\[1\]\/x:body\[1\]\/x:div\[1\]\/x:div\[1\]\/x:(.*)\/text.*$', xpath)
+            steps = len(match.group(1).split('/x:'))
+            full_ladder = []
+            for item in match.group(1).split('/x:'):
+                full_ladder.append(int(re.match(r'.*\[(\d+)\]', item).group(1)))
+            if len(full_ladder) < self.MAX_ELEMENT_DEPTH:
+                for x in range(steps, self.MAX_ELEMENT_DEPTH):
+                    full_ladder.append(0)
+            else:
+                full_ladder = full_ladder[:self.MAX_ELEMENT_DEPTH]
+            fmt_str = '.'.join(["%04d"] * self.MAX_ELEMENT_DEPTH)
+            return fmt_str % tuple(full_ladder)
+        except:
+            return False
+
     def _generate_marvin_hash_map(self, installed_books):
         '''
         Generate a map of book_ids to hash values
@@ -3484,6 +3551,211 @@ class BookStatusDialog(SizePersistedDialog):
                 if type(lib_collections) is not list:
                     lib_collections = [lib_collections]
             return sorted(lib_collections, key=sort_key)
+
+    def _get_epub_toc(self, path, prepend_title=None):
+        '''
+        Given a Marvin path, return the epub TOC indexed by section
+        '''
+        toc = None
+        fpath = path
+
+        # Find the OPF file in the zipped ePub
+        zfo = cStringIO.StringIO(self.ios.read(fpath, mode='rb'))
+        try:
+            zf = ZipFile(zfo, 'r')
+            container = etree.fromstring(zf.read('META-INF/container.xml'))
+            opf_tree = etree.fromstring(zf.read(container.xpath('.//*[local-name()="rootfile"]')[0].get('full-path')))
+
+            spine = opf_tree.xpath('.//*[local-name()="spine"]')[0]
+            ncx_fs = spine.get('toc')
+            manifest = opf_tree.xpath('.//*[local-name()="manifest"]')[0]
+            ncx = manifest.find('.//*[@id="%s"]' % ncx_fs).get('href')
+
+            # Find the ncx file
+            fnames = zf.namelist()
+            _ncx = [x for x in fnames if ncx in x][0]
+            ncx_tree = etree.fromstring(zf.read(_ncx))
+        except:
+            import traceback
+            self._log_location()
+            self._log(" unable to unzip '%s'" % fpath)
+            self._log(traceback.format_exc())
+            return toc
+
+        # fpath points to epub (zipped or unzipped dir)
+        # spine, ncx_tree populated
+        try:
+            toc = OrderedDict()
+            # 1. capture idrefs from spine
+            for i, el in enumerate(spine):
+                toc[str(i)] = el.get('idref')
+
+            # 2. Resolve <spine> idrefs to <manifest> hrefs
+            for el in toc:
+                toc[el] = manifest.find('.//*[@id="%s"]' % toc[el]).get('href')
+
+            # 3. Build a dict of src:toc_entry
+            src_map = OrderedDict()
+            navMap = ncx_tree.xpath('.//*[local-name()="navMap"]')[0]
+            for navPoint in navMap:
+                # Get the first-level entry
+                src = re.sub(r'#.*$', '', navPoint.xpath('.//*[local-name()="content"]')[0].get('src'))
+                toc_entry = navPoint.xpath('.//*[local-name()="text"]')[0].text
+                src_map[src] = toc_entry
+
+                # Get any nested navPoints
+                nested_navPts = navPoint.xpath('.//*[local-name()="navPoint"]')
+                for nnp in nested_navPts:
+                    src = re.sub(r'#.*$', '', nnp.xpath('.//*[local-name()="content"]')[0].get('src'))
+                    toc_entry = nnp.xpath('.//*[local-name()="text"]')[0].text
+                    src_map[src] = toc_entry
+
+            # Resolve src paths to toc_entry
+            for section in toc:
+                if toc[section] in src_map:
+                    if prepend_title:
+                        toc[section] = "%s &middot; %s" % (prepend_title,  src_map[toc[section]])
+                    else:
+                        toc[section] = src_map[toc[section]]
+                else:
+                    toc[section] = None
+
+            # 5. Fill in the gaps
+            current_toc_entry = None
+            for section in toc:
+                if toc[section] is None:
+                    toc[section] = current_toc_entry
+                else:
+                    current_toc_entry = toc[section]
+        except:
+            import traceback
+            self._log_location()
+            self._log("{:~^80}".format(" error parsing '%s' " % fpath))
+            self._log(traceback.format_exc())
+            self._log("{:~^80}".format(" end traceback "))
+
+        return toc
+
+    def _get_formatted_annotations(self, book_id):
+        '''
+        '''
+        # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
+        local_db_path = getattr(self.parent.connected_device, "local_db_path")
+        #self._log("local_db_path: %s" % local_db_path)
+
+        template = "{0}_books"
+        books_db = template.format(re.sub('\W', '_', self.ios.device_name))
+        #self._log("books_db: %s" % books_db)
+
+        # Create the books table as needed (#272)
+        self.opts.db.create_books_table(books_db)
+
+        # Populate a BookStuct
+        b_mi = BookStruct()
+        b_mi.active = True
+        b_mi.author = ', '.join(self.installed_books[book_id].author)
+        b_mi.author_sort = self.installed_books[book_id].author_sort
+        b_mi.book_id = book_id
+        b_mi.title = self.installed_books[book_id].title
+        b_mi.title_sort = self.installed_books[book_id].title_sort
+        b_mi.uuid = self.installed_books[book_id].uuid
+
+        # Add to books_db (#330)
+        self.opts.db.add_to_books_db(books_db, b_mi)
+
+        # Get the toc_entries (#344)
+        path = '/'.join(['/Documents', self.installed_books[book_id].path])
+        self.tocs = {}
+        self.tocs[book_id] = self._get_epub_toc(path)
+
+        # Update the timestamp (#347)
+        self.opts.db.update_timestamp(books_db)
+        self.opts.db.commit()
+
+        # ~~~~~~~~~~ Emulating get_active_annotations() ~~~~~~~~~~
+        template = "{0}_annotations"
+        cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
+        self._log("cached_db: %s" % cached_db)
+
+        # Create annotations table as needed (#153)
+        self.opts.db.create_annotations_table(cached_db)
+
+        # Fetch the annotations (#158)
+        con = sqlite3.connect(local_db_path)
+
+        with con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            cur.execute('''
+                           SELECT * FROM Highlights
+                           WHERE BookId = '{0}'
+                           ORDER BY NoteDateTime
+                        '''.format(book_id))
+            rows = cur.fetchall()
+            for row in rows:
+                # Sanitize text, note to unicode
+                highlight_text = re.sub('\xa0', ' ', row[b'Text'])
+                highlight_text = UnicodeDammit(highlight_text).unicode
+                highlight_text = highlight_text.rstrip('\n').split('\n')
+                while highlight_text.count(''):
+                    highlight_text.remove('')
+                highlight_text = [line.strip() for line in highlight_text]
+
+                note_text = None
+                if row[b'Note']:
+                    note_text = UnicodeDammit(row[b'Note']).unicode
+                    note_text = note_text.rstrip('\n').split('\n')[0]
+
+                # Populate an AnnotationStruct
+                a_mi = AnnotationStruct()
+                a_mi.annotation_id = row[b'UUID']
+                a_mi.book_id = book_id
+                a_mi.highlight_color = self.HIGHLIGHT_COLORS[row[b'Colour']]
+                a_mi.highlight_text = '\n'.join(highlight_text)
+                a_mi.last_modification = row[b'NoteDateTime']
+
+                section = str(int(row[b'Section']) - 1)
+                try:
+                    a_mi.location = self.tocs[book_id][section]
+                except:
+                    a_mi.location = "Section %s" % row[b'Section']
+
+                a_mi.note_text = note_text
+
+                # If empty highlight_text and empty note_text, not a useful annotation
+                if not highlight_text and not note_text:
+                    continue
+
+                # Generate location_sort
+                interior = self._generate_interior_location_sort(row[b'StartXPath'])
+                if not interior:
+                    self._log("Marvin: unable to parse xpath:")
+                    self._log(row[b'StartXPath'])
+                    self._log(a_mi)
+                    continue
+
+                a_mi.location_sort = "%04d.%s.%04d" % (
+                    int(row[b'Section']),
+                    interior,
+                    int(row[b'StartOffset']))
+
+                # Add annotation
+                self.opts.db.add_to_annotations_db(cached_db, a_mi)
+
+                # Update last_annotation in books_db
+                self.opts.db.update_book_last_annotation(books_db, row[b'NoteDateTime'], book_id)
+
+            # Update the timestamp
+            self.opts.db.update_timestamp(cached_db)
+            self.opts.db.commit()
+
+        book_mi = BookStruct()
+        book_mi.book_id = book_id
+        book_mi.reader_app = 'Marvin'
+        book_mi.title = self.installed_books[book_id].title
+        formatted_annotations = self.opts.db.annotations_to_html(cached_db, book_mi)
+
+        return formatted_annotations
 
     def _get_marvin_collections(self, book_id):
         return sorted(self.installed_books[book_id].device_collections, key=sort_key)
@@ -4361,10 +4633,10 @@ class BookStatusDialog(SizePersistedDialog):
             author = str(self.tm.get_author(row).text())
             book_id = self.tm.get_book_id(row)
             cid = self.tm.get_calibre_id(row)
-            has_annotations = bool(self.tm.get_annotations(row))
-            has_articles = bool(self.tm.get_articles(row))
+            has_annotations = self.tm.get_annotations(row).sort_key
+            has_articles = self.tm.get_articles(row).sort_key
             has_dv_content = bool(self.tm.get_deep_view(row))
-            has_vocabulary = bool(self.tm.get_vocabulary(row))
+            has_vocabulary = self.tm.get_vocabulary(row).sort_key
             last_opened = str(self.tm.get_last_opened(row).text())
             locked = self.tm.get_locked(row).sort_key
             path = self.tm.get_path(row)
