@@ -213,7 +213,7 @@ class ConfigWidget(QWidget):
         self.cfg_annotations_appearance_toolbutton.setIcon(self.annotations_icon)
         self.cfg_annotations_appearance_toolbutton.clicked.connect(self.configure_appearance)
         self.cfg_css_options_qgl.addWidget(self.cfg_annotations_appearance_toolbutton, current_row, 0)
-        self.cfg_annotations_label = ClickableQLabel("Annotations appearance")
+        self.cfg_annotations_label = ClickableQLabel("Annotations")
         self.connect(self.cfg_annotations_label, SIGNAL('clicked()'), self.configure_appearance)
         self.cfg_css_options_qgl.addWidget(self.cfg_annotations_label, current_row, 1)
         current_row += 1
@@ -224,7 +224,7 @@ class ConfigWidget(QWidget):
         self.cfg_css_editor_toolbutton.setIcon(self.css_editor_icon)
         self.cfg_css_editor_toolbutton.clicked.connect(self.edit_css)
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_toolbutton, current_row, 0)
-        self.cfg_css_editor_label = ClickableQLabel("Articles, Deep View, Vocabulary appearance")
+        self.cfg_css_editor_label = ClickableQLabel("Articles, Deep View, Vocabulary")
         self.connect(self.cfg_css_editor_label, SIGNAL('clicked()'), self.edit_css)
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_label, current_row, 1)
 
