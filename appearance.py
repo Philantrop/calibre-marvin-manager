@@ -531,10 +531,6 @@ class AnnotationsAppearance(SizePersistedDialog):
         path = os.path.join(self.parent.resources_path, 'help/timestamp_formats.html')
         open_url(QUrl.fromLocalFile(path))
 
-#         hv = HelpView(self, self.icon, self.prefs,
-#             html=get_resources('help/timestamp_formats.html'), title="Timestamp formats")
-#         hv.show()
-
     def sizeHint(self):
         return QtCore.QSize(600, 200)
 

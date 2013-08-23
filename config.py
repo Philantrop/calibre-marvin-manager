@@ -199,6 +199,36 @@ class ConfigWidget(QWidget):
         spacerItem1 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
         self.cfg_custom_fields_qgl.addItem(spacerItem1)
 
+        # ~~~~~~~~ Create the CSS group box ~~~~~~~~
+        self.cfg_css_options_gb = QGroupBox(self)
+        self.cfg_css_options_gb.setTitle('CSS')
+        self.l.addWidget(self.cfg_css_options_gb)
+        self.cfg_css_options_qgl = QGridLayout(self.cfg_css_options_gb)
+
+        current_row = 0
+
+        # Annotations appearance
+        self.annotations_icon = QIcon(os.path.join(self.resources_path, 'icons', 'annotations_hiliter.png'))
+        self.cfg_annotations_appearance_toolbutton = QToolButton()
+        self.cfg_annotations_appearance_toolbutton.setIcon(self.annotations_icon)
+        self.cfg_annotations_appearance_toolbutton.clicked.connect(self.configure_appearance)
+        self.cfg_css_options_qgl.addWidget(self.cfg_annotations_appearance_toolbutton, current_row, 0)
+        self.cfg_annotations_label = ClickableQLabel("Annotations appearance")
+        self.connect(self.cfg_annotations_label, SIGNAL('clicked()'), self.configure_appearance)
+        self.cfg_css_options_qgl.addWidget(self.cfg_annotations_label, current_row, 1)
+        current_row += 1
+
+        # Injected CSS
+        self.css_editor_icon = QIcon(I('format-text-heading.png'))
+        self.cfg_css_editor_toolbutton = QToolButton()
+        self.cfg_css_editor_toolbutton.setIcon(self.css_editor_icon)
+        self.cfg_css_editor_toolbutton.clicked.connect(self.edit_css)
+        self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_toolbutton, current_row, 0)
+        self.cfg_css_editor_label = ClickableQLabel("Articles, Deep View, Vocabulary appearance")
+        self.connect(self.cfg_css_editor_label, SIGNAL('clicked()'), self.edit_css)
+        self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_label, current_row, 1)
+
+
         # ~~~~~~~~ Create the General options group box ~~~~~~~~
         self.cfg_runtime_options_gb = QGroupBox(self)
         self.cfg_runtime_options_gb.setTitle('General options')
@@ -221,39 +251,6 @@ class ConfigWidget(QWidget):
         self.debug_libimobiledevice_checkbox.setObjectName('debug_libimobiledevice_checkbox')
         self.debug_libimobiledevice_checkbox.setToolTip('Print libiMobileDevice diagnostic messages to console')
         self.cfg_runtime_options_qvl.addWidget(self.debug_libimobiledevice_checkbox)
-
-        # Horizontal line
-        self.cfg_hl_1 = QFrame(self.cfg_custom_fields_gb)
-        self.cfg_hl_1.setFrameShape(QFrame.HLine)
-        self.cfg_hl_1.setFrameShadow(QFrame.Sunken)
-        self.cfg_hl_1.setObjectName("cfg_hl_1")
-        self.cfg_runtime_options_qvl.addWidget(self.cfg_hl_1)
-
-        # ~~~~~~~~ Annotations appearance ~~~~~~~~
-        self.annotations_icon = QIcon(os.path.join(self.resources_path, 'icons', 'annotations_hiliter.png'))
-        self.cfg_annotations_appearance_pushbutton = QPushButton(self.annotations_icon, "Annotations appearance")
-        self.cfg_annotations_appearance_pushbutton.clicked.connect(self.configure_appearance)
-        self.cfg_runtime_options_qvl.addWidget(self.cfg_annotations_appearance_pushbutton)
-
-        # ~~~~~~~~ Injected CSS ~~~~~~~~
-        self.cfg_css_label = QLabel("CSS for Deep View and Vocabulary")
-        self.cfg_runtime_options_qvl.addWidget(self.cfg_css_label)
-
-        self.cfg_css_pte = QPlainTextEdit("CSS goes here")
-        self.cfg_css_pte.setToolTip("CSS applied to Annotations, Deep View content and Vocabulary retrieved from Marvin")
-        self.cfg_runtime_options_qvl.addWidget(self.cfg_css_pte)
-        if isosx:
-            FONT = QFont('Monaco', 11)
-        elif iswindows:
-            FONT = QFont('Lucida Console', 9)
-        elif islinux:
-            FONT = QFont('Monospace', 9)
-            FONT.setStyleHint(QFont.TypeWriter)
-        self.cfg_css_pte.setFont(FONT)
-
-        # Tab width
-        width = QFontMetrics(FONT).width(" ") * 4
-        self.cfg_css_pte.setTabStopWidth(width)
 
         # Group box spacer
         spacerItem2 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
@@ -305,9 +302,6 @@ class ConfigWidget(QWidget):
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
-
-        # Restore/init the stored CSS
-        self.cfg_css_pte.setPlainText(self.prefs.get('injected_css', ''))
 
         # Hook changes to diagnostic checkboxes
         self.debug_plugin_checkbox.stateChanged.connect(self.set_restart_required)
@@ -375,6 +369,20 @@ class ConfigWidget(QWidget):
 
                 move_annotations(self, self.annotated_books_scanner.annotation_map,
                     field, field, window_title="Updating appearance")
+
+    def edit_css(self):
+        '''
+        '''
+        self._log_location()
+        from calibre_plugins.marvin_manager.book_status import dialog_resources_path
+        klass = os.path.join(dialog_resources_path, 'css_editor.py')
+        if os.path.exists(klass):
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('css_editor')
+            sys.path.remove(dialog_resources_path)
+            dlg = this_dc.CSSEditorDialog(self, 'css_editor')
+            dlg.initialize(self)
+            dlg.exec_()
 
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
@@ -606,9 +614,6 @@ class ConfigWidget(QWidget):
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
         self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice_checkbox.isChecked())
 
-        # Save CSS
-        self.prefs.set('injected_css', str(self.cfg_css_pte.toPlainText()))
-
         # If restart needed, inform user
         if self.restart_required:
             do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
@@ -650,6 +655,14 @@ class ConfigWidget(QWidget):
                     func=sys._getframe(1).f_code.co_name,
                     arg1=arg1, arg2=arg2))
 
+
+class ClickableQLabel(QLabel):
+
+    def __init__(self, parent):
+        QLabel.__init__(self, parent)
+
+    def mouseReleaseEvent(self, event):
+        self.emit(SIGNAL('clicked()'))
 
 class InventoryAnnotatedBooks(QThread):
 
