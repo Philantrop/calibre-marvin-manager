@@ -107,6 +107,8 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         # Set the titles
         self.setWindowTitle(content['title'])
         self.html_gb.setTitle(content['group_box_title'])
+        if content['toolTip']:
+            self.html_gb.setToolTip(content['toolTip'])
 
         # Set the bg color of the content to the dialog bg color
         bgcolor = self.palette().color(QPalette.Background)
@@ -138,16 +140,6 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         else:
             self.footer.setVisible(False)
 
-        # Add Refresh button if enabled
-        if content['refresh']:
-            self.refresh_method = content['refresh']['method']
-            self.refresh_button = self.bb.addButton("Refresh '%s'" % content['refresh']['name'],
-                                                    self.bb.ActionRole)
-            self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
-                                              'icons',
-                                              'from_marvin.png')))
-            self.refresh_button.setObjectName('refresh_button')
-
         # Add Copy to Clipboard button
         self.ctc_button = self.bb.addButton('&Copy to clipboard',
                                             self.bb.ActionRole)
@@ -159,6 +151,16 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.addAction(self.copy_action)
         self.copy_action.setShortcuts(QKeySequence.Copy)
         self.copy_action.triggered.connect(self.copy_to_clipboard)
+
+        # Add Refresh button if enabled
+        if content['refresh']:
+            self.refresh_method = content['refresh']['method']
+            self.refresh_button = self.bb.addButton("Refresh '%s'" % content['refresh']['name'],
+                                                    self.bb.ActionRole)
+            self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                              'icons',
+                                              'from_marvin.png')))
+            self.refresh_button.setObjectName('refresh_button')
 
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)
@@ -188,9 +190,11 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         If enabled, pass window content to custom column
         '''
-        func = getattr(self.parent, self.refresh_method, None)
-        if func is not None:
-            func()
+        refresh = getattr(self.parent, self.refresh_method, None)
+        if refresh is not None:
+            refresh()
+            self.refresh_button.setText('Refreshed')
+            self.refresh_button.setIcon(QIcon(I('ok.png')))
         else:
             self._log_location("ERROR: Can't execute '%s'" % self.refresh_method)
 

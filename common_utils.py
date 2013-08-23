@@ -624,7 +624,10 @@ def existing_annotations(parent, field, return_all=False):
                 (len(annotation_map), len(db.data)))
 
         debug_print(" annotation_map: %s" % repr(annotation_map))
-        return annotation_map
+    else:
+        debug_print(" no active field")
+
+    return annotation_map
 
 
 def get_icon(icon_name):

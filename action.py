@@ -124,10 +124,6 @@ class MarvinManagerAction(InterfaceAction):
 
         # Build a current opts object
         self.opts = self.init_options()
-        # Instantiate the Annotations database
-        db = AnnotationsDB(self.opts, path=os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'annotations.db'))
-        self.opts.conn = db.connect()
-        self.opts.db = db
 
         # Read the plugin icons and store for potential sharing with the config widget
         icon_resources = self.load_resources(PLUGIN_ICONS)
@@ -242,7 +238,7 @@ class MarvinManagerAction(InterfaceAction):
 
     def init_options(self, disable_caching=False):
         """
-        Build an opts object with a ProgressBar
+        Build an opts object with a ProgressBar, Annotations db
         """
         opts = Struct(
             gui=self.gui,
@@ -251,8 +247,15 @@ class MarvinManagerAction(InterfaceAction):
             resources_path=self.resources_path,
             verbose=DEBUG)
 
-        opts['pb'] = ProgressBar(parent=self.gui, window_title=self.name)
         self._log_location()
+
+        # Attach a Progress bar
+        opts.pb = ProgressBar(parent=self.gui, window_title=self.name)
+
+        # Instantiate the Annotations database
+        opts.db = AnnotationsDB(opts, path=os.path.join(self.resources_path, 'annotations.db'))
+        opts.conn = opts.db.connect()
+
         return opts
 
     def init_prefs(self):

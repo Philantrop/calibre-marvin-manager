@@ -313,6 +313,10 @@ class ConfigWidget(QWidget):
         self.debug_plugin_checkbox.stateChanged.connect(self.set_restart_required)
         self.debug_libimobiledevice_checkbox.stateChanged.connect(self.set_restart_required)
 
+        # Hook changes to Annotations comboBox
+        self.annotations_field_comboBox.currentIndexChanged.connect(
+            partial(self.save_combobox_setting, 'annotations_field_comboBox'))
+
         # Launch the annotated_books_scanner
         field = plugin_prefs.get('annotations_field_lookup', None)
         self.annotated_books_scanner = InventoryAnnotatedBooks(self.gui, field)
@@ -352,7 +356,8 @@ class ConfigWidget(QWidget):
                 plugin_prefs.set(setting, original_settings[setting])
             nsh = osh
 
-        # If there were changes, and there are existing annotations, offer to re-render
+        # If there were changes, and there are existing annotations,
+        # and there is an active Annotations field, offer to re-render
         field = plugin_prefs.get("annotations_field_lookup", None)
         if osh.digest() != nsh.digest() and existing_annotations(self.parent, field):
             title = 'Update annotations?'
@@ -537,6 +542,21 @@ class ConfigWidget(QWidget):
         Set restart_required flag to show show dialog when closing dialog
         '''
         self.restart_required = True
+
+    def save_combobox_setting(self, cb, index):
+        '''
+        Apply changes immediately
+        '''
+        cf = str(getattr(self, cb).currentText())
+        self._log_location("%s => %s" % (cb, repr(cf)))
+
+        if cb == 'annotations_field_comboBox':
+            self.prefs.set(cb, cf)
+            if cf:
+                self.prefs.set('annotations_field_lookup', self.eligible_annotations_fields[cf])
+            else:
+                self.prefs.set('annotations_field_lookup', '')
+            self.prefs.commit()
 
     def save_settings(self):
         self._log_location()

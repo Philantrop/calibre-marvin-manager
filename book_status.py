@@ -1051,7 +1051,7 @@ class BookStatusDialog(SizePersistedDialog):
         elif action in ['export_metadata', 'import_metadata']:
             self._update_metadata(action)
         elif action == 'fetch_annotations':
-            self._fetch_annotations()
+            self._fetch_annotations(report_results=True)
         elif action == 'generate_deep_view':
             self._generate_deep_view()
         elif action == 'manage_collections':
@@ -1357,6 +1357,8 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
 
+        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+
         enabled = []
         for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
                     'progress_field_comboBox', 'word_count_field_comboBox']:
@@ -1397,6 +1399,23 @@ class BookStatusDialog(SizePersistedDialog):
 
         updateCalibreGUIView()
         self._busy_operation_teardown()
+
+        # Restore selection
+        if self.saved_selection_region:
+            for rect in self.saved_selection_region.rects():
+                self.tv.setSelection(rect, QItemSelectionModel.Select)
+            self.saved_selection_region = None
+
+        # Report results
+        title = 'Custom columns refreshed'
+        refreshed = ''
+        for col in enabled[0:-1]:
+            refreshed += '<b>%s</b>, ' % col
+        refreshed += '<b>%s</b> ' % enabled[-1]
+        msg = "<p>%s refreshed for %s.</p>" % (refreshed,
+                                       "1 book" if len(rows_to_refresh) == 1 else
+                                       "%d books" % len(rows_to_refresh))
+        MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def show_add_collections_dialog(self):
         '''
@@ -1471,8 +1490,7 @@ class BookStatusDialog(SizePersistedDialog):
         group_box_title = 'Annotations'
         annotations = self._get_formatted_annotations(book_id)
 
-        footer = (
-            '<p>Annotations appearance may be fine-tuned in the <b>Customize plugin…</b> dialog.</p>')
+        footer = None
         afn = self.parent.prefs.get('annotations_field_comboBox', None)
         if afn:
             refresh = {
@@ -1486,6 +1504,7 @@ class BookStatusDialog(SizePersistedDialog):
             'header': header,
             'html_content': HTML_TEMPLATE.format(annotations),
             'title': title,
+            'toolTip': '<p>Annotations appearance may be fine-tuned in the <b>Customize plugin…</b> dialog</p>',
             'refresh': refresh
             }
 
@@ -1707,6 +1726,7 @@ class BookStatusDialog(SizePersistedDialog):
             'header': header,
             'html_content': response,
             'title': title,
+            'toolTip': None,
             'refresh': refresh
             }
 
@@ -3042,13 +3062,14 @@ class BookStatusDialog(SizePersistedDialog):
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
-    def _fetch_annotations(self, update_gui=True):
+    def _fetch_annotations(self, update_gui=True, report_results=False):
         '''
         Retrieve formatted annotations
         '''
         lookup = self.parent.prefs.get('annotations_field_lookup', None)
         if lookup:
             self._log_location()
+            updated = 0
             for row, book in self._selected_books().items():
                 cid = book['cid']
                 if cid is not None:
@@ -3070,12 +3091,18 @@ class BookStatusDialog(SizePersistedDialog):
                         mi.set_user_metadata(lookup, um)
                         db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                         commit=True)
-
+                        updated += 1
                     else:
                         self._log("%s has no annotations" % repr(book['title']))
 
             if update_gui:
                 updateCalibreGUIView()
+
+            if report_results:
+                title = 'Annotations refreshed'
+                msg = ("<p>Annotations refreshed for %s.</p>" %
+                    ("1 book" if updated == 1 else "%d books" % updated))
+                MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def _fetch_deep_view_status(self, book_ids):
         '''
