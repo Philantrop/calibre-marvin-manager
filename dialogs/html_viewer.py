@@ -10,13 +10,13 @@ __docformat__ = 'restructuredtext en'
 
 import os, sys
 
-from calibre.gui2 import open_url
+from calibre.gui2 import Application, open_url
 from calibre.devices.usbms.driver import debug_print
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
 
-from PyQt4.Qt import (QAction, QApplication, QDialogButtonBox, QIcon, QKeySequence,
+from PyQt4.Qt import (Qt, QAction, QApplication, QDialogButtonBox, QIcon, QKeySequence,
                       QPalette, QSize, QSizePolicy,
                       pyqtSignal)
 from PyQt4.QtWebKit import QWebPage, QWebView
@@ -45,9 +45,13 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         '''
         Store window contents to system clipboard
         '''
-        plain_text = self.html_wv.page().currentFrame().toPlainText()
-        #html = self.html_wv.page().currentFrame().toHtml()
-        QApplication.clipboard().setText(unicode(plain_text))
+        modifiers = Application.keyboardModifiers()
+        if bool(modifiers & Qt.AltModifier):
+            contents = self.html_wv.page().currentFrame().toHtml()
+            QApplication.clipboard().setText(unicode(contents))
+        else:
+            contents = self.html_wv.page().currentFrame().toPlainText()
+            QApplication.clipboard().setText(unicode(contents))
 
         if hasattr(self, 'ctc_button'):
             self.ctc_button.setText('Copied')
