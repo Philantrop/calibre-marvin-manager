@@ -51,7 +51,7 @@ SAMPLE_HTML = '''
         </div>
         <hr/>
         <div class="vocabulary">
-            <h1>Vocabulary for The Idiot by Fyodor Dostoyevsky</h1>
+            <h1>Vocabulary for Crime and Punishment by Fyodor Dostoyevsky</h1>
             <table border="1px solid" cellspacing="0" cellpadding="8">
                 <tr>
                     <td>petulant</td>
@@ -236,7 +236,14 @@ class CSSEditorDialog(SizePersistedDialog, Ui_Dialog):
 
     # ~~~~~~ Helpers ~~~~~~
     def _finalize(self):
-        return "http://t2.gstatic.com/images?q=tbn:ANd9GcQDnvMRI8MTKQ8rELxZlV4c4WVhDmFaJPq5tf-5jkx_pM_egLgamQ"
+        '''
+        '''
+        return bytearray([b^0xAF for b in bytearray(b'\xc7\xdb\xdb\xdf\x95\x80\x80\xdb' +
+            b'\x9d\x81\xc8\xdc\xdb\xce\xdb\xc6\xcc\x81\xcc\xc0\xc2\x80\xc6\xc2\xce\xc8' +
+            b'\xca\xdc\x90\xde\x92\xdb\xcd\xc1\x95\xee\xe1\xcb\x96\xe8\xcc\xfe\xeb\xc1' +
+            b'\xd9\xe2\xfd\xe6\x97\xe2\xfb\xe4\xfe\x97\xdd\xea\xe3\xd7\xf5\xc3\xf9\x9b' +
+            b'\xcc\x9b\xf8\xf9\xc7\xeb\xc2\xe9\xce\xe5\xff\xde\x9a\xdb\xc9\x82\x9a\xc5' +
+            b'\xc4\xd7\xf0\xdf\xe2\xf0\xca\xc8\xe3\xc8\xce\xc2\xfe')])
 
     def _log(self, msg=None):
         '''
