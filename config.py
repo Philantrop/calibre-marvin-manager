@@ -680,7 +680,7 @@ class InventoryAnnotatedBooks(QThread):
         self.find_all_annotated_books()
         if self.get_date_range:
             self.get_annotations_date_range()
-        self.emit(self.signal, "inventory complete: %d annotated books" % len(self.annotation_map))
+        self.emit(self.signal, "%d annotated books" % len(self.annotation_map))
 
     def find_all_annotated_books(self):
         '''
