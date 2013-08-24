@@ -12,6 +12,7 @@ import locale, operator, os, re, sqlite3, sys, time
 
 from collections import OrderedDict
 from datetime import datetime
+from dateutil import tz
 from functools import partial
 from lxml import etree
 from threading import Timer
@@ -39,6 +40,7 @@ from calibre.gui2 import Application, Dispatcher, error_dialog, warning_dialog
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2.dialogs.progress import ProgressDialog
 from calibre.utils.config import config_dir, JSONConfig
+from calibre.utils.date import strptime
 from calibre.utils.icu import sort_key
 from calibre.utils.magick.draw import thumbnail
 from calibre.utils.wordcount import get_wordcount_obj
@@ -2092,8 +2094,8 @@ class BookStatusDialog(SizePersistedDialog):
                     if new_date:
                         updated = True
                         um = mi.metadata_for_field(lookup)
-                        ndo = datetime.strptime(new_date, "%Y-%m-%d")
-                        um['#value#'] = ndo.replace(hour=12)
+                        ndo = strptime(new_date, "%Y-%m-%d %H:%M", as_utc=False, assume_utc=True)
+                        um['#value#'] = ndo
                         mi.set_user_metadata(lookup, um)
                         db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                         commit=True)
@@ -2671,7 +2673,7 @@ class BookStatusDialog(SizePersistedDialog):
             last_opened_ts = ''
             last_opened_sort = 0
             if book_data.date_opened:
-                last_opened_ts = time.strftime("%Y-%m-%d",
+                last_opened_ts = time.strftime("%Y-%m-%d %H:%M",
                                                time.localtime(book_data.date_opened))
                 last_opened_sort = book_data.date_opened
             last_opened = SortableTableWidgetItem(
