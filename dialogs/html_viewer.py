@@ -10,8 +10,9 @@ __docformat__ = 'restructuredtext en'
 
 import os, sys
 
-from calibre.gui2 import Application, open_url
 from calibre.devices.usbms.driver import debug_print
+from calibre.ebooks.BeautifulSoup import BeautifulSoup
+from calibre.gui2 import Application, open_url
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
@@ -48,7 +49,8 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         modifiers = Application.keyboardModifiers()
         if bool(modifiers & Qt.AltModifier):
             contents = self.html_wv.page().currentFrame().toHtml()
-            QApplication.clipboard().setText(unicode(contents))
+            #contents = BeautifulSoup(str(contents)).prettify()
+            QApplication.clipboard().setText(contents)
         else:
             contents = self.html_wv.page().currentFrame().toPlainText()
             QApplication.clipboard().setText(unicode(contents))
@@ -150,6 +152,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         self.ctc_button.clicked.connect(self.copy_to_clipboard)
         self.ctc_button.setIcon(QIcon(I('edit-copy.png')))
         self.ctc_button.setObjectName('copy_to_clipboard_button')
+        self.ctc_button.setToolTip('<p>Copy plain text to clipboard, <b>Alt/Option-click</b> for HTML</p>')
 
         self.copy_action = QAction(self)
         self.addAction(self.copy_action)
