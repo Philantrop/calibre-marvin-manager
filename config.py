@@ -224,7 +224,7 @@ class ConfigWidget(QWidget):
         self.cfg_css_editor_toolbutton.setIcon(self.css_editor_icon)
         self.cfg_css_editor_toolbutton.clicked.connect(self.edit_css)
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_toolbutton, current_row, 0)
-        self.cfg_css_editor_label = ClickableQLabel("Articles, Deep View, Vocabulary")
+        self.cfg_css_editor_label = ClickableQLabel("Articles, Vocabulary")
         self.connect(self.cfg_css_editor_label, SIGNAL('clicked()'), self.edit_css)
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_label, current_row, 1)
 
