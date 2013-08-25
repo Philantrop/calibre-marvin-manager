@@ -4,5 +4,5 @@ A calibre plugin for managing Marvin
 © 2013 Gregory Riker
 
 Version history:
-0.1.0 [4 August 2013]
+0.1.0 [25 August 2013]
  • Initial beta release
