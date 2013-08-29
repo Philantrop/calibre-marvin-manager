@@ -183,8 +183,7 @@
 <! ~~~~~~~~~~~~~~~ Match status table ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="match-status" id="match-status"></a>3. <a href="#toc">Match status</a></h3>
-  <p>Click <img src="images/show_matches.png" alt="" width="127" height="27" align="absmiddle" /> to list books installed in Marvin with a background color representing their status. </p>
-  <p>Click <img src="images/hide_matches.png" alt="" width="124" height="27" align="absmiddle" /> to return to the regular display listing.</p>
+  <p>Click <img src="images/show_matches.png" alt="" align="absmiddle" /> to list books installed in Marvin with a background color representing their status. </p>
   <table width="100%" style="border:1px solid black;">
     <tr class="header">
       <td>Color</td>
@@ -193,13 +192,13 @@
     </tr>
     <tr class="white">
       <td>White</td>
-      <td class="checked">&nbsp;</td>
-      <td>Installed in Marvin, but not your calibre library.</td>
+      <td class="checked">&#x2715;</td>
+      <td>Installed in Marvin. The book is not in your calibre library.</td>
     </tr>
     <tr class="red">
       <td>Red</td>
-      <td class="checked">&nbsp;</td>
-      <td>More than one copy of the book exists in your Marvin library. The book was not found in calibre.</td>
+      <td class="checked">&#x2715;</td>
+      <td>More than one copy in Marvin. The book is not in your calibre library.</td>
     </tr>
     <tr class="green">
       <td>Green</td>
@@ -209,14 +208,15 @@
     <tr class="yellow">
       <td>Yellow</td>
       <td class="checked">&#x2713;</td>
-      <td>Some metadata differences between calibre and Marvin.</td>
+      <td>Installed in calibre and Marvin, some metadata differences.</td>
     </tr>
     <tr class="orange">
       <td>Orange</td>
       <td class="checked">&#x2713;</td>
-      <td>Duplicate copy of a book in your calibre library.</td>
+      <td>Installed in calibre and Marvin, more than one copy in Marvin.</td>
     </tr>
   </table>
+  <p>Click <img src="images/hide_matches.png" alt="" align="absmiddle" /> to return to the regular display listing.</p>
 </div>
 
 <! ~~~~~~~~~~~~~~~ Usage scenarios ~~~~~~~~~~~~~~~>
