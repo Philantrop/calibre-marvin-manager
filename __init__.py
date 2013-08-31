@@ -9,13 +9,12 @@ __docformat__ = 'restructuredtext en'
 from calibre.customize import InterfaceActionBase
 from calibre.utils.config import JSONConfig
 
-
 class MarvinManagerPlugin(InterfaceActionBase):
     name = 'Marvin XD'
     description = 'Extended Driver for Marvin'
     supported_platforms = ['linux', 'osx', 'windows']
     author = 'Greg Riker'
-    version = (0, 1, 12)
+    version = (1, 0, 0)
     minimum_calibre_version = (1, 0, 0)
 
     actual_plugin = 'calibre_plugins.marvin_manager.action:MarvinManagerAction'

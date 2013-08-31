@@ -631,8 +631,8 @@ class MarvinManagerAction(InterfaceAction):
         version = self.interface_action_base_plugin.version
         title = "%s v %d.%d.%d" % (self.name, version[0], version[1], version[2])
         msg = ('<p>To learn more about this plugin, visit the '
-               '<a href="http://www.mobileread.com/forums/showthread.php?t=205062">THIS NEEDS TO BE ADDED</a> '
-               'at MobileRead’s Calibre forum.</p>')
+               '<a href="http://www.mobileread.com/forums/showthread.php?t=221357">Marvin XD</a> '
+               'support thread at MobileRead’s Calibre forum.</p>')
         text = get_resources('about.txt')
         text = text.decode('utf-8')
         d = MessageBox(MessageBox.INFO, title, msg, det_msg=text, show_copy_button=False)
