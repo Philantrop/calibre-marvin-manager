@@ -1218,6 +1218,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.installed_books = self._generate_booklist()
 
+        self._busy_operation_setup("Preparing Marvin library view…")
+
         # ~~~~~~~~ Create the dialog ~~~~~~~~
         self.setWindowTitle(u'Marvin Library: %d books' % len(self.installed_books))
         self.setWindowIcon(self.icon)
@@ -1252,14 +1254,13 @@ class BookStatusDialog(SizePersistedDialog):
         # ~~~~~~~~ Create the Table ~~~~~~~~
         self.tv = MyTableView(self)
         self.l.addWidget(self.tv)
+
         self.tabledata = self._construct_table_data()
         self._construct_table_view()
 
         # Set the width of the filter control after we know the size of the other cols
         saved_column_widths = self.opts.prefs.get('marvin_library_column_widths')
         filter_width = 0
-        if self.parent.has_password:
-            filter_width += saved_column_widths[self.LOCKED_COL]
         for index in [self.TITLE_COL, self.AUTHOR_COL, self.SERIES_COL]:
             filter_width += saved_column_widths[index]
         self.filter_le.setFixedWidth(filter_width)
@@ -1321,6 +1322,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         self.resize_dialog()
         self.tv.setFocus()
+
+        self._busy_operation_teardown()
 
     def launch_collections_scanner(self):
         '''
@@ -2285,7 +2288,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        self.busy_window = MyBlockingBusy(self, title, size=60,
+        self.busy_window = MyBlockingBusy(self.parent.gui, title, size=60,
                                           on_top=on_top,
                                           show_cancel=show_cancel)
         self.busy_window.start()
@@ -2845,6 +2848,7 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.path
                 ]
             tabledata.append(this_book)
+            Application.processEvents()
         return tabledata
 
     def _construct_table_view(self):
@@ -3705,8 +3709,8 @@ class BookStatusDialog(SizePersistedDialog):
 
                 note_text = None
                 if row[b'Note']:
-                    note_text = UnicodeDammit(row[b'Note']).unicode
-                    note_text = note_text.rstrip('\n').split('\n')[0]
+                    ntu = UnicodeDammit(row[b'Note']).unicode
+                    note_text = ntu.rstrip('\n')
 
                 # Populate an AnnotationStruct
                 a_mi = AnnotationStruct()
@@ -5613,9 +5617,11 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
 
+        if self.ios.exists(str(self.remote_hash_cache)):
+            self.ios.remove(str(self.remote_hash_cache))
+
         if self.parent.prefs.get('hash_caching_disabled', False):
             self._log("hash_caching_disabled, deleting remote hash cache")
-            self.ios.remove(str(self.remote_hash_cache))
         else:
             # Copy local cache to iDevice
             self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))

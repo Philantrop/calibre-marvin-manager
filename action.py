@@ -92,7 +92,8 @@ class MarvinManagerAction(InterfaceAction):
                 self.gui.current_db.delete_all_custom_book_data('epub_hash')
                 self._log("cached epub hashes deleted")
                 # Invalidate the library hash map, as library contents may change before reconnection
-                self.library_scanner.hash_map = None
+                if hasattr(self, 'library_scanner'):
+                    self.library_scanner.hash_map = None
             elif action == 'Nuke annotations':
                 self.nuke_annotations()
             elif action == 'Reset column widths':
@@ -487,8 +488,7 @@ class MarvinManagerAction(InterfaceAction):
                 self._log_location(self.connected_device.gui_name)
 
                 # Init libiMobileDevice
-                self.ios = libiMobileDevice(log=self._log,
-                                            verbose=self.prefs.get('debug_libimobiledevice', False))
+                self.ios = libiMobileDevice(verbose=self.prefs.get('debug_libimobiledevice', False))
                 self._log("mounting %s" % self.connected_device.app_id)
                 self.ios.mount_ios_app(app_id=self.connected_device.app_id)
 
