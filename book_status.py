@@ -8,7 +8,7 @@ __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
 import base64, cStringIO, hashlib, importlib, inspect, json
-import locale, operator, os, re, sqlite3, sys, time
+import locale, operator, os, cPickle as pickle, re, sqlite3, sys, time
 
 from collections import OrderedDict
 from datetime import datetime
@@ -461,42 +461,11 @@ class MyTableView(QTableView):
         self.parent._update_refresh_button()
 
 
-class _SortableImageWidgetItem(QTableWidget):
-    def __init__(self, parent, path, sort_key, column):
-        super(SortableImageWidgetItem, self).__init__(parent=parent.tv)
-        self.column = column
-        self.parent = parent.tv
-        self.picture = QPixmap(path)
-        self.sort_key = sort_key
-        self.width = self.picture.width()
-
-    def __lt__(self, other):
-        return self.sort_key < other.sort_key
-
-    """
-    def _paintEvent(self, event):
-        #painter = QPainter(self.viewport())
-        #print(dir(self.viewport()))
-        #print("event.pos().x(): %s" % self.viewport().x())
-        #print("event.pos().y(): %s" % self.viewport().y())
-        #col_width = self.parent.columnWidth(self.column)
-        #x_off = self.viewport().x()
-        #if col_width > self.width:
-        #    x_off += int((col_width - self.width) / 2)
-        #painter.drawPixmap(x_off, self.viewport().y(), self.picture)
-        #painter.end()
-        QTableWidget.paintEvent(self, event)
-    """
-
-
 class SortableImageWidgetItem(QWidget):
-    def __init__(self, parent, path, sort_key, column):
-        super(SortableImageWidgetItem, self).__init__(parent=parent.tv)
-        self.column = column
-        self.parent_tv = parent.tv
+    def __init__(self, path, sort_key):
+        super(SortableImageWidgetItem, self).__init__()
         self.picture = QPixmap(path)
         self.sort_key = sort_key
-        self.width = self.picture.width()
 
     def __lt__(self, other):
         return self.sort_key < other.sort_key
@@ -1192,7 +1161,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.archived_cover_hashes = JSONConfig('plugins/Marvin_XD_resources/cover_hashes')
         self.busy_window = None
         self.Dispatcher = partial(Dispatcher, parent=self)
-        self.hash_cache = 'content_hashes.zip'
+        self.hash_cache = "content_hashes.db"
         self.icon = get_icon(parent.icon)
         self.ios = parent.ios
         self.installed_books = None
@@ -2493,10 +2462,9 @@ class BookStatusDialog(SizePersistedDialog):
             if mask == 0:
                 flagbits = 0
                 basename = "flags0.png"
-                new_flags_widget = SortableImageWidgetItem(self,
-                                                           os.path.join(self.parent.opts.resources_path,
-                                                           'icons', basename),
-                                                           flagbits, self.FLAGS_COL)
+                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                        'icons', basename),
+                                                           flagbits)
                 # Update self.installed_books flags list
                 flags = []
                 self.installed_books[book_id].flags = flags
@@ -2517,10 +2485,9 @@ class BookStatusDialog(SizePersistedDialog):
                 # Clear the bit with XOR
                 flagbits = flagbits ^ mask
                 basename = "flags%d.png" % flagbits
-                new_flags_widget = SortableImageWidgetItem(self,
-                                                           os.path.join(self.parent.opts.resources_path,
-                                                           'icons', basename),
-                                                           flagbits, self.FLAGS_COL)
+                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                        'icons', basename),
+                                                           flagbits)
                 # Update self.installed_books flags list
                 self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
@@ -2652,10 +2619,9 @@ class BookStatusDialog(SizePersistedDialog):
             if 'READ' in flag_list:
                 flagbits += 1
             base_name = "flags%d.png" % flagbits
-            flags = SortableImageWidgetItem(self,
-                                            os.path.join(self.parent.opts.resources_path,
+            flags = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
                                                          'icons', base_name),
-                                            flagbits, self.FLAGS_COL)
+                                            flagbits)
             return flags
 
         def _generate_highlights(book_data):
@@ -2692,10 +2658,9 @@ class BookStatusDialog(SizePersistedDialog):
             image_name = "empty_16x16.png"
             if book_data.pin:
                 image_name = "lock_enabled.png"
-            locked = SortableImageWidgetItem(self,
-                                             os.path.join(self.parent.opts.resources_path,
+            locked = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
                                                           'icons', image_name),
-                                             book_data.pin, self.LOCKED_COL)
+                                             book_data.pin)
             return locked
 
         def _generate_match_quality(book_data):
@@ -2849,6 +2814,7 @@ class BookStatusDialog(SizePersistedDialog):
                 ]
             tabledata.append(this_book)
             Application.processEvents()
+
         return tabledata
 
     def _construct_table_view(self):
@@ -3144,18 +3110,12 @@ class BookStatusDialog(SizePersistedDialog):
             self._log_location(path)
 
         # Try getting the hash from the cache
-        try:
-            zfr = ZipFile(self.local_hash_cache)
-            hash = zfr.read(path)
-        except:
-            if self.opts.prefs.get('development_mode', False):
-                self._log("opening local hash cache for appending")
-            zfw = ZipFile(self.local_hash_cache, mode='a')
-        else:
-            if self.opts.prefs.get('development_mode', False):
-                self._log("returning hash from cache: %s" % hash)
-            zfr.close()
-            return hash
+        # Get hash_cache into memory for writing if needed
+        with open(self.local_hash_cache, 'rb') as hcf:
+            hash_cache = pickle.load(hcf)
+            if path in hash_cache:
+                hash = hash_cache[path]
+                return hash
 
         # Get a local copy, generate hash
         rbp = '/'.join(['/Documents', path])
@@ -3165,8 +3125,10 @@ class BookStatusDialog(SizePersistedDialog):
             self.ios.copy_from_idevice(str(rbp), out)
 
         hash = self._compute_epub_hash(lbp)
-        zfw.writestr(path, hash)
-        zfw.close()
+
+        with open(self.local_hash_cache, 'wb') as hcf:
+            hash_cache[path] = hash
+            pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
 
         # Delete the local copy
         os.remove(lbp)
@@ -3325,24 +3287,23 @@ class BookStatusDialog(SizePersistedDialog):
                 book_data.device_collections == []):
             base_name = 'collections_empty.png'
             sort_value = 0
-        elif (book_data.calibre_collections is None and
-                book_data.device_collections > []):
-            base_name = 'collections_info.png'
-            sort_value = 0
         elif (book_data.device_collections == [] and
               book_data.calibre_collections == []):
             base_name = 'collections_empty.png'
             sort_value = 0
+        elif (book_data.calibre_collections is None and
+                book_data.device_collections > []):
+            base_name = 'collections_info.png'
+            sort_value = 1
         elif book_data.device_collections == book_data.calibre_collections:
             base_name = 'collections_equal.png'
-            sort_value = 2
+            sort_value = 3
         else:
             base_name = 'collections_unequal.png'
-            sort_value = 1
-        collection_match = SortableImageWidgetItem(self,
-                                                   os.path.join(self.parent.opts.resources_path,
+            sort_value = 2
+        collection_match = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
                                                                 'icons', base_name),
-                                                   sort_value, self.COLLECTIONS_COL)
+                                                   sort_value)
         return collection_match
 
     def _generate_deep_view(self):
@@ -3533,11 +3494,9 @@ class BookStatusDialog(SizePersistedDialog):
             elif book_data.progress >= 0.95:
                 base_name = "progress100.png"
 
-            progress = SortableImageWidgetItem(self,
-                                               os.path.join(self.parent.opts.resources_path,
-                                               'icons', base_name),
-                                               pct_progress,
-                                               self.PROGRESS_COL)
+            progress = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                            'icons', base_name),
+                                               pct_progress)
         return progress
 
     def _get_calibre_collections(self, cid):
@@ -4388,10 +4347,10 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("remote_cache_folder exists")
 
             # Create a local cache
-            self._log("creating new local hash cache: %s" % repr(lhc))
-            zfw = ZipFile(lhc, mode='w')
-            zfw.writestr('Marvin hash cache', '')
-            zfw.close()
+            #self._log("creating new local hash cache: %s" % repr(lhc))
+            with open(lhc, 'wb') as hcf:
+                hash_cache = {}
+                pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
 
             # Clear the marvin_content_updated flag
             if self.parent.marvin_content_updated:
@@ -4442,15 +4401,16 @@ class BookStatusDialog(SizePersistedDialog):
 
         '''
         self._log_location()
-        zfa = ZipFile(self.local_hash_cache, mode='a')
-        zfi = zfa.infolist()
-        for zi in zfi:
-            if zi.filename == 'Marvin hash cache':
-                continue
-            if zi.filename not in cached_books:
-                self._log("removing %s from hash cache" % repr(zi.filename))
-                zfa.delete(zi.filename)
-        zfa.close()
+        with open(self.local_hash_cache, 'rb') as hcf:
+            hash_cache = pickle.load(hcf)
+            for key in hash_cache:
+                if key not in cached_books:
+                    self._log("removing %s from hash cache" % key)
+                    hash_cache.pop(key)
+
+        # Write updated hash_cache
+        with open(self.local_hash_cache, 'wb') as hcf:
+            pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
 
     def _save_column_widths(self):
         '''
@@ -4732,10 +4692,9 @@ class BookStatusDialog(SizePersistedDialog):
                 flagbits = flagbits | mask
                 flagbits = flagbits & inhibit
                 basename = "flags%d.png" % flagbits
-                new_flags_widget = SortableImageWidgetItem(self,
-                                                           os.path.join(self.parent.opts.resources_path,
-                                                           'icons', basename),
-                                                           flagbits, self.FLAGS_COL)
+                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                        'icons', basename),
+                                                           flagbits)
                 # Update the spreadsheet
                 self.tm.set_flags(row, new_flags_widget)
 
@@ -5333,10 +5292,9 @@ class BookStatusDialog(SizePersistedDialog):
         manifest_tag = Tag(update_soup, 'manifest')
         update_soup.command.insert(0, manifest_tag)
 
-        new_locked_widget = SortableImageWidgetItem(self,
-                                                    os.path.join(self.parent.opts.resources_path,
+        new_locked_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
                                                                  'icons', new_image_name),
-                                                    new_pin_value, self.LOCKED_COL)
+                                                    new_pin_value)
 
         for row in selected_books:
             # Update the spreadsheet
