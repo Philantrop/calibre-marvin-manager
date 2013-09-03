@@ -821,16 +821,15 @@ class BookStatusDialog(SizePersistedDialog):
     DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom columns in calibre.<br/>Custom column mappings assigned in Customization dialog.</p>"
     HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
+    MAX_BOOKS_BEFORE_SPINNER = 4
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
     MAX_ELEMENT_DEPTH = 6
+    UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
+    WATCHDOG_TIMEOUT = 10.0
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-
-    MAX_BOOKS_BEFORE_SPINNER = 4
-
-    WATCHDOG_TIMEOUT = 10.0
 
     # Flag constants
     if True:
@@ -2256,13 +2255,18 @@ class BookStatusDialog(SizePersistedDialog):
     def _busy_operation_setup(self, title, on_top=True, show_cancel=False):
         '''
         '''
-        self._log_location()
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-        self.busy_window = MyBlockingBusy(self.parent.gui, title, size=60,
-                                          on_top=on_top,
-                                          show_cancel=show_cancel)
-        self.busy_window.start()
-        self.busy_window.show()
+        self._log_location(title)
+
+        if self.busy_window:
+            self._log("busy_window is already active with '%s'" %
+                      str(self.busy_window.text()))
+        else:
+            QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+            self.busy_window = MyBlockingBusy(self.parent.gui, title, size=60,
+                                              on_top=on_top,
+                                              show_cancel=show_cancel)
+            self.busy_window.start()
+            self.busy_window.show()
 
     def _busy_operation_teardown(self):
         '''
@@ -2349,7 +2353,8 @@ class BookStatusDialog(SizePersistedDialog):
 
                 wordcount = get_wordcount_obj(book_text)
 
-                self._log("%s: %d words" % (selected_books[row]['title'], wordcount.words))
+                self._log("{0}: {1:,} words".format(
+                    selected_books[row]['title'], wordcount.words))
                 stats[selected_books[row]['book_id']] = wordcount.words
 
                 # Delete the local copy
@@ -2984,7 +2989,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                     # Put on a show while waiting for the delete job to finish
                     QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-                    blocking_busy = MyBlockingBusy(self.opts.gui, "Updating Marvin Library…", size=60)
+                    blocking_busy = MyBlockingBusy(self.opts.gui, self.UPDATING_MARVIN_MESSAGE, size=60)
                     blocking_busy.start()
                     blocking_busy.show()
                     while not job.is_finished:
@@ -4280,7 +4285,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         update_soup.manifest.insert(0, book_tag)
 
-        self._busy_operation_setup("Updating Marvin…")
+        self._busy_operation_setup(self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup,
                                       update_local_db=update_local_db)
         self._busy_operation_teardown()
@@ -4333,9 +4338,9 @@ class BookStatusDialog(SizePersistedDialog):
         with open(local_db_path, 'wb') as out:
             self.ios.copy_from_idevice(remote_db_path, out)
 
-        self._log_location("finished")
         if local_busy_window:
             self._busy_operation_teardown()
+        self._log_location("finished")
 
     def _localize_hash_cache(self, cached_books):
         '''
@@ -5363,7 +5368,7 @@ class BookStatusDialog(SizePersistedDialog):
             manifest_tag.insert(0, book_tag)
 
         if len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER:
-            self._busy_operation_setup("Updating Marvin")
+            self._busy_operation_setup(self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup, update_local_db=True)
         if results['code']:
             self._log_location("ERROR: %s" % results)
