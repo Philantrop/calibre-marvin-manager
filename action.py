@@ -81,9 +81,8 @@ class MarvinManagerAction(InterfaceAction):
         if action in ['Delete calibre hashes', 'Delete Marvin hashes',
                       'Nuke annotations', 'Reset column widths']:
             if action == 'Delete Marvin hashes':
-                hash_cache = 'content_hashes.zip'
                 remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
-                rhc = b'/'.join([remote_cache_folder, hash_cache])
+                rhc = b'/'.join([remote_cache_folder, BookStatusDialog.HASH_CACHE_FS])
 
                 if self.ios.exists(rhc):
                     self.ios.remove(rhc)

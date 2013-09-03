@@ -819,6 +819,7 @@ class BookStatusDialog(SizePersistedDialog):
     CIRCLE_SLASH = u"\u20E0"
     DEFAULT_REFRESH_TEXT = 'Refresh custom columns'
     DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom columns in calibre.<br/>Custom column mappings assigned in Customization dialog.</p>"
+    HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
@@ -1161,7 +1162,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.archived_cover_hashes = JSONConfig('plugins/Marvin_XD_resources/cover_hashes')
         self.busy_window = None
         self.Dispatcher = partial(Dispatcher, parent=self)
-        self.hash_cache = "content_hashes.db"
+        self.hash_cache = None
         self.icon = get_icon(parent.icon)
         self.ios = parent.ios
         self.installed_books = None
@@ -3105,19 +3106,16 @@ class BookStatusDialog(SizePersistedDialog):
     def _fetch_marvin_content_hash(self, path):
         '''
         Given a Marvin path, compute/fetch a hash of its contents (excluding OPF)
+        self.hash_cache is current
         '''
         if self.opts.prefs.get('development_mode', False):
             self._log_location(path)
 
         # Try getting the hash from the cache
-        # Get hash_cache into memory for writing if needed
-        with open(self.local_hash_cache, 'rb') as hcf:
-            hash_cache = pickle.load(hcf)
-            if path in hash_cache:
-                hash = hash_cache[path]
-                return hash
+        if path in self.hash_cache:
+            return self.hash_cache[path]
 
-        # Get a local copy, generate hash
+        # Get a local copy of the book, generate hash
         rbp = '/'.join(['/Documents', path])
         lbp = os.path.join(self.local_cache_folder, path)
 
@@ -3126,9 +3124,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         hash = self._compute_epub_hash(lbp)
 
-        with open(self.local_hash_cache, 'wb') as hcf:
-            hash_cache[path] = hash
-            pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
+        # Add it to the hash_cache
+        self.hash_cache[path] = hash
 
         # Delete the local copy
         os.remove(lbp)
@@ -4327,8 +4324,8 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         # Existing hash cache?
-        lhc = os.path.join(self.local_cache_folder, self.hash_cache)
-        rhc = '/'.join([self.remote_cache_folder, self.hash_cache])
+        lhc = os.path.join(self.local_cache_folder, self.HASH_CACHE_FS)
+        rhc = '/'.join([self.remote_cache_folder, self.HASH_CACHE_FS])
 
         cache_exists = (self.ios.exists(rhc) and
                         not self.opts.prefs.get('hash_caching_disabled'))
@@ -4337,6 +4334,11 @@ class BookStatusDialog(SizePersistedDialog):
             self._log("copying remote hash cache")
             with open(lhc, 'wb') as out:
                 self.ios.copy_from_idevice(str(rhc), out)
+
+            # Load hash_cache to memory
+            with open(lhc, 'rb') as hcf:
+                hash_cache = pickle.load(hcf)
+
         else:
             # Confirm path to remote folder is valid store point
             folder_exists = self.ios.exists(self.remote_cache_folder)
@@ -4365,6 +4367,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         if cache_exists and current_vl == '':
             self._purge_cached_orphans(cached_books)
+
+        return hash_cache
 
     def _log(self, msg=None):
         '''
@@ -4401,12 +4405,19 @@ class BookStatusDialog(SizePersistedDialog):
 
         '''
         self._log_location()
+
+        # Find the orphans
+        orphans = []
         with open(self.local_hash_cache, 'rb') as hcf:
             hash_cache = pickle.load(hcf)
             for key in hash_cache:
                 if key not in cached_books:
                     self._log("removing %s from hash cache" % key)
-                    hash_cache.pop(key)
+                    orphans.append(key)
+
+        # Remove the orphans
+        for key in orphans:
+            hash_cache.pop(key)
 
         # Write updated hash_cache
         with open(self.local_hash_cache, 'wb') as hcf:
@@ -4548,8 +4559,8 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location("%d" % len(cached_books))
 
-        # Fetch pre-existing hash cache from device
-        self._localize_hash_cache(cached_books)
+        # Fetch pre-existing hash cache from device, purge orphans
+        self.hash_cache = self._localize_hash_cache(cached_books)
 
         # Set up the progress bar
         pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 1 of 2", on_top=True)
@@ -4573,6 +4584,10 @@ class BookStatusDialog(SizePersistedDialog):
                 close_requested = True
                 break
         else:
+            # Store the updated hash_cache if we finished
+            with open(self.local_hash_cache, 'wb') as hcf:
+                pickle.dump(self.hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
+
             # Push the local hash to the iDevice
             self._update_remote_hash_cache()
 
