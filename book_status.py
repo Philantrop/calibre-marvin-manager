@@ -2455,8 +2455,12 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'clear_all_flags':
             mask = 0
 
+        # Save the currently selected rows
+        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+
         selected_books = self._selected_books()
         for row in selected_books:
+            self.tv.selectRow(row)
             book_id = selected_books[row]['book_id']
             flagbits = self.tm.get_flags(row).sort_key
             path = selected_books[row]['path']
@@ -2480,7 +2484,7 @@ class BookStatusDialog(SizePersistedDialog):
                 _update_in_memory(book_id, path)
 
                 # Update Marvin db
-                self._inform_marvin_collections(book_id)
+                self._inform_marvin_collections(book_id, update_local_db=False)
 
             elif flagbits & mask:
                 # Clear the bit with XOR
@@ -2502,11 +2506,19 @@ class BookStatusDialog(SizePersistedDialog):
                 _update_in_memory(book_id, path)
 
                 # Update Marvin db
-                self._inform_marvin_collections(book_id)
+                self._inform_marvin_collections(book_id, update_local_db=False)
 
             self._update_device_flags(book_id, path, _build_flag_list(flagbits))
 
-        self.repaint()
+        # Restore selection
+        if self.saved_selection_region:
+            for rect in self.saved_selection_region.rects():
+                self.tv.setSelection(rect, QItemSelectionModel.Select)
+            self.saved_selection_region = None
+
+        self._localize_marvin_database()
+
+        Application.processEvents()
 
     def _clear_selected_rows(self):
         '''
@@ -4240,7 +4252,7 @@ class BookStatusDialog(SizePersistedDialog):
                 return html
         return(html)
 
-    def _inform_marvin_collections(self, book_id):
+    def _inform_marvin_collections(self, book_id, update_local_db=True):
         '''
         Inform Marvin of updated flags + collections
         '''
@@ -4269,7 +4281,8 @@ class BookStatusDialog(SizePersistedDialog):
         update_soup.manifest.insert(0, book_tag)
 
         self._busy_operation_setup("Updating Marvin…")
-        results = self._issue_command(command_name, update_soup)
+        results = self._issue_command(command_name, update_soup,
+                                      update_local_db=update_local_db)
         self._busy_operation_teardown()
         if results['code']:
             self._log_location("ERROR: %s" % results)
@@ -4309,12 +4322,20 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Copy remote_db_path from iOS to local storage using device pointers
         '''
-        self._log_location()
+        self._log_location("starting")
+        local_busy_window = False
+        if not self.busy_window:
+            self._busy_operation_setup("Updating local database")
+            local_busy_window = True
 
         local_db_path = self.parent.connected_device.local_db_path
         remote_db_path = self.parent.connected_device.books_subpath
         with open(local_db_path, 'wb') as out:
             self.ios.copy_from_idevice(remote_db_path, out)
+
+        self._log_location("finished")
+        if local_busy_window:
+            self._busy_operation_teardown()
 
     def _localize_hash_cache(self, cached_books):
         '''
@@ -4366,7 +4387,7 @@ class BookStatusDialog(SizePersistedDialog):
         current_vl = mdb.data.get_base_restriction_name()
 
         if cache_exists and current_vl == '':
-            self._purge_cached_orphans(cached_books)
+            hash_cache = self._purge_cached_orphans(cached_books)
 
         return hash_cache
 
@@ -4422,6 +4443,8 @@ class BookStatusDialog(SizePersistedDialog):
         # Write updated hash_cache
         with open(self.local_hash_cache, 'wb') as hcf:
             pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
+
+        return hash_cache
 
     def _save_column_widths(self):
         '''
@@ -4697,8 +4720,12 @@ class BookStatusDialog(SizePersistedDialog):
             mask = self.READ_FLAG
             inhibit = self.READING_FLAG + self.READ_FLAG
 
+        # Save the currently selected rows
+        self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+
         selected_books = self._selected_books()
         for row in selected_books:
+            self.tv.selectRow(row)
             book_id = selected_books[row]['book_id']
             flagbits = self.tm.get_flags(row).sort_key
             path = selected_books[row]['path']
@@ -4723,11 +4750,19 @@ class BookStatusDialog(SizePersistedDialog):
                 _update_in_memory(book_id, path)
 
                 # Update Marvin db
-                self._inform_marvin_collections(book_id)
+                self._inform_marvin_collections(book_id, update_local_db=False)
 
             self._update_device_flags(book_id, path, _build_flag_list(flagbits))
 
-        self.repaint()
+        # Restore selection
+        if self.saved_selection_region:
+            for rect in self.saved_selection_region.rects():
+                self.tv.setSelection(rect, QItemSelectionModel.Select)
+            self.saved_selection_region = None
+
+        self._localize_marvin_database()
+
+        Application.processEvents()
 
     def _show_command_error(self, operation, results):
         '''

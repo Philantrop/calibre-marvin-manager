@@ -58,7 +58,7 @@ Marvin XD (eXtended Driver) is a calibre plugin that makes it easy to manage Mar
 [LIST]
 [*]The first time that you use Marvin XD with an iDevice, caches are created which will make subsequent connections much faster.
 [*]If you have a very large calibre library, you can speed up initialization by creating a Virtual Library, which will limit the number of books in your calibre library that Marvin XD is analyzing.
-[*]Marvin XD is currently limited in the number of books it can handle in a Marvin library. I have tested it up to 3500 books on my system.
+[*]Marvin XD has been tested with a library of 4200 books.
 [/LIST]
 
 [B]If you have problems:[/B]
