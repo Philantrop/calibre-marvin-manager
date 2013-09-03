@@ -4335,6 +4335,11 @@ class BookStatusDialog(SizePersistedDialog):
 
         local_db_path = self.parent.connected_device.local_db_path
         remote_db_path = self.parent.connected_device.books_subpath
+
+        # Report size of remote_db
+        stats = self.ios.exists(remote_db_path)
+        self._log("mainDb: {:,} bytes".format(int(stats['st_size'])))
+
         with open(local_db_path, 'wb') as out:
             self.ios.copy_from_idevice(remote_db_path, out)
 
@@ -4357,7 +4362,6 @@ class BookStatusDialog(SizePersistedDialog):
                         not self.opts.prefs.get('hash_caching_disabled'))
         if cache_exists:
             # Copy from existing remote cache to local cache
-            self._log("copying remote hash cache")
             with open(lhc, 'wb') as out:
                 self.ios.copy_from_idevice(str(rhc), out)
 
@@ -4365,20 +4369,21 @@ class BookStatusDialog(SizePersistedDialog):
             with open(lhc, 'rb') as hcf:
                 hash_cache = pickle.load(hcf)
 
+            self._log("remote hash cache: version %d" % hash_cache['version'])
+
         else:
             # Confirm path to remote folder is valid store point
             folder_exists = self.ios.exists(self.remote_cache_folder)
             if not folder_exists:
                 self._log("creating remote_cache_folder %s" % repr(self.remote_cache_folder))
                 self.ios.mkdir(self.remote_cache_folder)
-            else:
-                self._log("remote_cache_folder exists")
 
             # Create a local cache
-            #self._log("creating new local hash cache: %s" % repr(lhc))
             with open(lhc, 'wb') as hcf:
-                hash_cache = {}
+                hash_cache = {'version': 1}
                 pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
+            self._log("creating new local hash cache: version %d" %
+                      hash_cache['version'])
 
             # Clear the marvin_content_updated flag
             if self.parent.marvin_content_updated:
@@ -4437,7 +4442,7 @@ class BookStatusDialog(SizePersistedDialog):
         with open(self.local_hash_cache, 'rb') as hcf:
             hash_cache = pickle.load(hcf)
             for key in hash_cache:
-                if key not in cached_books:
+                if key not in cached_books and key != 'version':
                     self._log("removing %s from hash cache" % key)
                     orphans.append(key)
 
