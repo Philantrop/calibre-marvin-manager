@@ -2252,7 +2252,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         return parameters_tag
 
-    def _busy_operation_setup(self, title, on_top=True, show_cancel=False):
+    def _busy_operation_setup(self, title, on_top=False, show_cancel=False):
         '''
         '''
         self._log_location(title)
@@ -2262,7 +2262,7 @@ class BookStatusDialog(SizePersistedDialog):
                       str(self.busy_window.text()))
         else:
             QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-            self.busy_window = MyBlockingBusy(self.parent.gui, title, size=60,
+            self.busy_window = MyBlockingBusy(self, title, size=60,
                                               on_top=on_top,
                                               show_cancel=show_cancel)
             self.busy_window.start()
