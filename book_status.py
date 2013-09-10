@@ -931,6 +931,7 @@ class BookStatusDialog(SizePersistedDialog):
         RED = 1
         WHITE = 0
 
+    large_covers_subpath = '/Library/Caches/com.appstafarian.marvin.covers.l'
     marvin_device_status_changed = pyqtSignal(str)
 
     def accept(self):
@@ -3150,35 +3151,32 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _fetch_marvin_cover(self, book_id):
         '''
-        Retrieve Books:LargeCoverJpg if no cover_path
+        Retrieve large cover from cache
         '''
-        marvin_cover = None
-        if self.installed_books[book_id].cover_file:
-            self._log_location("fetching cover from Marvin sandbox")
-            self._log("*** NOT IMPLEMENTED ***")
-            # Return cover file as bytes
 
-        else:
-            self._log_location("fetching cover from mainDb")
-            con = sqlite3.connect(self.parent.connected_device.local_db_path)
-            with con:
-                con.row_factory = sqlite3.Row
 
-                # Fetch LargeCoverJpg from mainDb
-                cover_cur = con.cursor()
-                cover_cur.execute('''SELECT
-                                      LargeCoverJpg
-                                     FROM Books
-                                     WHERE ID = '{0}'
-                                  '''.format(book_id))
-                rows = cover_cur.fetchall()
+        cover_bytes = None
+        self._log_location("fetching large cover from cache")
+        con = sqlite3.connect(self.parent.connected_device.local_db_path)
+        with con:
+            con.row_factory = sqlite3.Row
 
-            if len(rows):
-                marvin_cover = rows[0][b'LargeCoverJpg']
-            else:
-                self._log_location("no cover data fetched from mainDb")
+            # Fetch Hash from mainDb
+            cover_cur = con.cursor()
+            cover_cur.execute('''SELECT
+                                  Hash
+                                 FROM Books
+                                 WHERE ID = '{0}'
+                              '''.format(book_id))
+            row = cover_cur.fetchone()
 
-        return marvin_cover
+        book_hash = row[b'Hash']
+        cover_path = '/'.join([self.large_covers_subpath, '%s.jpg' % book_hash])
+        stats = self.ios.exists(cover_path)
+        if stats:
+            self._log("cover size: {:,} bytes".format(int(stats['st_size'])))
+            cover_bytes = self.ios.read(cover_path, mode='rb')
+        return cover_bytes
 
     def _find_book_id_in_model(self, book_id):
         '''

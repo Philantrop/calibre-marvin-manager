@@ -237,74 +237,73 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         Display calibre cover for both unless mismatch
         '''
         def _fetch_marvin_cover(with_border=False):
-            # Retrieve Books:LargeCoverJpg if no cover_path
-            if self.installed_book.cover_file:
-                self._log_location("fetching cover from Marvin sandbox")
-                self._log("*** NOT IMPLEMENTED ***")
+            '''
+            Retrieve LargeCoverJpg from cache
+            '''
+            self._log_location()
+            con = sqlite3.connect(self.marvin_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
 
-            else:
-                self._log_location("fetching cover from mainDb")
-                con = sqlite3.connect(self.marvin_db_path)
-                with con:
-                    con.row_factory = sqlite3.Row
+                # Fetch Hash from mainDb
+                cover_cur = con.cursor()
+                cover_cur.execute('''SELECT
+                                      Hash
+                                     FROM Books
+                                     WHERE ID = '{0}'
+                                  '''.format(self.book_id))
+                row = cover_cur.fetchone()
 
-                    # Fetch LargeCoverJpg from mainDb
-                    cover_cur = con.cursor()
-                    cover_cur.execute('''SELECT
-                                          LargeCoverJpg
-                                         FROM Books
-                                         WHERE ID = '{0}'
-                                      '''.format(self.book_id))
-                    rows = cover_cur.fetchall()
+            book_hash = row[b'Hash']
+            cover_path = '/'.join([self.parent.large_covers_subpath, '%s.jpg' % book_hash])
+            stats = self.parent.ios.exists(cover_path)
+            if stats:
+                self._log("fetching large cover from cache")
+                #self._log("cover size: {:,} bytes".format(int(stats['st_size'])))
+                cover_bytes = self.parent.ios.read(cover_path, mode='rb')
+                m_image = QImage()
+                m_image.loadFromData(cover_bytes)
 
-                if len(rows):
-                    marvin_cover_jpg = rows[0][b'LargeCoverJpg']
-                    if marvin_cover_jpg is not None:
-                        m_image = QImage()
-                        m_image.loadFromData(marvin_cover_jpg)
+                if with_border:
+                    m_image = m_image.scaledToHeight(
+                        self.COVER_ICON_SIZE - self.BORDER_WIDTH * 2,
+                        Qt.SmoothTransformation)
 
-                        if with_border:
-                            m_image = m_image.scaledToHeight(
-                                self.COVER_ICON_SIZE - self.BORDER_WIDTH * 2,
-                                Qt.SmoothTransformation)
+                    # Construct a QPixmap with yellow background
+                    self.m_pixmap = QPixmap(
+                        QSize(m_image.width() + self.BORDER_WIDTH * 2,
+                              m_image.height() + self.BORDER_WIDTH * 2))
 
-                            # Construct a QPixmap with yellow background
-                            self.m_pixmap = QPixmap(
-                                QSize(m_image.width() + self.BORDER_WIDTH * 2,
-                                      m_image.height() + self.BORDER_WIDTH * 2))
+                    m_painter = QPainter(self.m_pixmap)
+                    m_painter.setRenderHints(m_painter.Antialiasing)
 
-                            m_painter = QPainter(self.m_pixmap)
-                            m_painter.setRenderHints(m_painter.Antialiasing)
-
-                            m_painter.fillRect(self.m_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
-                            m_painter.drawImage(self.BORDER_WIDTH, self.BORDER_WIDTH, m_image)
-                        else:
-                            m_image = m_image.scaledToHeight(
-                                self.COVER_ICON_SIZE,
-                                Qt.SmoothTransformation)
-
-                            self.m_pixmap = QPixmap(
-                                QSize(m_image.width(),
-                                      m_image.height()))
-
-                            m_painter = QPainter(self.m_pixmap)
-                            m_painter.setRenderHints(m_painter.Antialiasing)
-
-                            m_painter.drawImage(0, 0, m_image)
-
-                        self.marvin_cover.setPixmap(self.m_pixmap)
-                    else:
-                        # No cover available, use generic
-                        pixmap = QPixmap()
-                        pixmap.load(I('book.png'))
-                        pixmap = pixmap.scaled(self.COVER_ICON_SIZE,
-                                               self.COVER_ICON_SIZE,
-                                               aspectRatioMode=Qt.KeepAspectRatio,
-                                               transformMode=Qt.SmoothTransformation)
-                        self.marvin_cover.setPixmap(pixmap)
-
+                    m_painter.fillRect(self.m_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
+                    m_painter.drawImage(self.BORDER_WIDTH, self.BORDER_WIDTH, m_image)
                 else:
-                    self._log_location("no cover data fetched from mainDb")
+                    m_image = m_image.scaledToHeight(
+                        self.COVER_ICON_SIZE,
+                        Qt.SmoothTransformation)
+
+                    self.m_pixmap = QPixmap(
+                        QSize(m_image.width(),
+                              m_image.height()))
+
+                    m_painter = QPainter(self.m_pixmap)
+                    m_painter.setRenderHints(m_painter.Antialiasing)
+
+                    m_painter.drawImage(0, 0, m_image)
+
+                self.marvin_cover.setPixmap(self.m_pixmap)
+            else:
+                # No cover available, use generic
+                self._log("No cached cover, using generic")
+                pixmap = QPixmap()
+                pixmap.load(I('book.png'))
+                pixmap = pixmap.scaled(self.COVER_ICON_SIZE,
+                                       self.COVER_ICON_SIZE,
+                                       aspectRatioMode=Qt.KeepAspectRatio,
+                                       transformMode=Qt.SmoothTransformation)
+                self.marvin_cover.setPixmap(pixmap)
 
         self.calibre_cover.setMaximumSize(QSize(self.COVER_ICON_SIZE, self.COVER_ICON_SIZE))
         self.calibre_cover.setText('')
