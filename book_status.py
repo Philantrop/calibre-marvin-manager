@@ -46,6 +46,8 @@ from calibre.utils.magick.draw import thumbnail
 from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
+from calibre_plugins.marvin_manager.annotations import merge_annotations
+
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
     MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
@@ -2538,8 +2540,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Generate a hash of all text and css files in epub
         '''
-        if self.opts.prefs.get('development_mode', False):
-            self._log_location(os.path.basename(zipfile))
+        self._log_location(os.path.basename(zipfile))
 
         # Find the OPF file in the zipped ePub, extract a list of text files
         try:
@@ -3068,25 +3069,33 @@ class BookStatusDialog(SizePersistedDialog):
                         self._log("%s (row %d): %d annotations" %
                                   (repr(book['title']), row, self.tm.get_annotations(row).sort_key))
                         book_id = book['book_id']
-                        formatted_annotations = self._get_formatted_annotations(book_id)
+                        new_annotations = self._get_formatted_annotations(book_id)
 
                         # Apply to custom column
                         # Get the current value from the lookup field
                         db = self.opts.gui.current_db
                         mi = db.get_metadata(cid, index_is_id=True)
-                        #old_value = mi.get_user_metadata(lookup, False)['#value#']
-                        #self._log("Updating old value: %s" % repr(old_value))
-
                         um = mi.metadata_for_field(lookup)
-                        um['#value#'] = formatted_annotations
+                        old_annotations = mi.get_user_metadata(lookup, False)['#value#']
+                        if old_annotations is None:
+                            self._log("adding new_annotations")
+                            um['#value#'] = new_annotations
+                        else:
+                            self._log("merging old_annotations and new_annotations")
+                            old_soup = BeautifulSoup(old_annotations)
+                            new_soup = BeautifulSoup(new_annotations)
+                            merged_soup = merge_annotations(self, cid, old_soup, new_soup)
+                            um['#value#'] = unicode(merged_soup)
                         mi.set_user_metadata(lookup, um)
                         db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                         commit=True)
                         updated += 1
                     else:
                         self._log("%s has no annotations" % repr(book['title']))
+                else:
+                    self._log("%s does not exist in calibre library" % repr(book['title']))
 
-            if update_gui:
+            if update_gui and updated:
                 updateCalibreGUIView()
 
             if report_results:
@@ -3126,11 +3135,11 @@ class BookStatusDialog(SizePersistedDialog):
         Given a Marvin path, compute/fetch a hash of its contents (excluding OPF)
         self.hash_cache is current
         '''
-        if self.opts.prefs.get('development_mode', False):
-            self._log_location(path)
+        #self._log_location(path)
 
         # Try getting the hash from the cache
         if path in self.hash_cache:
+            #self._log("returning hash from cache")
             return self.hash_cache[path]
 
         # Get a local copy of the book, generate hash
@@ -4174,42 +4183,46 @@ class BookStatusDialog(SizePersistedDialog):
                     pb.show()
 
                     for i, row in enumerate(rows):
+                        try:
+                            cid, mi = _get_calibre_id(row[b'UUID'],
+                                                      row[b'Title'],
+                                                      row[b'Author'])
 
-                        cid, mi = _get_calibre_id(row[b'UUID'],
-                                                  row[b'Title'],
-                                                  row[b'Author'])
-
-                        book_id = row[b'id_']
-                        # Get the primary metadata from Books
-                        this_book = Book(row[b'Title'], row[b'Author'].split(', '))
-                        this_book.articles = _get_articles(cur, book_id)
-                        this_book.author_sort = row[b'AuthorSort']
-                        this_book.cid = cid
-                        this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
-                        this_book.comments = row[b'Description']
-                        this_book.cover_file = row[b'CoverFile']
-                        this_book.date_added = row[b'DateAdded']
-                        this_book.date_opened = row[b'DateOpened']
-                        this_book.device_collections = _get_collections(cur, book_id)
-                        this_book.deep_view_prepared = row[b'DeepViewPrepared']
-                        this_book.flags = _get_flags(cur, row)
-                        this_book.hash = hashes[row[b'FileName']]['hash']
-                        this_book.highlights = _get_highlights(cur, book_id)
-                        this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
-                        this_book.mid = book_id
-                        this_book.on_device = _get_on_device_status(this_book.cid)
-                        this_book.path = row[b'FileName']
-                        this_book.pin = row[b'Pin']
-                        this_book.progress = row[b'Progress']
-                        this_book.pubdate = _get_pubdate(row)
-                        this_book.series = row[b'CalibreSeries']
-                        this_book.series_index = row[b'CalibreSeriesIndex']
-                        this_book.tags = _get_marvin_genres(book_id)
-                        this_book.title_sort = row[b'CalibreTitleSort']
-                        this_book.uuid = row[b'UUID']
-                        this_book.vocabulary = _get_vocabulary_list(cur, book_id)
-                        this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
-                        installed_books[book_id] = this_book
+                            book_id = row[b'id_']
+                            # Get the primary metadata from Books
+                            this_book = Book(row[b'Title'], row[b'Author'].split(', '))
+                            this_book.articles = _get_articles(cur, book_id)
+                            this_book.author_sort = row[b'AuthorSort']
+                            this_book.cid = cid
+                            this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
+                            this_book.comments = row[b'Description']
+                            this_book.cover_file = row[b'CoverFile']
+                            this_book.date_added = row[b'DateAdded']
+                            this_book.date_opened = row[b'DateOpened']
+                            this_book.device_collections = _get_collections(cur, book_id)
+                            this_book.deep_view_prepared = row[b'DeepViewPrepared']
+                            this_book.flags = _get_flags(cur, row)
+                            this_book.hash = hashes[row[b'FileName']]['hash']
+                            this_book.highlights = _get_highlights(cur, book_id)
+                            this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
+                            this_book.mid = book_id
+                            this_book.on_device = _get_on_device_status(this_book.cid)
+                            this_book.path = row[b'FileName']
+                            this_book.pin = row[b'Pin']
+                            this_book.progress = row[b'Progress']
+                            this_book.pubdate = _get_pubdate(row)
+                            this_book.series = row[b'CalibreSeries']
+                            this_book.series_index = row[b'CalibreSeriesIndex']
+                            this_book.tags = _get_marvin_genres(book_id)
+                            this_book.title_sort = row[b'CalibreTitleSort']
+                            this_book.uuid = row[b'UUID']
+                            this_book.vocabulary = _get_vocabulary_list(cur, book_id)
+                            this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
+                            installed_books[book_id] = this_book
+                        except:
+                            self._log("ERROR adding to installed_books")
+                            import traceback
+                            self._log(traceback.format_exc())
 
                         pb.increment()
 

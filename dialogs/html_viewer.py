@@ -168,6 +168,7 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
                                               'icons',
                                               'from_marvin.png')))
             self.refresh_button.setObjectName('refresh_button')
+            self.refresh_button.setEnabled(bool(self.installed_book.cid))
 
         # Hook the button events
         self.bb.clicked.connect(self.dispatch_button_click)
