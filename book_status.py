@@ -2204,6 +2204,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         # ~~~~~~ Collections + Flags ~~~~~~
         ccas = self._get_calibre_collections(cid)
+        if ccas is None:
+            ccas = []
         flags = self.installed_books[book_id].flags
         collection_assignments = sorted(flags + ccas, key=sort_key)
 
@@ -2540,7 +2542,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Generate a hash of all text and css files in epub
         '''
-        self._log_location(os.path.basename(zipfile))
+        #self._log_location(os.path.basename(zipfile))
 
         # Find the OPF file in the zipped ePub, extract a list of text files
         try:

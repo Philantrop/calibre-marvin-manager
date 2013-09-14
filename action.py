@@ -120,6 +120,8 @@ class MarvinManagerAction(InterfaceAction):
         self.library_last_modified = None
         self.marvin_connected = False
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
+        if not os.path.exists(self.resources_path):
+            os.makedirs(self.resources_path)
         self.virtual_library = None
 
         # Build a current opts object

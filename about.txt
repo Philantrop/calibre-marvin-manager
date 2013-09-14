@@ -1,8 +1,12 @@
 Marvin XD
 
-A calibre plugin for managing Marvin
+A calibre plugin for managing Marvin, an iOS reader application.
 © 2013 Gregory Riker
 
 Version history:
-1.0.0 [15 September 2013]
+1.0.2 [14 September 2013]
+ • Fixed error with empty calibre collection assignments
+1.0.1 [13 September 2013]
+ • Fixed startup crash on fresh installs
+1.0.0 [13 September 2013]
  • Initial release
