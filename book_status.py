@@ -5428,6 +5428,9 @@ class BookStatusDialog(SizePersistedDialog):
         Update Marvin from calibre metadata
         This clones upload_books() in the iOS reader application driver
         All metadata is asserted, cover optional if changes
+
+        Books in gui.memory_view.model().db are Metadata objects
+        self._log("standard_field_keys: %s" % self.opts.gui.memory_view.model().db[0].standard_field_keys())
         '''
 
         # Highlight the row we're working on
@@ -5460,8 +5463,22 @@ class BookStatusDialog(SizePersistedDialog):
             if book.path == path:
                 break
         else:
-            self._log("ERROR: couldn't find '%s' in memory_view" % path)
-            device_view_row = None
+            # If we didn't find the path, then possibly the book was updated/replaced
+            # If the book was originally downloaded via OPDS, we should have a uuid match
+            if 'uuid' not in mismatches:
+                self._log("path not found in memory_view, scanning by uuid")
+                uuid = self.installed_books[book_id].uuid
+                for device_view_row in self.opts.gui.memory_view.model().map:
+                    book = self.opts.gui.memory_view.model().db[device_view_row]
+                    if book.uuid == uuid:
+                        break
+                else:
+                    self._log("ERROR: uuid '%s' not found in memory_view" % uuid)
+                    device_view_row = None
+            else:
+                self._log("ERROR: path '%s' not found in memory_view, uuid mismatch" % path)
+                self._log(" Device view will not be updated")
+                device_view_row = None
 
         '''
         We need to tweak the in-memory versions of the Marvin library as if they had
@@ -5479,13 +5496,15 @@ class BookStatusDialog(SizePersistedDialog):
                 cached_books[path]['authors'] = authors
                 cached_books[path]['author'] = ', '.join(authors)
                 self.installed_books[book_id].authors = authors
-                self.opts.gui.memory_view.model().db[device_view_row].authors = authors
+                if device_view_row:
+                    self.opts.gui.memory_view.model().db[device_view_row].authors = authors
 
             if key == 'author_sort':
                 author_sort = mismatches[key]['calibre']
                 cached_books[path]['author_sort'] = author_sort
                 self.installed_books[book_id].author_sort = author_sort
-                self.opts.gui.memory_view.model().db[device_view_row].author_sort = author_sort
+                if device_view_row_:
+                    self.opts.gui.memory_view.model().db[device_view_row].author_sort = author_sort
 
             if key == 'comments':
                 comments = mismatches[key]['calibre']
@@ -5522,13 +5541,15 @@ class BookStatusDialog(SizePersistedDialog):
                 title = mismatches[key]['calibre']
                 cached_books[path]['title'] = title
                 self.installed_books[book_id].title = title
-                self.opts.gui.memory_view.model().db[device_view_row].title = title
+                if device_view_row:
+                    self.opts.gui.memory_view.model().db[device_view_row].title = title
 
             if key == 'title_sort':
                 title_sort = mismatches[key]['calibre']
                 cached_books[path]['title_sort'] = title_sort
                 self.installed_books[book_id].title_sort = title_sort
-                self.opts.gui.memory_view.model().db[device_view_row].title_sort = title_sort
+                if device_view_row:
+                    self.opts.gui.memory_view.model().db[device_view_row].title_sort = title_sort
 
             if key == 'uuid':
                 uuid = mismatches[key]['calibre']
@@ -5536,8 +5557,9 @@ class BookStatusDialog(SizePersistedDialog):
                 self.installed_books[book_id].matches = [uuid]
 
                 self.installed_books[book_id].uuid = uuid
-                self.opts.gui.memory_view.model().db[device_view_row].uuid = uuid
-                self.opts.gui.memory_view.model().db[device_view_row].in_library = "UUID"
+                if device_view_row:
+                    self.opts.gui.memory_view.model().db[device_view_row].uuid = uuid
+                    self.opts.gui.memory_view.model().db[device_view_row].in_library = "UUID"
 
                 # Add to hash_map
                 self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
