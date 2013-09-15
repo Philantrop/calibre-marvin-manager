@@ -400,7 +400,7 @@ class MarvinManagerAction(InterfaceAction):
         self._log_location("QUESTION: %s" % msg)
 
         # Show progress
-        pb = ProgressBar(parent=self.gui, window_title="Removing annotations", on_top=True)
+        pb = ProgressBar(parent=self.gui, window_title="Removing annotations")
         total_books = len(db.data)
         pb.set_maximum(total_books)
         pb.set_value(0)

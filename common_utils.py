@@ -229,7 +229,7 @@ class MyBlockingBusy(QDialog):
     ACKNOWLEDGED = 2
 
     def __init__(self, gui, msg, size=100, window_title='Marvin XD', show_cancel=False,
-                 on_top=True):
+                 on_top=False):
         flags = Qt.FramelessWindowHint
         if on_top:
             flags = Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
@@ -694,7 +694,7 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
     id = db.FIELD_MAP['id']
 
     # Show progress
-    pb = ProgressBar(parent=parent, window_title=window_title, on_top=True)
+    pb = ProgressBar(parent=parent, window_title=window_title)
     total_books = len(annotation_map)
     pb.set_maximum(total_books)
     pb.set_value(1)

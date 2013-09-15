@@ -2000,8 +2000,7 @@ class BookStatusDialog(SizePersistedDialog):
                         added[item]['model_row'] = model_row
                         self.tm.set_calibre_id(model_row, cid)
 
-            pb = ProgressBar(parent=self.opts.gui, window_title="Updating calibre metadata",
-                             on_top=True)
+            pb = ProgressBar(parent=self.opts.gui, window_title="Updating calibre metadata")
             total_books = len(added)
             # Show progress in dispatched method - 2 times
             pb.set_maximum(total_books * 2)
@@ -2309,8 +2308,7 @@ class BookStatusDialog(SizePersistedDialog):
         selected_books = self._selected_books()
         if selected_books:
             if not silent:
-                pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word count",
-                                 on_top=True)
+                pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word count")
                 total_books = len(selected_books)
                 pb.set_maximum(total_books)
                 pb.set_value(0)
@@ -3405,7 +3403,6 @@ class BookStatusDialog(SizePersistedDialog):
             self._busy_operation_setup("Generating Deep View for %s" %
                                      ("1 book…" if len(selected_books) == 1 else
                                       "%d books…" % len(selected_books)),
-                                      on_top=True,
                                       show_cancel=True)
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
@@ -4177,7 +4174,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                     rows = cur.fetchall()
 
-                    pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 2 of 2", on_top=True)
+                    pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 2 of 2")
                     book_count = len(rows)
                     pb.set_maximum(book_count)
                     pb.set_value(0)
@@ -4494,7 +4491,7 @@ class BookStatusDialog(SizePersistedDialog):
             os.remove(path)
             return hash
 
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning calibre library", on_top=True)
+        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning calibre library")
         pb.set_label('{:^100}'.format("Waiting for library scan to complete…"))
         pb.set_value(0)
         pb.show()
@@ -4609,7 +4606,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.hash_cache = self._localize_hash_cache(cached_books)
 
         # Set up the progress bar
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 1 of 2", on_top=True)
+        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 1 of 2")
         total_books = len(cached_books)
         pb.set_maximum(total_books)
         pb.set_value(0)
@@ -5593,8 +5590,7 @@ class BookStatusDialog(SizePersistedDialog):
                 return MessageBox(MessageBox.WARNING, title, msg,
                                   show_copy_button=False).exec_()
 
-        pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata",
-                         on_top=True)
+        pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata")
         total_books = len(selected_books)
         # Show progress in dispatched method - 2 times
         pb.set_maximum(total_books * 2)
