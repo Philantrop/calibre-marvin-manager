@@ -2069,10 +2069,14 @@ class BookStatusDialog(SizePersistedDialog):
                         updated = True
                         um = mi.metadata_for_field(lookup)
                         ndo = strptime(new_date, "%Y-%m-%d %H:%M", as_utc=False, assume_utc=True)
-                        um['#value#'] = ndo
-                        mi.set_user_metadata(lookup, um)
-                        db.set_metadata(cid, mi, set_title=False, set_authors=False,
-                                        commit=True)
+                        try:
+                            um['#value#'] = ndo
+                            mi.set_user_metadata(lookup, um)
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                            commit=True)
+                        except:
+                            self._log("unable to set custom field value, calibre needs to be restarted")
+
                     else:
                         self._log("'%s' has no Last read date" % selected_books[row]['title'])
             if updated and update_gui:
