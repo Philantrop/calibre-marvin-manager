@@ -514,10 +514,11 @@ class MarvinManagerAction(InterfaceAction):
                     #self._log(etree.tostring(connection, pretty_print=True))
                     self._log_location("%s running iOS %s" % (connection.get('device'), connection.get('system')))
 
-                    has_password = connection.find('has_password')
-                    if has_password is not None:
-                        self.has_password = bool(has_password.text == "true")
-                        self._log("self.has_password: %s" % self.has_password)
+                    self.has_password = False
+                    chp = connection.find('has_password')
+                    if chp is not None:
+                        self.has_password = bool(chp.text == "true")
+                    self._log("self.has_password: %s" % self.has_password)
 
                     self.connected_device.set_busy_flag(False)
             else:
