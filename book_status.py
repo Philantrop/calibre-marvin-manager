@@ -3998,10 +3998,11 @@ class BookStatusDialog(SizePersistedDialog):
                         mismatches['series'] = {'calibre': mi.series,
                                                 'Marvin': row[b'CalibreSeries']}
 
-                if bool(mi.series_index) or bool(float(row[b'CalibreSeriesIndex'])):
-                    if mi.series_index != float(row[b'CalibreSeriesIndex']):
+                csi = row[b'CalibreSeriesIndex']
+                if bool(mi.series_index) or bool(csi):
+                    if mi.series_index != float(csi):
                         mismatches['series_index'] = {'calibre': mi.series_index,
-                                                      'Marvin': row[b'CalibreSeriesIndex']}
+                                                      'Marvin': csi}
 
                 # ~~~~~~~~ title ~~~~~~~~
                 if mi.title != row[b'Title']:
