@@ -3997,16 +3997,17 @@ class BookStatusDialog(SizePersistedDialog):
                                                'Marvin': row[b'Publisher']}
 
                 # ~~~~~~~~ series, series_index ~~~~~~~~
+                # We only care about series_index if series is assigned
                 if bool(mi.series) or bool(row[b'CalibreSeries']):
                     if mi.series != row[b'CalibreSeries']:
                         mismatches['series'] = {'calibre': mi.series,
                                                 'Marvin': row[b'CalibreSeries']}
 
-                csi = row[b'CalibreSeriesIndex']
-                if bool(mi.series_index) or bool(csi):
-                    if mi.series_index != float(csi):
-                        mismatches['series_index'] = {'calibre': mi.series_index,
-                                                      'Marvin': csi}
+                    csi = row[b'CalibreSeriesIndex']
+                    if bool(mi.series_index) or bool(csi):
+                        if mi.series_index != float(csi):
+                            mismatches['series_index'] = {'calibre': mi.series_index,
+                                                          'Marvin': csi}
 
                 # ~~~~~~~~ title ~~~~~~~~
                 if mi.title != row[b'Title']:
