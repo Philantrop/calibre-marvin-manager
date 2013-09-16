@@ -4,6 +4,8 @@ A calibre plugin for managing Marvin, an iOS reader application.
 © 2013 Gregory Riker
 
 Version history:
+1.0.4 [16 September 2013]
+ • Bug fixes (issues #12, 14, 15, 16)
 1.0.3 [15 September 2013]
  • Improved updating of Device view when book path has changed during session
  • Fixed some dialog layer priorities
