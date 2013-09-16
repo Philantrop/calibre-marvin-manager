@@ -696,7 +696,7 @@ class InventoryAnnotatedBooks(QThread):
                     continue
             else:
                 raw = mi.get_user_metadata(self.field, False)
-                if raw['#value#']:
+                if hasattr(raw, '#value#') and raw['#value#']:
                     soup = BeautifulSoup(raw['#value#'])
                     if soup.find('div', 'user_annotations') is not None:
                         self.annotation_map.append(mi.id)
