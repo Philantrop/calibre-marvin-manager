@@ -4,6 +4,8 @@ A calibre plugin for managing Marvin, an iOS reader application.
 © 2013 Gregory Riker
 
 Version history:
+1.0.6 [18 September 2013]
+ • Properly handle metadata changes when importing books from Marvin
 1.0.5 [16 September 2013]
  • Improved error handling, ignore series_index when no series
 1.0.4 [16 September 2013]
