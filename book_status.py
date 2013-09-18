@@ -1941,7 +1941,6 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Filter out books already in calibre
         Hook into gui.iactions['Add Books'].add_books_from_device()
-        gui2.actions.add #406
         '''
         self._log_location("not fully implemented")
 
@@ -1958,38 +1957,46 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Build map of added books from the model so we know which items to monitor for completion
         if paths_to_add:
-            # Find the books in the model so we can monitor the in_library field
+            # Find the books in the Device model
             model = self.parent.gui.memory_view.model()
             added = {}
             for item in model.sorted_map:
+                original_cids = self.parent.opts.gui.current_db.search_getting_ids('formats:EPUB', '')
                 book = model.db[item]
                 if book.path in paths_to_add:
-                    added[item] = {'path': book.path}
+                    # Tell calibre to add the paths
+                    # gui2.actions.add #406
+                    self.opts.gui.iactions['Add Books'].add_books_from_device(self.parent.gui.memory_view,
+                                                                              paths=[book.path])
+                    # Wait for add_books job
+                    while not self.parent.gui.job_manager.unfinished_jobs():
+                        Application.processEvents()
+                    this_job = self.parent.gui.job_manager.unfinished_jobs()[0]
 
-            # Tell calibre to add the paths
-            self.opts.gui.iactions['Add Books'].add_books_from_device(self.parent.gui.memory_view,
-                                                                      paths=paths_to_add)
+                    while not this_job.is_finished:
+                        Application.processEvents()
 
-            # Wait for added books to be updated in model.db
-            # in_library property will be set to AUTHOR (or, less likely, UUID)
-            incomplete = True
-            while incomplete:
-                Application.processEvents()
-                for item in added:
-                    if model.db[item].in_library is None:
-                        break
-                else:
-                    incomplete = False
+                    # Wait for current_db to be updated with one new cid
+                    while True:
+                        Application.processEvents()
+                        updated_cids = self.parent.opts.gui.current_db.search_getting_ids('formats:EPUB', '')
+                        added_cids = list(set(updated_cids) - set(original_cids))
+                        if added_cids:
+                            break
+                    added[item] = {'path': book.path, 'cid': added_cids[0], 'row': item}
+
+            #self._log("added: %s" % added)
 
             # Update in-memory with newly minted cid, populate added
             for item in added:
                 #self._log(model.db[item].all_field_keys())
-                cid = model.db[item].application_id
+                #cid = model.db[item].application_id
+                cid = added[item]['cid']
 
                 # Add book_id, cid to item dict, update installed_books with cid
                 for book in self.installed_books.values():
                     if book.path == added[item]['path']:
-                        added[item]['cid'] = cid
+                        #added[item]['cid'] = cid
                         added[item]['book_id'] = book.mid
                         book.cid = cid
                         break
@@ -2021,9 +2028,8 @@ class BookStatusDialog(SizePersistedDialog):
                 mismatches['comments'] = {'Marvin': this_book['description']}
                 mismatches['pubdate'] = {'Marvin': this_book['pubdate']}
                 mismatches['publisher'] = {'Marvin': this_book['publisher']}
-                if this_book['series']:
-                    mismatches['series'] = {'Marvin': this_book['series']}
-                    mismatches['series_index'] = {'Marvin': this_book['series_index']}
+                mismatches['series'] = {'Marvin': this_book['series']}
+                mismatches['series_index'] = {'Marvin': this_book['series_index']}
                 mismatches['tags'] = {'Marvin': this_book['tags']}
                 mismatches['title'] = {'Marvin': this_book['title']}
                 mismatches['title_sort'] = {'Marvin': this_book['title_sort']}
@@ -2033,17 +2039,37 @@ class BookStatusDialog(SizePersistedDialog):
                 mismatches['uuid'] = {'calibre': mi.uuid,
                                       'Marvin': this_book['uuid']}
 
-                # Do the magic
+                # Update calibre metadata to match Marvin metadata
+                self._log("updating metadata for cid %s" % repr(added[item]['cid']))
                 self._update_calibre_metadata(added[item]['book_id'],
                                               added[item]['cid'],
                                               mismatches,
                                               added[item]['model_row'],
-                                              pb)
+                                              pb,
+                                              update_local_db=False)
+
+                # Update .application_id in gui.booklists to match our new cid
+                self._log("updating application_id in booklist")
+                booklist = self.parent.gui.booklists()[0]
+                for book in booklist:
+                    if book.uuid == mi.uuid:
+                        book.application_id = added[item]['cid']
+                        break
 
             pb.hide()
 
+            # Update local_db
+            self._localize_marvin_database()
+
             # Launch row flasher
             self._flash_affected_rows()
+
+            # Refresh calibre view to reflect changed metadata
+            updateCalibreGUIView()
+
+            # Reset connected status in Library window
+            self.parent.gui.book_on_device(None, reset=True)
+
 
     def _apply_date_read(self, update_gui=True):
         '''
@@ -4315,7 +4341,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Consolidated command handler
         '''
-        self._log_location()
+        self._log_location("update_local_db: %s" % update_local_db)
 
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
@@ -4873,7 +4899,7 @@ class BookStatusDialog(SizePersistedDialog):
         # Update in-memory
         self.installed_books[book_id].calibre_collections = updated_calibre_collections
 
-    def _update_calibre_metadata(self, book_id, cid, mismatches, model_row, pb):
+    def _update_calibre_metadata(self, book_id, cid, mismatches, model_row, pb, update_local_db=True):
         '''
         Update calibre from Marvin metadata
         If uuids differ, we need to send an update_metadata command to Marvin
@@ -4890,6 +4916,7 @@ class BookStatusDialog(SizePersistedDialog):
         mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
 
         self._log_location(mi.title)
+        self._log("update_local_db: %s" % update_local_db)
         self._log("mismatches:\n%s" % mismatches)
 
         # We need these if uuid needs to be updated
@@ -4954,7 +4981,8 @@ class BookStatusDialog(SizePersistedDialog):
 
                     update_soup.manifest.insert(0, book_tag)
 
-                    results = self._issue_command(command_name, update_soup)
+                    results = self._issue_command(command_name, update_soup,
+                                                  update_local_db=update_local_db)
                     if results['code']:
                         self._log_location("ERROR: %s" % results)
 
@@ -5018,7 +5046,8 @@ class BookStatusDialog(SizePersistedDialog):
                 book_tag['newuuid'] = mismatches[key]['calibre']
                 update_soup.manifest.insert(0, book_tag)
 
-                results = self._issue_command(command_name, update_soup)
+                results = self._issue_command(command_name, update_soup,
+                                              update_local_db=update_local_db)
                 if results['code']:
                     self._log_location("ERROR: %s" % results)
 
