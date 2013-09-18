@@ -778,7 +778,7 @@ class MarkupTableModel(QAbstractTableModel):
 
     def set_match_quality(self, row, value):
         self.arraydata[row][self.parent.MATCHED_COL] = value
-        #self.parent.repaint()
+        self.parent.repaint()
 
     def get_path(self, row):
         return self.arraydata[row][self.parent.PATH_COL]
@@ -2040,7 +2040,7 @@ class BookStatusDialog(SizePersistedDialog):
                                       'Marvin': this_book['uuid']}
 
                 # Update calibre metadata to match Marvin metadata
-                self._log("updating metadata for cid %s" % repr(added[item]['cid']))
+                # Book is added to updated_match_quality for flashing
                 self._update_calibre_metadata(added[item]['book_id'],
                                               added[item]['cid'],
                                               mismatches,
@@ -4341,8 +4341,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Consolidated command handler
         '''
-        self._log_location("update_local_db: %s" % update_local_db)
-
+        self._log_location()
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
@@ -4915,9 +4914,9 @@ class BookStatusDialog(SizePersistedDialog):
         db = self.opts.gui.current_db
         mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
 
-        self._log_location(mi.title)
-        self._log("update_local_db: %s" % update_local_db)
-        self._log("mismatches:\n%s" % mismatches)
+        self._log_location("{0} cid:{1}".format(repr(mi.title), cid))
+        if self.opts.prefs.get('development_mode', False):
+            self._log("mismatches:\n%s" % mismatches)
 
         # We need these if uuid needs to be updated
         cached_books = self.parent.connected_device.cached_books
@@ -5051,9 +5050,9 @@ class BookStatusDialog(SizePersistedDialog):
                 if results['code']:
                     self._log_location("ERROR: %s" % results)
 
-            self._clear_selected_rows()
-
         pb.increment()
+
+        self._clear_selected_rows()
 
         # Update metadata match quality in the visible model
         old = self.tm.get_match_quality(model_row)
