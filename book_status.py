@@ -3176,8 +3176,14 @@ class BookStatusDialog(SizePersistedDialog):
         rbp = '/'.join(['/Documents', path])
         lbp = os.path.join(self.local_cache_folder, path)
 
-        with open(lbp, 'wb') as out:
-            self.ios.copy_from_idevice(str(rbp), out)
+        try:
+            with open(lbp, 'wb') as out:
+                self.ios.copy_from_idevice(str(rbp), out)
+        except:
+            self._log("ERROR: Unable to open %s for output" % repr(lbp))
+            import traceback
+            self._log(traceback.format_exc())
+            return -1
 
         hash = self._compute_epub_hash(lbp)
 

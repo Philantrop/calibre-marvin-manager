@@ -4,6 +4,8 @@ A calibre plugin for managing Marvin, an iOS reader application.
 © 2013 Gregory Riker
 
 Version history:
+1.0.7 [21 September 2013]
+ • Added error handler for illegal filenames when generating hashes
 1.0.6 [18 September 2013]
  • Properly handle metadata changes when importing books from Marvin
 1.0.5 [16 September 2013]
