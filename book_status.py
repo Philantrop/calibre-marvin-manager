@@ -3180,10 +3180,13 @@ class BookStatusDialog(SizePersistedDialog):
             with open(lbp, 'wb') as out:
                 self.ios.copy_from_idevice(str(rbp), out)
         except:
+            # We have an invalid filename, but we need to return a unique hash
             self._log("ERROR: Unable to open %s for output" % repr(lbp))
             import traceback
             self._log(traceback.format_exc())
-            return -1
+            m = hashlib.md5()
+            m.update(lbp)
+            return m.hexdigest()
 
         hash = self._compute_epub_hash(lbp)
 
@@ -4005,23 +4008,30 @@ class BookStatusDialog(SizePersistedDialog):
                                                 'Marvin': row[b'CalibreCoverHash']}
 
                 # ~~~~~~~~ pubdate ~~~~~~~~
-                if bool(row[b'DatePublished']) or bool(mi.pubdate):
-                    try:
-                        mb_pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
-                        mb_pubdate = mb_pubdate.replace(hour=0, minute=0, second=0)
-                    except:
-                        mb_pubdate = None
-                    naive = mi.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
 
-                    if naive and mb_pubdate:
-                        td = naive - mb_pubdate
-                        if abs(td.days) > 1:
+                if (mi.pubdate.year == 101 and mi.pubdate.month == 1 and
+                    row[b'DatePublished'] is None):
+                    # Special case when calibre pubdate is unknown (101-01-01) and
+                    # Marvin is None
+                    pass
+                else:
+                    if bool(row[b'DatePublished']) or bool(mi.pubdate):
+                        try:
+                            mb_pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
+                            mb_pubdate = mb_pubdate.replace(hour=0, minute=0, second=0)
+                        except:
+                            mb_pubdate = None
+                        naive = mi.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
+
+                        if naive and mb_pubdate:
+                            td = naive - mb_pubdate
+                            if abs(td.days) > 1:
+                                mismatches['pubdate'] = {'calibre': naive,
+                                                         'Marvin': mb_pubdate}
+                        elif naive != mb_pubdate:
+                            # One of them is None
                             mismatches['pubdate'] = {'calibre': naive,
                                                      'Marvin': mb_pubdate}
-                    elif naive != mb_pubdate:
-                        # One of them is None
-                        mismatches['pubdate'] = {'calibre': naive,
-                                                 'Marvin': mb_pubdate}
 
                 # ~~~~~~~~ publisher ~~~~~~~~
                 if mi.publisher != row[b'Publisher']:
@@ -5496,9 +5506,15 @@ class BookStatusDialog(SizePersistedDialog):
 
         # Find the book in Device map
         for device_view_row in self.opts.gui.memory_view.model().map:
-            book = self.opts.gui.memory_view.model().db[device_view_row]
-            if book.path == path:
-                break
+            try:
+                book = self.opts.gui.memory_view.model().db[device_view_row]
+                if book.path == path:
+                    break
+            except:
+                import traceback
+                self._log("ERROR: invalid device_view_row %s" % device_view_row)
+                self._log(traceback.format_exc())
+
         else:
             # If we didn't find the path, then possibly the book was updated/replaced
             # If the book was originally downloaded via OPDS, we should have a uuid match
