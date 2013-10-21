@@ -5556,7 +5556,7 @@ class BookStatusDialog(SizePersistedDialog):
                 author_sort = mismatches[key]['calibre']
                 cached_books[path]['author_sort'] = author_sort
                 self.installed_books[book_id].author_sort = author_sort
-                if device_view_row_:
+                if device_view_row:
                     self.opts.gui.memory_view.model().db[device_view_row].author_sort = author_sort
 
             if key == 'comments':
