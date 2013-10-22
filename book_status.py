@@ -1942,7 +1942,7 @@ class BookStatusDialog(SizePersistedDialog):
         Filter out books already in calibre
         Hook into gui.iactions['Add Books'].add_books_from_device()
         '''
-        self._log_location("not fully implemented")
+        self._log_location()
 
         # Save the selection region for restoration
         self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
@@ -3200,8 +3200,6 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Retrieve large cover from cache
         '''
-
-
         cover_bytes = None
         self._log_location("fetching large cover from cache")
         con = sqlite3.connect(self.parent.connected_device.local_db_path)
@@ -4984,8 +4982,13 @@ class BookStatusDialog(SizePersistedDialog):
                 marvin_cover = self._fetch_marvin_cover(book_id)
                 if marvin_cover is not None:
                     db.set_cover(cid, marvin_cover)
-                    cover_hash = hashlib.md5(marvin_cover).hexdigest()
 
+                    desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
+                    cover = thumbnail(marvin_cover,
+                                      desired_thumbnail_height,
+                                      desired_thumbnail_height)
+                    cover_hash = hashlib.md5(cover[2]).hexdigest()
+                    
                     # Tell Marvin about the updated cover_hash
                     command_name = 'update_metadata_items'
                     command_element = 'updatemetadataitems'
