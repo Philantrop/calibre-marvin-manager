@@ -3962,16 +3962,19 @@ class BookStatusDialog(SizePersistedDialog):
                 '''
                 Retrieve cover_hash from archive, or create/store
                 '''
+                #self._log_location(this_book.title)
                 ach = self.archived_cover_hashes.get(str(this_book.cid), {})
                 cover_last_modified = self.opts.gui.current_db.cover_last_modified(this_book.cid, index_is_id=True)
                 if ('cover_last_modified' in ach and
                         ach['cover_last_modified'] == cover_last_modified):
+                    #self._log("returning cached cover_hash %s" % ach['cover_hash'])
                     return ach['cover_hash']
 
                 # Generate calibre cover hash (same process used by driver when sending books)
-                cover_hash = 0
+                cover_hash = '0'
                 desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
                 try:
+                    #self._log("mi.cover_data[0]: %s" % repr(mi.cover_data[0]))
                     sized_thumb = thumbnail(mi.cover_data[1],
                                             desired_thumbnail_height,
                                             desired_thumbnail_height)
