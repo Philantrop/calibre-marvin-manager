@@ -2070,7 +2070,6 @@ class BookStatusDialog(SizePersistedDialog):
             # Reset connected status in Library window
             self.parent.gui.book_on_device(None, reset=True)
 
-
     def _apply_date_read(self, update_gui=True):
         '''
         Fetch the LAST_OPENED date, convert to datetime, apply to custom field
@@ -3311,7 +3310,7 @@ class BookStatusDialog(SizePersistedDialog):
         self._log_location()
 
         if False:
-            # Scan library books for hashes
+            ''' Scan library books for hashes '''
             if self.library_scanner.isRunning():
                 self._busy_operation_setup("Scanning calibre library…")
                 self.library_scanner.wait()
@@ -4153,8 +4152,12 @@ class BookStatusDialog(SizePersistedDialog):
 
         self._log_location()
 
+        marvin_content_updated = getattr(self.parent, 'marvin_content_updated', False)
         installed_books = getattr(self.parent, 'installed_books', None)
-        if installed_books is None:
+        if installed_books is None or marvin_content_updated:
+            if marvin_content_updated:
+                setattr(self.parent, 'marvin_content_updated', False)
+            
             installed_books = {}
 
             # Wait for device driver to complete initialization, but tell user what's happening
@@ -4445,10 +4448,13 @@ class BookStatusDialog(SizePersistedDialog):
             self._log("creating new local hash cache: version %d" %
                       hash_cache['version'])
 
+            """
             # Clear the marvin_content_updated flag
-            if self.parent.marvin_content_updated:
-                self.parent.marvin_content_updated = False
-
+            if getattr(self.parent, 'marvin_content_updated', False):
+                self._log("clearing marvin_content_updated flag")
+                setattr(self.parent, 'marvin_content_updated', False)
+            """
+            
         self.local_hash_cache = lhc
         self.remote_hash_cache = rhc
 
