@@ -314,19 +314,35 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
         self.marvin_cover.setScaledContents(False)
 
         if self.cid:
+            db = self.opts.gui.current_db
             if 'cover_hash' not in self.mismatches:
-                db = self.opts.gui.current_db
                 mi = db.get_metadata(self.cid, index_is_id=True, get_cover=True, cover_as_data=True)
-                c_image = QImage()
-                c_image.loadFromData(mi.cover_data[1])
-                c_image = c_image.scaledToHeight(self.COVER_ICON_SIZE,
-                                                           Qt.SmoothTransformation)
-                self.c_pixmap = QPixmap(QSize(c_image.width(),
-                                              c_image.height()))
-                c_painter = QPainter(self.c_pixmap)
-                c_painter.setRenderHints(c_painter.Antialiasing)
-                c_painter.drawImage(0, 0, c_image)
 
+                c_image = QImage()
+                if mi.has_cover:                
+                    c_image.loadFromData(mi.cover_data[1])
+                    c_image = c_image.scaledToHeight(self.COVER_ICON_SIZE,
+                                                     Qt.SmoothTransformation)
+                    self.c_pixmap = QPixmap(QSize(c_image.width(),
+                                                  c_image.height()))
+                    c_painter = QPainter(self.c_pixmap)
+                    c_painter.setRenderHints(c_painter.Antialiasing)
+                    c_painter.drawImage(0, 0, c_image)
+                else:
+                    c_image.load(I('book.png'))
+                    c_image = c_image.scaledToWidth(135,
+                                                    Qt.SmoothTransformation)
+                    # Construct a QPixmap with dialog background
+                    self.c_pixmap = QPixmap(
+                        QSize(c_image.width(),
+                              c_image.height()))
+                    c_painter = QPainter(self.c_pixmap)
+                    c_painter.setRenderHints(c_painter.Antialiasing)
+                    bgcolor = self.palette().color(QPalette.Background)
+                    #c_painter.fillRect(self.c_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
+                    c_painter.fillRect(self.c_pixmap.rect(), bgcolor)
+                    c_painter.drawImage(0, 0, c_image)
+                    
                 # Set calibre cover
                 self.calibre_cover.setPixmap(self.c_pixmap)
 
@@ -334,8 +350,6 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                 self.marvin_cover.setPixmap(self.c_pixmap)
             else:
                 # Covers don't match - render with border
-                db = self.opts.gui.current_db
-
                 # Construct a QImage with the cover sized to fit inside border
                 c_image = QImage()
                 cdata = db.cover(self.cid, index_is_id=True)
