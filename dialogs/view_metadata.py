@@ -339,7 +339,6 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                     c_painter = QPainter(self.c_pixmap)
                     c_painter.setRenderHints(c_painter.Antialiasing)
                     bgcolor = self.palette().color(QPalette.Background)
-                    #c_painter.fillRect(self.c_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
                     c_painter.fillRect(self.c_pixmap.rect(), bgcolor)
                     c_painter.drawImage(0, 0, c_image)
                     
