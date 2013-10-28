@@ -2722,12 +2722,12 @@ class BookStatusDialog(SizePersistedDialog):
             '''
 
             if self.opts.prefs.get('development_mode', False):
-                self._log("%s uuid: %s matches: %s on_device: %s hash: %s" %
-                          (book_data.title,
-                           repr(book_data.uuid),
-                           repr(book_data.matches),
-                           repr(book_data.on_device),
-                           repr(book_data.hash)))
+                self._log_location("%s uuid: %s matches: %s on_device: %s hash: %s" %
+                                   (book_data.title,
+                           			repr(book_data.uuid),
+                           			repr(book_data.matches),
+                           			repr(book_data.on_device),
+                           			repr(book_data.hash)))
                 self._log("metadata_mismatches: %s" % repr(book_data.metadata_mismatches))
             match_quality = self.WHITE
 
@@ -4155,7 +4155,7 @@ class BookStatusDialog(SizePersistedDialog):
         if installed_books is None or marvin_content_updated:
             if marvin_content_updated:
                 setattr(self.parent, 'marvin_content_updated', False)
-            
+
             installed_books = {}
 
             # Wait for device driver to complete initialization, but tell user what's happening
@@ -4452,7 +4452,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log("clearing marvin_content_updated flag")
                 setattr(self.parent, 'marvin_content_updated', False)
             """
-            
+
         self.local_hash_cache = lhc
         self.remote_hash_cache = rhc
 
@@ -4988,7 +4988,7 @@ class BookStatusDialog(SizePersistedDialog):
                                       desired_thumbnail_height,
                                       desired_thumbnail_height)
                     cover_hash = hashlib.md5(cover[2]).hexdigest()
-                    
+
                     # Tell Marvin about the updated cover_hash
                     command_name = 'update_metadata_items'
                     command_element = 'updatemetadataitems'
