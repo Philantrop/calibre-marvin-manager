@@ -319,7 +319,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                 mi = db.get_metadata(self.cid, index_is_id=True, get_cover=True, cover_as_data=True)
 
                 c_image = QImage()
-                if mi.has_cover:                
+                if mi.has_cover:
                     c_image.loadFromData(mi.cover_data[1])
                     c_image = c_image.scaledToHeight(self.COVER_ICON_SIZE,
                                                      Qt.SmoothTransformation)
@@ -341,12 +341,17 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog):
                     bgcolor = self.palette().color(QPalette.Background)
                     c_painter.fillRect(self.c_pixmap.rect(), bgcolor)
                     c_painter.drawImage(0, 0, c_image)
-                    
+
                 # Set calibre cover
                 self.calibre_cover.setPixmap(self.c_pixmap)
 
-                # Marvin cover matches calibre cover
-                self.marvin_cover.setPixmap(self.c_pixmap)
+                if self.opts.prefs.get('development_mode', False):
+                    # Show individual covers
+                    _fetch_marvin_cover()
+                else:
+                    # Show calibre cover on both sides
+                    self.marvin_cover.setPixmap(self.c_pixmap)
+
             else:
                 # Covers don't match - render with border
                 # Construct a QImage with the cover sized to fit inside border
