@@ -4141,10 +4141,12 @@ class BookStatusDialog(SizePersistedDialog):
             cover_hash_cids = sorted(self.archived_cover_hashes.keys())
             #self._log("cover_hash keys: %s" % cover_hash_cids)
 
+			self._busy_operation_setup("Removing obsolete cover hashes")
             for ch_cid in cover_hash_cids:
                 if ch_cid not in active_cids:
                     self._log("removing orphan cid %s from archived_cover_hashes" % ch_cid)
                     del self.archived_cover_hashes[ch_cid]
+			self._busy_operation_teardown()
 
         # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
 
