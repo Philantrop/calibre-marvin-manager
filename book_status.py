@@ -2583,7 +2583,8 @@ class BookStatusDialog(SizePersistedDialog):
                 #self._log(etree.tostring(item, pretty_print=True))
                 mt = item.get('media-type')
                 if mt in ['application/xhtml+xml', 'text/css']:
-                    text_hrefs.append(item.get('href').split('/')[-1])
+                    thr = item.get('href').split('/')[-1]
+                    text_hrefs.append(thr.replace('%20', ' '))
             zf.close()
         except:
             if self.opts.prefs.get('development_mode', False):
@@ -2591,11 +2592,17 @@ class BookStatusDialog(SizePersistedDialog):
                 self._log(traceback.format_exc())
             return None
 
+        if False and self.opts.prefs.get('development_mode', False):
+            self._log("text_hrefs[]:")
+            for th in text_hrefs:
+                self._log(th)
+
         m = hashlib.md5()
         zfi = ZipFile(zipfile).infolist()
         for zi in zfi:
             if False and self.opts.prefs.get('development_mode', False):
                 self._log("evaluating %s" % zi.filename)
+                self._log(repr(zi.filename.split('/')[-1]))
 
             if zi.filename.split('/')[-1] in text_hrefs:
                 m.update(zi.filename)
@@ -2724,10 +2731,10 @@ class BookStatusDialog(SizePersistedDialog):
             if self.opts.prefs.get('development_mode', False):
                 self._log_location("%s uuid: %s matches: %s on_device: %s hash: %s" %
                                    (book_data.title,
-                           			repr(book_data.uuid),
-                           			repr(book_data.matches),
-                           			repr(book_data.on_device),
-                           			repr(book_data.hash)))
+                                    repr(book_data.uuid),
+                                    repr(book_data.matches),
+                                    repr(book_data.on_device),
+                                    repr(book_data.hash)))
                 self._log("metadata_mismatches: %s" % repr(book_data.metadata_mismatches))
             match_quality = self.WHITE
 
@@ -3273,7 +3280,7 @@ class BookStatusDialog(SizePersistedDialog):
                     soft_matches.append(mb)
                     uuids = [mb.uuid]
             else:
-                #self._log("%s not in library_hash_map" % mb.title)
+                self._log("%s not in library_hash_map" % mb.title)
                 pass
             #self._log("storing %s" % repr(uuids))
             mb.matches = uuids
@@ -4141,12 +4148,12 @@ class BookStatusDialog(SizePersistedDialog):
             cover_hash_cids = sorted(self.archived_cover_hashes.keys())
             #self._log("cover_hash keys: %s" % cover_hash_cids)
 
-			self._busy_operation_setup("Removing obsolete cover hashes")
+            self._busy_operation_setup("Removing obsolete cover hashes")
             for ch_cid in cover_hash_cids:
                 if ch_cid not in active_cids:
                     self._log("removing orphan cid %s from archived_cover_hashes" % ch_cid)
                     del self.archived_cover_hashes[ch_cid]
-			self._busy_operation_teardown()
+            self._busy_operation_teardown()
 
         # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
 
