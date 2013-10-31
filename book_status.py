@@ -4059,9 +4059,10 @@ class BookStatusDialog(SizePersistedDialog):
                                                      'Marvin': mb_pubdate}
 
                 # ~~~~~~~~ publisher ~~~~~~~~
-                if mi.publisher != this_book.publisher:
-                    mismatches['publisher'] = {'calibre': mi.publisher,
-                                               'Marvin': this_book.publisher}
+                if mi.publisher != row[b'Publisher']:
+                    if not (mi.publisher is None and row[b'Publisher'] == 'Unknown'):
+                        mismatches['publisher'] = {'calibre': mi.publisher,
+                                                   'Marvin': row[b'Publisher']}
 
                 # ~~~~~~~~ series, series_index ~~~~~~~~
                 # We only care about series_index if series is assigned
@@ -4295,7 +4296,6 @@ class BookStatusDialog(SizePersistedDialog):
                             this_book.pin = row[b'Pin']
                             this_book.progress = row[b'Progress']
                             this_book.pubdate = _get_pubdate(row)
-                            this_book.publisher = _get_publisher(row)
                             this_book.series = row[b'CalibreSeries']
                             this_book.series_index = row[b'CalibreSeriesIndex']
                             this_book.tags = _get_marvin_genres(book_id)
@@ -4322,8 +4322,8 @@ class BookStatusDialog(SizePersistedDialog):
                 if self.opts.prefs.get('development_mode', False):
                     self._log("%d cached books from Marvin:" % len(cached_books))
                     for book in installed_books:
-                        self._log("%s publisher: %s" % (repr(installed_books[book].title),
-                                                         repr(installed_books[book].publisher)))
+                        self._log("%s word_count: %s" % (installed_books[book].title,
+                                                         repr(installed_books[book].word_count)))
             else:
                 self._log("Marvin database is damaged")
                 title = "Damaged database"
