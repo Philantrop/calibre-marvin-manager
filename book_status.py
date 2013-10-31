@@ -2569,6 +2569,19 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Generate a hash of all text and css files in epub
         '''
+        def _url_decode(s):
+            subs = {
+                    '%20': ' ',
+                    '%21': '!',
+                    '%22': '"',
+                    '%23': '#',
+                    '%25': '%'
+                   }
+            for k, v in subs.iteritems():
+                s = s.replace(k, v)
+            return s
+
+        _local_debug = False
         #self._log_location(os.path.basename(zipfile))
 
         # Find the OPF file in the zipped ePub, extract a list of text files
@@ -2584,32 +2597,37 @@ class BookStatusDialog(SizePersistedDialog):
                 mt = item.get('media-type')
                 if mt in ['application/xhtml+xml', 'text/css']:
                     thr = item.get('href').split('/')[-1]
-                    text_hrefs.append(thr.replace('%20', ' '))
+                    text_hrefs.append(_url_decode(thr))
             zf.close()
         except:
-            if self.opts.prefs.get('development_mode', False):
+            if _local_debug:
                 import traceback
                 self._log(traceback.format_exc())
             return None
 
-        if False and self.opts.prefs.get('development_mode', False):
-            self._log("text_hrefs[]:")
+        if _local_debug:
+            self._log("{:-^80}".format(" text_hrefs[] "))
             for th in text_hrefs:
                 self._log(th)
+            self._log("{:-^80}".format(""))
 
         m = hashlib.md5()
         zfi = ZipFile(zipfile).infolist()
         for zi in zfi:
-            if False and self.opts.prefs.get('development_mode', False):
-                self._log("evaluating %s" % zi.filename)
-                self._log(repr(zi.filename.split('/')[-1]))
+            base = zi.filename.split('/')[-1]
+            if _local_debug:
+                #self._log("evaluating %s" % zi.filename)
+                self._log("evaluating %s" % repr(base))
 
-            if zi.filename.split('/')[-1] in text_hrefs:
+            if base in text_hrefs:
                 m.update(zi.filename)
                 m.update(str(zi.file_size))
-                if False and self.opts.prefs.get('development_mode', False):
-                    self._log("adding filename %s" % (zi.filename))
-                    self._log("adding file_size %s" % (zi.file_size))
+                if _local_debug:
+                    self._log(" adding filename %s" % (zi.filename))
+                    self._log(" adding file_size %s" % (zi.file_size))
+
+        if _local_debug:
+            self._log("computed hexdigest: %s" % m.hexdigest())
 
         return m.hexdigest()
 
