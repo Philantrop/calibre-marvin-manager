@@ -5784,6 +5784,10 @@ class BookStatusDialog(SizePersistedDialog):
         Marvin creates status.xml upon receiving command, increments <progress>
         from 0.0 to 1.0 as command progresses.
         '''
+        import traceback
+
+        # POLLING_DELAY affects the frequency with which the spinner is updated
+        POLLING_DELAY = 0.5
         msg = ''
         if timeout_override:
             msg = "using timeout_override %d" % timeout_override
@@ -5820,7 +5824,7 @@ class BookStatusDialog(SizePersistedDialog):
                             }
                         break
                     Application.processEvents()
-                    time.sleep(0.10)
+                    time.sleep(POLLING_DELAY)
 
                 else:
                     # Start a new watchdog timer per iteration
@@ -5888,14 +5892,23 @@ class BookStatusDialog(SizePersistedDialog):
                                 self.watchdog.start()
 
                             Application.processEvents()
-                            time.sleep(0.10)
+                            time.sleep(POLLING_DELAY)
 
                         except:
-                            #import traceback
-                            #self._log(traceback.format_exc())
+                            self.watchdog.cancel()
+
+                            formatted_lines = traceback.format_exc().splitlines()
+                            current_error = formatted_lines[-1]
+
+                            time.sleep(POLLING_DELAY)
                             Application.processEvents()
-                            time.sleep(0.10)
-                            self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
+
+                            self._log("{0}:  retry ({1})".format(
+                                datetime.now().strftime('%H:%M:%S.%f'),
+                                current_error))
+
+                            self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
+                            self.watchdog.start()
 
                     # Command completed
                     self.watchdog.cancel()
