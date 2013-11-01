@@ -4,6 +4,8 @@ A calibre plugin for managing Marvin, an iOS reader application.
 © 2013 Gregory Riker
 
 Version history:
+1.0.9 [01 November 2013]
+ • Various bug fixes and performance improvements
 1.0.8 [25 September 2013]
  • Fixed metadata pubdate comparison when pubdate is unknown
 1.0.7 [21 September 2013]
