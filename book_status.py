@@ -1161,7 +1161,6 @@ class BookStatusDialog(SizePersistedDialog):
         self.tv.horizontalHeader().setClickable(False)
 
     def initialize(self, parent):
-        self.archived_cover_hashes = JSONConfig('plugins/Marvin_XD_resources/cover_hashes')
         self.busy_window = None
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = None
@@ -1181,6 +1180,11 @@ class BookStatusDialog(SizePersistedDialog):
         self.show_match_colors = self.prefs.get('show_match_colors', False)
         self.updated_match_quality = None
         self.verbose = parent.verbose
+
+        # Device-specific cover_hash cache
+        device_cached_hashes = "plugins/Marvin_XD_resources/{0}_cover_hashes".format(
+            re.sub('\W', '_', self.ios.device_name))
+        self.archived_cover_hashes = JSONConfig(device_cached_hashes)
 
         # Subscribe to Marvin driver change events
         self.parent.connected_device.marvin_device_signals.reader_app_status_changed.connect(
@@ -2300,6 +2304,7 @@ class BookStatusDialog(SizePersistedDialog):
                                               show_cancel=show_cancel)
             self.busy_window.start()
             self.busy_window.show()
+            Application.processEvents()
 
     def _busy_operation_teardown(self):
         '''
@@ -3298,7 +3303,7 @@ class BookStatusDialog(SizePersistedDialog):
                     soft_matches.append(mb)
                     uuids = [mb.uuid]
             else:
-                self._log("%s not in library_hash_map" % mb.title)
+                #self._log("%s not in library_hash_map" % mb.title)
                 pass
             #self._log("storing %s" % repr(uuids))
             mb.matches = uuids
