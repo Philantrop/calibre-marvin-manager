@@ -11,7 +11,7 @@ import base64, cStringIO, hashlib, importlib, inspect, json
 import locale, operator, os, cPickle as pickle, re, sqlite3, sys, time
 
 from collections import OrderedDict
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import tz
 from functools import partial
 from lxml import etree
@@ -4050,7 +4050,17 @@ class BookStatusDialog(SizePersistedDialog):
                             mb_pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
                             mb_pubdate = mb_pubdate.replace(hour=0, minute=0, second=0)
                         except:
-                            mb_pubdate = None
+                            if iswindows:
+                                ''' Windows doesn't like negative timestamps '''
+                                epoch = datetime(1970, 1, 1)
+                                mb_pubdate = epoch + timedelta(seconds=int(row[b'DatePublished']))
+                            else:
+                                self._log("Error getting pubdate for %s" % repr(row[b'Title']))
+                                self._log("DatePublished: %s" % repr(row[b'DatePublished']))
+                                import traceback
+                                self._log(traceback.format_exc())
+                                mb_pubdate = None
+
                         naive = mi.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
 
                         if naive and mb_pubdate:
@@ -4134,10 +4144,20 @@ class BookStatusDialog(SizePersistedDialog):
             return ans
 
         def _get_pubdate(row):
+            pubdate = None
             try:
                 pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
             except:
-                pubdate = None
+                if iswindows:
+                    ''' Windows doesn't like negative timestamps '''
+                    epoch = datetime(1970, 1, 1)
+                    pubdate = epoch + timedelta(seconds=int(row[b'DatePublished']))
+                else:
+                    self._log("Error getting pubdate for %s" % repr(row[b'Title']))
+                    self._log("DatePublished: %s" % repr(row[b'DatePublished']))
+                    import traceback
+                    self._log(traceback.format_exc())
+
             return pubdate
 
         def _get_publisher(row):
@@ -4327,8 +4347,8 @@ class BookStatusDialog(SizePersistedDialog):
                 if self.opts.prefs.get('development_mode', False):
                     self._log("%d cached books from Marvin:" % len(cached_books))
                     for book in installed_books:
-                        self._log("%s word_count: %s" % (installed_books[book].title,
-                                                         repr(installed_books[book].word_count)))
+                        self._log("%s pubdate: %s" % (installed_books[book].title,
+                                                         repr(installed_books[book].pubdate)))
             else:
                 self._log("Marvin database is damaged")
                 title = "Damaged database"
