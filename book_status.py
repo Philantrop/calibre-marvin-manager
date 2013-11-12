@@ -240,6 +240,24 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_read.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_read_flag", row))
 
+            menu.addSeparator()
+            # Test for calibre cids
+            calibre_cids = False
+            for row in selected_books:
+                if selected_books[row]['cid'] is not None:
+                    calibre_cids = True
+                    break
+
+            # Test for active Read or Reading list flag mapping
+            read_field = self.parent.prefs.get('read_field_comboBox', None)
+            reading_list_field = self.parent.prefs.get('reading_list_field_comboBox', None)
+            enabled = bool(calibre_cids and (read_field or reading_list_field))
+
+            ac = menu.addAction("Synchronize")
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'sync_collections.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "synchronize_flags", row))
+            ac.setEnabled(enabled)
+
         elif col == self.parent.LAST_OPENED_COL:
             date_read_field = self.parent.prefs.get('date_read_field_comboBox', None)
 
@@ -1046,6 +1064,8 @@ class BookStatusDialog(SizePersistedDialog):
             self.show_annotations(row)
         elif action == 'show_metadata':
             self.show_view_metadata_dialog(row)
+        elif action == 'synchronize_flags':
+            self._apply_flags()
         else:
             selected_books = self._selected_books()
             det_msg = ''
@@ -1277,7 +1297,7 @@ class BookStatusDialog(SizePersistedDialog):
         self.refresh_button.setObjectName('refresh_custom_columns_button')
         self.refresh_button.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
                                                        'icons',
-                                                       'from_marvin.png')))
+                                                       'sync_collections.png')))
         self.refresh_button.setToolTip(self.DEFAULT_REFRESH_TOOLTIP)
         self.refresh_button.setEnabled(False)
 
@@ -1342,7 +1362,8 @@ class BookStatusDialog(SizePersistedDialog):
 
         enabled = []
         for cfn in ['annotations_field_comboBox', 'date_read_field_comboBox',
-                    'progress_field_comboBox', 'word_count_field_comboBox']:
+                    'progress_field_comboBox', 'read_field_comboBox',
+                    'reading_list_field_comboBox','word_count_field_comboBox']:
             cfv = self.parent.prefs.get(cfn, None)
             if cfv:
                 enabled.append(cfv)
@@ -1369,12 +1390,14 @@ class BookStatusDialog(SizePersistedDialog):
             # Process selected books
             rows_to_refresh = sorted(self._selected_books())
             for row in rows_to_refresh:
-                if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                if (self.busy_window and
+                    self.busy_window.cancel_status == self.busy_window.REQUESTED):
                     self._log("user requested cancel")
                     break
                 self.tv.selectRow(row)
                 self._fetch_annotations(update_gui=False)
                 self._apply_date_read(update_gui=False)
+                self._apply_flags(update_gui=False)
                 self._apply_progress(update_gui=False)
                 self._apply_word_count(update_gui=False)
 
@@ -2139,6 +2162,81 @@ class BookStatusDialog(SizePersistedDialog):
             if update_gui:
                 updateCalibreGUIView()
 
+    def _apply_flags(self, update_gui=True):
+        '''
+        Synchronize Read and Reading list flags between calibre and connected iDevice
+        If either is True, set the other to True
+        '''
+        read_lookup = self.parent.prefs.get('read_field_lookup', None)
+        reading_list_lookup = self.parent.prefs.get('reading_list_lookup', None)
+        if read_lookup or reading_list_lookup:
+            self._log_location()
+            selected_books = self._selected_books()
+            for row in selected_books:
+                cid = selected_books[row]['cid']
+                if cid is not None and (read_lookup or reading_list_lookup):
+                    # Get the current custom column values
+                    db = self.opts.gui.current_db
+                    mi = db.get_metadata(cid, index_is_id=True)
+
+                    # Get the current Marvin values
+                    flagbits = self.tm.get_flags(row).sort_key
+
+                    # ~~~~~~~~~ Process Read flag ~~~~~~~~~
+                    c_read = False
+                    if read_lookup:
+                        c_read_um = mi.metadata_for_field(read_lookup)
+                        c_read = bool(c_read_um['#value#'])
+                    m_read = bool(flagbits & self.READ_FLAG)
+
+                    #  If either flag is set, set the counterpart
+                    if read_lookup and (c_read != m_read):
+                        if c_read:
+                            self._log("Setting Marvin Read flag")
+                            self._set_flags('set_read_flag')
+                        else:
+                            self._log("Setting calibre Read flag")
+                            c_read_um['#value#'] = 1
+                            mi.set_user_metadata(read_lookup, c_read_um)
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                commit=True, force_changes=True)
+                    else:
+                        if not read_lookup:
+                            self._log("No custom column mapped for Read")
+                        elif c_read and m_read:
+                            self._log("Both calibre and Marvin Read flags set")
+                        elif not c_read and not m_read:
+                            self._log("Neither calibre nor Marvin Read flags set")
+
+                    # ~~~~~~~~~ Process Reading list flag ~~~~~~~~~
+                    c_reading_list = False
+                    if reading_list_lookup:
+                        c_reading_list_um = mi.metadata_for_field(reading_list_lookup)
+                        c_reading_list = bool(c_reading_list_um['#value#'])
+                    m_reading_list = bool(flagbits & self.READING_FLAG)
+
+                    #  If either flag is set, set the counterpart
+                    if reading_list_lookup and (c_reading_list != m_reading_list):
+                        if c_reading_list:
+                            self._log("Setting Marvin Reading list flag")
+                            self._set_flags('set_reading_list_flag')
+                        else:
+                            self._log("Setting calibre Reading list flag")
+                            c_reading_list_um['#value#'] = 1
+                            mi.set_user_metadata(reading_list_lookup, c_reading_list_um)
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                commit=True, force_changes=True)
+                    else:
+                        if not reading_list_lookup:
+                            self._log("No custom column mapped for Reading list")
+                        elif c_reading_list and m_reading_list:
+                            self._log("Both calibre and Marvin Reading list flags already set")
+                        elif not c_reading_list and not m_reading_list:
+                            self._log("Neither calibre nor Marvin Reading list flags set")
+
+            if update_gui:
+                updateCalibreGUIView()
+
     def _apply_word_count(self, update_gui=True):
         '''
         Fetch Progress, apply to custom field
@@ -2166,8 +2264,6 @@ class BookStatusDialog(SizePersistedDialog):
                         updated = True
             if updated and update_gui:
                 updateCalibreGUIView()
-        else:
-            self._log("No word_count_field_lookup specified")
 
     def _build_metadata_update(self, book_id, cid, book, mismatches):
         '''
@@ -2296,7 +2392,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         if self.busy_window:
             self._log("busy_window is already active with '%s'" %
-                      str(self.busy_window.text()))
+                      str(self.busy_window.msg))
         else:
             QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
             self.busy_window = MyBlockingBusy(self, title, size=60,
@@ -2310,10 +2406,13 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         '''
         self._log_location()
-        self.busy_window.stop()
-        self.busy_window.accept()
-        self.busy_window = None
-        QApplication.restoreOverrideCursor()
+        if self.busy_window:
+            self.busy_window.stop()
+            self.busy_window.accept()
+            self.busy_window = None
+            QApplication.restoreOverrideCursor()
+        else:
+            self._log("no active busy_window")
 
     def _calculate_word_count(self, silent=False):
         '''
@@ -4406,10 +4505,15 @@ class BookStatusDialog(SizePersistedDialog):
 
         update_soup.manifest.insert(0, book_tag)
 
-        self._busy_operation_setup(self.UPDATING_MARVIN_MESSAGE)
+        local_busy_window = False
+        if not self.busy_window:
+            local_busy_window = True
+            self._busy_operation_setup(self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup,
                                       update_local_db=update_local_db)
-        self._busy_operation_teardown()
+        if local_busy_window:
+            self._busy_operation_teardown()
+
         if results['code']:
             self._log_location("ERROR: %s" % results)
 
@@ -5764,12 +5868,14 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         self._log_location()
 
-        # Get a list of the active custom columns
+        # Get a list of the active mapped custom columns
         enabled = []
         for cfn, col in [
                          ('annotations_field_comboBox', self.ANNOTATIONS_COL),
                          ('date_read_field_comboBox', self.LAST_OPENED_COL),
                          ('progress_field_comboBox', self.PROGRESS_COL),
+                         ('read_field_comboBox', self.FLAGS_COL),
+                         ('reading_list_comboBox', self.FLAGS_COL),
                          ('word_count_field_comboBox', self.WORD_COUNT_COL)
                         ]:
             cfv = self.parent.prefs.get(cfn, None)
