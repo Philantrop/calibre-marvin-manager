@@ -240,23 +240,26 @@ class MyTableView(QTableView):
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'set_read.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_read_flag", row))
 
-            menu.addSeparator()
-            # Test for calibre cids
+            # Add Synchronize option
             calibre_cids = False
             for row in selected_books:
                 if selected_books[row]['cid'] is not None:
                     calibre_cids = True
                     break
 
-            # Test for active Read or Reading list flag mapping
             read_field = self.parent.prefs.get('read_field_comboBox', None)
             reading_list_field = self.parent.prefs.get('reading_list_field_comboBox', None)
-            enabled = bool(calibre_cids and (read_field or reading_list_field))
-
-            ac = menu.addAction("Synchronize")
-            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'sync_collections.png')))
-            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "synchronize_flags", row))
-            ac.setEnabled(enabled)
+            if read_field or reading_list_field:
+                menu.addSeparator()
+                label = 'Synchronize Reading list, Read'
+                if reading_list_field and not read_field:
+                    label = 'Synchronize Reading list'
+                elif read_field and not reading_list_field:
+                    label = 'Synchronize Read'
+                ac = menu.addAction(label)
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'sync_collections.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "synchronize_flags", row))
+                ac.setEnabled(bool(calibre_cids))
 
         elif col == self.parent.LAST_OPENED_COL:
             date_read_field = self.parent.prefs.get('date_read_field_comboBox', None)
@@ -838,7 +841,7 @@ class BookStatusDialog(SizePersistedDialog):
     CHECKMARK = u"\u2713"
     CIRCLE_SLASH = u"\u20E0"
     DEFAULT_REFRESH_TEXT = 'Refresh custom columns'
-    DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom columns in calibre.<br/>Custom column mappings assigned in Customization dialog.</p>"
+    DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom column content in calibre.<br/>Assign custom column mappings in the <i>Customize plugin…</i> dialog.</p>"
     HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
     MAX_BOOKS_BEFORE_SPINNER = 4
@@ -1321,6 +1324,10 @@ class BookStatusDialog(SizePersistedDialog):
 
         self._busy_operation_teardown()
 
+        if self.parent.prefs.get('auto_refresh_at_startup', False):
+            self.refresh_custom_columns(all_books=True, report_results=False)
+            self._clear_selected_rows()
+
     def launch_collections_scanner(self):
         '''
         Invoke InventoryCollections to identify cids with collection assignments
@@ -1352,7 +1359,7 @@ class BookStatusDialog(SizePersistedDialog):
             self._log("closing dialog: %s" % command)
             self.close()
 
-    def refresh_custom_columns(self):
+    def refresh_custom_columns(self, all_books=False, report_results=True):
         '''
         Refresh enabled custom columns from Marvin content
         '''
@@ -1369,37 +1376,30 @@ class BookStatusDialog(SizePersistedDialog):
                 enabled.append(cfv)
         cols_to_refresh = ', '.join(sorted(enabled, key=sort_key))
 
-        self._busy_operation_setup("Refreshing %s for %s" %
-                                   (cols_to_refresh,
-                                    "1 book…" if len(self._selected_rows()) == 1 else
-                                    "%d books…" % len(self._selected_rows())),
-                                    on_top=False,
-                                    show_cancel=True)
 
-        if False and len(self._selected_rows()) < 2:
-            # Process all books
-            total_books = len(self.tm.all_rows())
-
-            for i in range(len(self.tm.all_rows())):
-                self.tv.selectRow(i)
-                self._fetch_annotations(update_gui=False)
-                self._apply_date_read(update_gui=False)
-                self._apply_progress(update_gui=False)
-                self._apply_word_count(update_gui=False)
+        if all_books:
+            rows_to_refresh = [i for i in range(len(self.tm.all_rows()))]
         else:
             # Process selected books
             rows_to_refresh = sorted(self._selected_books())
-            for row in rows_to_refresh:
-                if (self.busy_window and
-                    self.busy_window.cancel_status == self.busy_window.REQUESTED):
-                    self._log("user requested cancel")
-                    break
-                self.tv.selectRow(row)
-                self._fetch_annotations(update_gui=False)
-                self._apply_date_read(update_gui=False)
-                self._apply_flags(update_gui=False)
-                self._apply_progress(update_gui=False)
-                self._apply_word_count(update_gui=False)
+
+        self._busy_operation_setup("Refreshing %s for %s" %
+                                   (cols_to_refresh,
+                                    "1 book…" if len(rows_to_refresh) == 1 else
+                                    "%d books…" % len(rows_to_refresh)),
+                                    on_top=False,
+                                    show_cancel=True)
+
+        for row in rows_to_refresh:
+            if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                self._log("user requested cancel")
+                break
+            self.tv.selectRow(row)
+            self._fetch_annotations(update_gui=False)
+            self._apply_date_read(update_gui=False)
+            self._apply_flags(update_gui=False)
+            self._apply_progress(update_gui=False)
+            self._apply_word_count(update_gui=False)
 
         updateCalibreGUIView()
         self._busy_operation_teardown()
@@ -1411,15 +1411,16 @@ class BookStatusDialog(SizePersistedDialog):
             self.saved_selection_region = None
 
         # Report results
-        title = 'Custom columns refreshed'
-        refreshed = ''
-        for col in enabled[0:-1]:
-            refreshed += '<b>%s</b>, ' % col
-        refreshed += '<b>%s</b> ' % enabled[-1]
-        msg = "<p>%s refreshed for %s.</p>" % (refreshed,
-                                       "1 book" if len(rows_to_refresh) == 1 else
-                                       "%d books" % len(rows_to_refresh))
-        MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+        if report_results:
+            title = 'Custom columns refreshed'
+            refreshed = ''
+            for col in enabled[0:-1]:
+                refreshed += '<b>%s</b>, ' % col
+            refreshed += '<b>%s</b> ' % enabled[-1]
+            msg = "<p>%s refreshed for %s.</p>" % (refreshed,
+                                           "1 book" if len(rows_to_refresh) == 1 else
+                                           "%d books" % len(rows_to_refresh))
+            MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def show_add_collections_dialog(self):
         '''
@@ -5875,7 +5876,7 @@ class BookStatusDialog(SizePersistedDialog):
                          ('date_read_field_comboBox', self.LAST_OPENED_COL),
                          ('progress_field_comboBox', self.PROGRESS_COL),
                          ('read_field_comboBox', self.FLAGS_COL),
-                         ('reading_list_comboBox', self.FLAGS_COL),
+                         ('reading_list_field_comboBox', self.FLAGS_COL),
                          ('word_count_field_comboBox', self.WORD_COUNT_COL)
                         ]:
             cfv = self.parent.prefs.get(cfn, None)
@@ -5883,8 +5884,10 @@ class BookStatusDialog(SizePersistedDialog):
             if cfv and visible:
                 enabled.append(cfv)
 
-        if enabled:
+        if False and enabled:
             button_title = 'Refresh %s' % ', '.join(sorted(enabled, key=sort_key))
+            if len(button_title) > 40:
+                button_title = button_title[0:39] + u"\u2026"
         else:
             button_title = self.DEFAULT_REFRESH_TEXT
 

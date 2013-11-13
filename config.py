@@ -281,6 +281,12 @@ class ConfigWidget(QWidget):
         self.l.addWidget(self.cfg_runtime_options_gb)
         self.cfg_runtime_options_qvl = QVBoxLayout(self.cfg_runtime_options_gb)
 
+        # ++++++++ Auto refresh checkbox ++++++++
+        self.auto_refresh_checkbox = QCheckBox('Automatically refresh custom column content')
+        self.auto_refresh_checkbox.setObjectName('auto_refresh_at_startup')
+        self.auto_refresh_checkbox.setToolTip('Update calibre custom column when Marvin XD is opened')
+        self.cfg_runtime_options_qvl.addWidget(self.auto_refresh_checkbox)
+
         # ++++++++ Progress as percentage checkbox ++++++++
         self.reading_progress_checkbox = QCheckBox('Show reading progress as percentage')
         self.reading_progress_checkbox.setObjectName('show_progress_as_percentage')
@@ -365,6 +371,7 @@ class ConfigWidget(QWidget):
             self.word_count_field_comboBox.setCurrentIndex(idx)
 
         # Restore general settings
+        self.auto_refresh_checkbox.setChecked(self.prefs.get('auto_refresh_at_startup', False))
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
         self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
@@ -726,7 +733,10 @@ class ConfigWidget(QWidget):
             self.prefs.set('word_count_field_lookup', '')
 
         # Save general settings
+        self.prefs.set('auto_refresh_at_startup', self.auto_refresh_checkbox.isChecked())
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
+
+        # Save debug settings
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
         self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice_checkbox.isChecked())
 
