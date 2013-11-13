@@ -841,7 +841,7 @@ class BookStatusDialog(SizePersistedDialog):
     CHECKMARK = u"\u2713"
     CIRCLE_SLASH = u"\u20E0"
     DEFAULT_REFRESH_TEXT = 'Refresh custom columns'
-    DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom column content in calibre.<br/>Assign custom column mappings in the <i>Customize plugin…</i> dialog.</p>"
+    DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom column content in calibre for the selected books.<br/>Assign custom column mappings in the <i>Customize plugin…</i> dialog.</p>"
     HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
     MAX_BOOKS_BEFORE_SPINNER = 4
@@ -1383,44 +1383,53 @@ class BookStatusDialog(SizePersistedDialog):
             # Process selected books
             rows_to_refresh = sorted(self._selected_books())
 
-        self._busy_operation_setup("Refreshing %s for %s" %
-                                   (cols_to_refresh,
-                                    "1 book…" if len(rows_to_refresh) == 1 else
-                                    "%d books…" % len(rows_to_refresh)),
-                                    on_top=False,
-                                    show_cancel=True)
+        if rows_to_refresh:
+            self._busy_operation_setup("Refreshing %s for %s" %
+                                       (cols_to_refresh,
+                                        "1 book…" if len(rows_to_refresh) == 1 else
+                                        "%d books…" % len(rows_to_refresh)),
+                                        on_top=False,
+                                        show_cancel=True)
 
-        for row in rows_to_refresh:
-            if self.busy_window.cancel_status == self.busy_window.REQUESTED:
-                self._log("user requested cancel")
-                break
-            self.tv.selectRow(row)
-            self._fetch_annotations(update_gui=False)
-            self._apply_date_read(update_gui=False)
-            self._apply_flags(update_gui=False)
-            self._apply_progress(update_gui=False)
-            self._apply_word_count(update_gui=False)
+            for row in rows_to_refresh:
+                if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                    self._log("user requested cancel")
+                    break
+                self.tv.selectRow(row)
+                self._fetch_annotations(update_gui=False)
+                self._apply_date_read(update_gui=False)
+                self._apply_flags(update_gui=False)
+                self._apply_progress(update_gui=False)
+                self._apply_word_count(update_gui=False)
 
-        updateCalibreGUIView()
-        self._busy_operation_teardown()
+            updateCalibreGUIView()
+            self._busy_operation_teardown()
 
-        # Restore selection
-        if self.saved_selection_region:
-            for rect in self.saved_selection_region.rects():
-                self.tv.setSelection(rect, QItemSelectionModel.Select)
-            self.saved_selection_region = None
+            # Restore selection
+            if self.saved_selection_region:
+                for rect in self.saved_selection_region.rects():
+                    self.tv.setSelection(rect, QItemSelectionModel.Select)
+                self.saved_selection_region = None
 
-        # Report results
-        if report_results:
-            title = 'Custom columns refreshed'
-            refreshed = ''
-            for col in enabled[0:-1]:
-                refreshed += '<b>%s</b>, ' % col
-            refreshed += '<b>%s</b> ' % enabled[-1]
-            msg = "<p>%s refreshed for %s.</p>" % (refreshed,
-                                           "1 book" if len(rows_to_refresh) == 1 else
-                                           "%d books" % len(rows_to_refresh))
-            MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+            # Report results
+            if report_results:
+                title = 'Custom columns refreshed'
+                refreshed = ''
+                for col in enabled[0:-1]:
+                    refreshed += '<b>%s</b>, ' % col
+                refreshed += '<b>%s</b> ' % enabled[-1]
+                msg = "<p>%s refreshed for %s.</p>" % (refreshed,
+                                               "1 book" if len(rows_to_refresh) == 1 else
+                                               "%d books" % len(rows_to_refresh))
+                MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+
+        else:
+            # No rows selected, inform user how the feature works
+            title = 'No books selected'
+            msg = ('No books selected.\n' +
+                    'To refresh custom columns, select one or more books, ' +
+                    "then click the 'Refresh custom columns' button.")
+            MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def show_add_collections_dialog(self):
         '''
