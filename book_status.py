@@ -2175,7 +2175,6 @@ class BookStatusDialog(SizePersistedDialog):
     def _apply_flags(self, update_gui=True):
         '''
         Synchronize Read and Reading list flags between calibre and connected iDevice
-        If either is True, set the other to True
         '''
         read_lookup = self.parent.prefs.get('read_field_lookup', None)
         reading_list_lookup = self.parent.prefs.get('reading_list_lookup', None)
@@ -2219,13 +2218,14 @@ class BookStatusDialog(SizePersistedDialog):
                             self._log("Neither calibre nor Marvin Read flags set")
 
                     # ~~~~~~~~~ Process Reading list flag ~~~~~~~~~
+                    '''
+                    #  If either flag is set, set the counterpart
                     c_reading_list = False
                     if reading_list_lookup:
                         c_reading_list_um = mi.metadata_for_field(reading_list_lookup)
                         c_reading_list = bool(c_reading_list_um['#value#'])
                     m_reading_list = bool(flagbits & self.READING_FLAG)
 
-                    #  If either flag is set, set the counterpart
                     if reading_list_lookup and (c_reading_list != m_reading_list):
                         if c_reading_list:
                             self._log("Setting Marvin Reading list flag")
@@ -2243,6 +2243,21 @@ class BookStatusDialog(SizePersistedDialog):
                             self._log("Both calibre and Marvin Reading list flags already set")
                         elif not c_reading_list and not m_reading_list:
                             self._log("Neither calibre nor Marvin Reading list flags set")
+                    '''
+
+                    # If custom Reading list mapping, calibre is the master
+                    if reading_list_lookup:
+                        c_reading_list_um = mi.metadata_for_field(reading_list_lookup)
+                        c_reading_list = bool(c_reading_list_um['#value#'])
+                        m_reading_list = bool(flagbits & self.READING_FLAG)
+                        if c_reading_list and not m_reading_list:
+                            self._log("Setting Marvin Reading list flag")
+                            self._set_flags('set_reading_list_flag')
+                        elif not c_reading_list and m_reading_list:
+                            self._log("Clearing Marvin Reading list flag")
+                            self._clear_flags("clear_reading_list_flag")
+                        elif c_reading_list and m_reading_list:
+                            self._log("Reading list flags already set in both calibre and Marvin")
 
             if update_gui:
                 updateCalibreGUIView()
