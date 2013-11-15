@@ -2693,7 +2693,7 @@ class BookStatusDialog(SizePersistedDialog):
                 local_db_update_required = True
                 self._update_device_flags(book_id, path, _build_flag_list(flagbits))
             else:
-                self._log("Marvin flags already correct, no changes")
+                self._log("Marvin flags already correct")
 
             self._inform_calibre_flags(book_id)
 
@@ -2703,7 +2703,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tv.setSelection(rect, QItemSelectionModel.Select)
             self.saved_selection_region = None
 
-        if update_local_db=True and local_db_update_required:
+        if update_local_db and local_db_update_required:
             self._localize_marvin_database()
 
         Application.processEvents()
@@ -4552,7 +4552,7 @@ class BookStatusDialog(SizePersistedDialog):
                     db_requires_update = True
                     mi.set_user_metadata(read_lookup, c_read_um)
                 else:
-                    self._log("calibre Read flag already matches")
+                    self._log("calibre Read flag already correct")
 
             if reading_list_lookup:
                 c_reading_list_um = mi.metadata_for_field(reading_list_lookup)
@@ -5093,7 +5093,7 @@ class BookStatusDialog(SizePersistedDialog):
                     local_db_update_required = True
                     self._update_device_flags(book_id, path, _build_flag_list(flagbits))
             else:
-                self._log("Marvin flags already correct, no changes")
+                self._log("Marvin flags already correct")
 
             self._inform_calibre_flags(book_id)
 
@@ -5103,7 +5103,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tv.setSelection(rect, QItemSelectionModel.Select)
             self.saved_selection_region = None
 
-        if update_local_db=True and local_db_update_required:
+        if update_local_db and local_db_update_required:
             self._localize_marvin_database()
 
         Application.processEvents()
