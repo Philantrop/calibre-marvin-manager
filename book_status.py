@@ -1402,6 +1402,9 @@ class BookStatusDialog(SizePersistedDialog):
                 self._apply_progress(update_gui=False)
                 self._apply_word_count(update_gui=False)
 
+            # _apply_flags may have updated Marvin
+            self._localize_marvin_database()
+
             updateCalibreGUIView()
             self._busy_operation_teardown()
 
@@ -2233,15 +2236,15 @@ class BookStatusDialog(SizePersistedDialog):
                     if c_last_modified > m_last_modified:
                         self._log("Using calibre as sync master. Read flag: %s" % c_read)
                         if c_read:
-                            self._set_flags('set_read_flag')
+                            self._set_flags('set_read_flag', update_local_db=False)
                         else:
-                            self._clear_flags('clear_read_flag')
+                            self._clear_flags('clear_read_flag', update_local_db=False)
                     else:
                         self._log("Using Marvin as sync master. Read flag: %s" % m_read)
                         if m_read:
-                            self._set_flags('set_read_flag')
+                            self._set_flags('set_read_flag', update_local_db=False)
                         else:
-                            self._clear_flags('clear_read_flag')
+                            self._clear_flags('clear_read_flag', update_local_db=False)
                 else:
                     if not read_lookup:
                         self._log("No custom column mapped for Read flag")
@@ -2265,15 +2268,15 @@ class BookStatusDialog(SizePersistedDialog):
                     if c_last_modified > m_last_modified:
                         self._log("Using calibre as sync master. Reading list flag: %s" % c_reading_list)
                         if c_reading_list:
-                            self._set_flags('set_read_flag')
+                            self._set_flags('set_read_flag', update_local_db=False)
                         else:
-                            self._clear_flags('clear_read_flag')
+                            self._clear_flags('clear_read_flag', update_local_db=False)
                     else:
                         self._log("Using Marvin as sync master. Reading list flag: %s" % m_reading_list)
                         if m_reading_list:
-                            self._set_flags('set_read_flag')
+                            self._set_flags('set_read_flag', update_local_db=False)
                         else:
-                            self._clear_flags('clear_read_flag')
+                            self._clear_flags('clear_read_flag', update_local_db=False)
                 else:
                     if not reading_list_lookup:
                         self._log("No custom column mapped for Reading list flag")
@@ -2281,7 +2284,6 @@ class BookStatusDialog(SizePersistedDialog):
                         self._log("No change: both flags already cleared")
                     elif c_reading_list and m_reading_list:
                         self._log("No change: both flags already set")
-
 
             if update_gui:
                 updateCalibreGUIView()
@@ -2604,7 +2606,7 @@ class BookStatusDialog(SizePersistedDialog):
         #self._log(stats)
         return stats
 
-    def _clear_flags(self, action):
+    def _clear_flags(self, action, update_local_db=True):
         '''
         Clear specified flags for selected books
         sort_key is the bitfield representing current flag settings
@@ -2645,6 +2647,8 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'clear_all_flags':
             mask = 0
 
+        local_db_update_required = False
+
         # Save the currently selected rows
         self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
@@ -2653,40 +2657,45 @@ class BookStatusDialog(SizePersistedDialog):
             self.tv.selectRow(row)
             book_id = selected_books[row]['book_id']
             flagbits = self.tm.get_flags(row).sort_key
-            path = selected_books[row]['path']
-            if mask == 0:
-                flagbits = 0
-                basename = "flags0.png"
-                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
-                                                                        'icons', basename),
-                                                           flagbits)
-                # Update self.installed_books flags list
-                self.installed_books[book_id].flags = []
 
-            elif flagbits & mask:
-                # Clear the bit with XOR
-                flagbits = flagbits ^ mask
-                basename = "flags%d.png" % flagbits
-                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
-                                                                        'icons', basename),
-                                                           flagbits)
-                # Update self.installed_books flags list
-                self.installed_books[book_id].flags = _build_flag_list(flagbits)
+            if flagbits != mask:
+                path = selected_books[row]['path']
+                if mask == 0:
+                    flagbits = 0
+                    basename = "flags0.png"
+                    new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                            'icons', basename),
+                                                               flagbits)
+                    # Update self.installed_books flags list
+                    self.installed_books[book_id].flags = []
 
-            # Update the model
-            self.tm.set_flags(row, new_flags_widget)
+                elif flagbits & mask:
+                    # Clear the bit with XOR
+                    flagbits = flagbits ^ mask
+                    basename = "flags%d.png" % flagbits
+                    new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                            'icons', basename),
+                                                               flagbits)
+                    # Update self.installed_books flags list
+                    self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
-            # Update reading progress based upon flag values
-            self._update_reading_progress(self.installed_books[book_id], row)
+                # Update the model
+                self.tm.set_flags(row, new_flags_widget)
 
-            # Update in-memory caches
-            _update_in_memory(book_id, path)
+                # Update reading progress based upon flag values
+                self._update_reading_progress(self.installed_books[book_id], row)
 
-            # Update Marvin db, calibre custom columns
-            self._inform_marvin_collections(book_id, update_local_db=False)
+                # Update in-memory caches
+                _update_in_memory(book_id, path)
+
+                # Update Marvin db
+                self._inform_marvin_collections(book_id, update_local_db=False)
+                local_db_update_required = True
+                self._update_device_flags(book_id, path, _build_flag_list(flagbits))
+            else:
+                self._log("Marvin flags already correct, no changes")
+
             self._inform_calibre_flags(book_id)
-
-            self._update_device_flags(book_id, path, _build_flag_list(flagbits))
 
         # Restore selection
         if self.saved_selection_region:
@@ -2694,7 +2703,8 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tv.setSelection(rect, QItemSelectionModel.Select)
             self.saved_selection_region = None
 
-        self._localize_marvin_database()
+        if update_local_db=True and local_db_update_required:
+            self._localize_marvin_database()
 
         Application.processEvents()
 
@@ -4527,27 +4537,41 @@ class BookStatusDialog(SizePersistedDialog):
             cid = self.installed_books[book_id].cid
             mi = db.get_metadata(cid, index_is_id=True)
             flags = self.installed_books[book_id].flags
+            db_requires_update = False
 
             if read_lookup:
                 c_read_um = mi.metadata_for_field(read_lookup)
-                if 'READ' in flags:
+                if 'READ' in flags and not c_read_um['#value#']:
                     self._log("setting READ (%s)" % read_lookup)
                     c_read_um['#value#'] = 1
-                else:
+                    db_requires_update = True
+                    mi.set_user_metadata(read_lookup, c_read_um)
+                elif 'READ' not in flags and c_read_um['#value#']:
                     self._log("clearing READ (%s)" % read_lookup)
                     c_read_um['#value#'] = None
-                mi.set_user_metadata(read_lookup, c_read_um)
+                    db_requires_update = True
+                    mi.set_user_metadata(read_lookup, c_read_um)
+                else:
+                    self._log("calibre Read flag already matches")
+
             if reading_list_lookup:
                 c_reading_list_um = mi.metadata_for_field(reading_list_lookup)
-                if 'READING LIST' in flags:
+                if 'READING LIST' in flags and not c_reading_list_um['#value#']:
                     self._log("setting READING LIST (%s)" % reading_list_lookup)
                     c_reading_list_um['#value#'] = 1
-                else:
+                    db_requires_update = True
+                    mi.set_user_metadata(reading_list_lookup, c_reading_list_um)
+                elif 'READING LIST' not in flags and c_reading_list_um['#value#']:
                     self._log("clearing READING LIST (%s)" % reading_list_lookup)
                     c_reading_list_um['#value#'] = None
-                mi.set_user_metadata(reading_list_lookup, c_reading_list_um)
-            db.set_metadata(cid, mi, set_title=False, set_authors=False,
-                commit=True, force_changes=True)
+                    db_requires_update = True
+                    mi.set_user_metadata(reading_list_lookup, c_reading_list_um)
+                else:
+                    self._log("calibre Reading list flag already matches")
+
+            if db_requires_update:
+                db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                    commit=True, force_changes=True)
             if update_gui:
                 updateCalibreGUIView()
 
@@ -4990,7 +5014,7 @@ class BookStatusDialog(SizePersistedDialog):
         srs = self.tv.selectionModel().selectedRows()
         return [sr.row() for sr in srs]
 
-    def _set_flags(self, action):
+    def _set_flags(self, action, update_local_db=True):
         '''
         Set specified flags for selected books
         '''
@@ -5031,6 +5055,8 @@ class BookStatusDialog(SizePersistedDialog):
             mask = self.READ_FLAG
             inhibit = self.READING_FLAG + self.READ_FLAG
 
+        local_db_update_required = False
+
         # Save the currently selected rows
         self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
@@ -5039,32 +5065,37 @@ class BookStatusDialog(SizePersistedDialog):
             self.tv.selectRow(row)
             book_id = selected_books[row]['book_id']
             flagbits = self.tm.get_flags(row).sort_key
-            path = selected_books[row]['path']
-            if not flagbits & mask:
-                # Set the bit with OR
-                flagbits = flagbits | mask
-                flagbits = flagbits & inhibit
-                basename = "flags%d.png" % flagbits
-                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
-                                                                        'icons', basename),
-                                                           flagbits)
-                # Update the spreadsheet
-                self.tm.set_flags(row, new_flags_widget)
 
-                # Update self.installed_books flags list
-                self.installed_books[book_id].flags = _build_flag_list(flagbits)
+            if flagbits != mask:
+                path = selected_books[row]['path']
+                if not flagbits & mask:
+                    # Set the bit with OR
+                    flagbits = flagbits | mask
+                    flagbits = flagbits & inhibit
+                    basename = "flags%d.png" % flagbits
+                    new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                            'icons', basename),
+                                                               flagbits)
+                    # Update the spreadsheet
+                    self.tm.set_flags(row, new_flags_widget)
 
-                # Update reading progress based on flag values
-                self._update_reading_progress(self.installed_books[book_id], row)
+                    # Update self.installed_books flags list
+                    self.installed_books[book_id].flags = _build_flag_list(flagbits)
 
-                # Update in-memory
-                _update_in_memory(book_id, path)
+                    # Update reading progress based on flag values
+                    self._update_reading_progress(self.installed_books[book_id], row)
 
-                # Update Marvin db, calibre custom columns
-                self._inform_marvin_collections(book_id, update_local_db=False)
-                self._inform_calibre_flags(book_id)
+                    # Update in-memory
+                    _update_in_memory(book_id, path)
 
-            self._update_device_flags(book_id, path, _build_flag_list(flagbits))
+                    # Update Marvin db, calibre custom columns
+                    self._inform_marvin_collections(book_id, update_local_db=False)
+                    local_db_update_required = True
+                    self._update_device_flags(book_id, path, _build_flag_list(flagbits))
+            else:
+                self._log("Marvin flags already correct, no changes")
+
+            self._inform_calibre_flags(book_id)
 
         # Restore selection
         if self.saved_selection_region:
@@ -5072,7 +5103,8 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tv.setSelection(rect, QItemSelectionModel.Select)
             self.saved_selection_region = None
 
-        self._localize_marvin_database()
+        if update_local_db=True and local_db_update_required:
+            self._localize_marvin_database()
 
         Application.processEvents()
 
@@ -5142,6 +5174,8 @@ class BookStatusDialog(SizePersistedDialog):
             for rect in self.saved_selection_region.rects():
                 self.tv.setSelection(rect, QItemSelectionModel.Select)
             self.saved_selection_region = None
+
+        self._localize_marvin_database()
 
         Application.processEvents()
 
