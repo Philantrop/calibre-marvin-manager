@@ -2659,9 +2659,9 @@ class BookStatusDialog(SizePersistedDialog):
             book_id = selected_books[row]['book_id']
             flagbits = self.tm.get_flags(row).sort_key
 
-            self._log("%s: mask: %s  flagbits: %s" %
-                (selected_books[row]['title'], mask, flagbits))
-
+#             self._log("%s: mask: %s  flagbits: %s" %
+#                 (selected_books[row]['title'], mask, flagbits))
+#
             path = selected_books[row]['path']
             if mask == 0 and flagbits:
                 flagbits = 0
@@ -5476,7 +5476,10 @@ class BookStatusDialog(SizePersistedDialog):
 
     def _update_flags(self, action):
         '''
+        Context menu entry point
         '''
+        rows_to_refresh = len(self._selected_books())
+
         if action in ['clear_new_flag', 'clear_reading_list_flag',
                       'clear_read_flag', 'clear_all_flags']:
             self._clear_flags(action)
@@ -5490,6 +5493,11 @@ class BookStatusDialog(SizePersistedDialog):
             msg = ("<p>{0}: not implemented</p>".format(action))
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
+
+        title = 'Flags updated'
+        msg = ("<p>Flags updated for {0}.</p>".format(
+            "1 book" if rows_to_refresh == 1 else "{0} books".format(rows_to_refresh)))
+        MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def _update_global_collections(self, details):
         '''
