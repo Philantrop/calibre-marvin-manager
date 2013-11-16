@@ -1378,7 +1378,7 @@ class BookStatusDialog(SizePersistedDialog):
 
 
         if all_books:
-            rows_to_refresh = [i for i in range(len(self.tm.all_rows()))]
+            rows_to_refresh = list(reversed([i for i in range(len(self.tm.all_rows()))]))
         else:
             # Process selected books
             rows_to_refresh = sorted(self._selected_books())
@@ -1402,7 +1402,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self._apply_progress(update_gui=False)
                 self._apply_word_count(update_gui=False)
 
-            # _apply_flags may have updated Marvin
+            # _apply_flags may have updated Marvin mainDb
             self._localize_marvin_database()
 
             updateCalibreGUIView()
@@ -2147,6 +2147,120 @@ class BookStatusDialog(SizePersistedDialog):
             if updated and update_gui:
                 updateCalibreGUIView()
 
+    def _apply_flags(self, update_gui=True):
+        '''
+        Synchronize Read and Reading list flags between calibre and connected iDevice
+        Compare metadata timestamps to determine master
+        '''
+
+        def _get_marvin_last_modified(book_id):
+            '''
+            Get LastModified timestamp for book_id
+            *** Temporarily using DateOpened until KG adds LastModified ***
+            '''
+            self._log_location("THIS NEEDS TO BE UPDATED TO LastModified WHEN AVAILABLE")
+            con = sqlite3.connect(self.parent.connected_device.local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+
+                lm_cur = con.cursor()
+                lm_cur.execute('''SELECT
+                                   DateOpened
+                                  FROM Books
+                                  WHERE ID = '{0}'
+                               '''.format(book_id))
+                row = lm_cur.fetchone()
+                lm_cur.close()
+            last_modified = datetime.utcfromtimestamp(row[b'DateOpened']).replace(tzinfo=tz.tzutc())
+            return last_modified.astimezone(tz.tzlocal())
+
+        read_lookup = self.parent.prefs.get('read_field_lookup', None)
+        reading_list_lookup = self.parent.prefs.get('reading_list_lookup', None)
+        if read_lookup or reading_list_lookup:
+            selected_books = self._selected_books()
+            self._log_location(selected_books[selected_books.keys()[0]]['title'])
+            for row in selected_books:
+                cid = self._selected_books()[row]['cid']
+                if cid is not None and (read_lookup or reading_list_lookup):
+                    # Get the metadata object
+                    db = self.opts.gui.current_db
+                    mi = db.get_metadata(cid, index_is_id=True)
+
+                    # Get the current Marvin flag values
+                    flagbits = self.tm.get_flags(row).sort_key
+
+                    # Get the Marvin LastModified date for this book
+                    book_id = self._selected_books()[row]['book_id']
+                    c_last_modified = mi.last_modified.astimezone(tz.tzlocal())
+                    m_last_modified = _get_marvin_last_modified(book_id)
+
+                    # ~~~~~~~~~ Process Read flag ~~~~~~~~~
+                    c_read = False
+                    if read_lookup:
+                        c_read_um = mi.metadata_for_field(read_lookup)
+                        c_read = bool(c_read_um['#value#'])
+                    m_read = bool(flagbits & self.READ_FLAG)
+
+                    #  If unequal, determine sync master and update
+                    if read_lookup and (c_read != m_read):
+                        self._log("Updating Read flag…")
+                        self._log("calibre last_modified: %s" % c_last_modified)
+                        self._log("Marvin last_modified: %s" % m_last_modified)
+                        if c_last_modified > m_last_modified:
+                            self._log("Using calibre as sync master. Read flag: %s" % c_read)
+                            if c_read:
+                                self._set_flags('set_read_flag', update_local_db=False)
+                            else:
+                                self._clear_flags('clear_read_flag', update_local_db=False)
+                        else:
+                            self._log("Using Marvin as sync master. Read flag: %s" % m_read)
+                            if m_read:
+                                self._set_flags('set_read_flag', update_local_db=False)
+                            else:
+                                self._clear_flags('clear_read_flag', update_local_db=False)
+                    else:
+                        if not read_lookup:
+                            self._log("No custom column mapped for Read flag")
+                        elif not c_read and not m_read:
+                            self._log("No change: both flags already cleared")
+                        elif c_read and m_read:
+                            self._log("No change: both flags already set")
+
+                    # ~~~~~~~~~ Process Reading list flag ~~~~~~~~~
+                    c_reading_list = False
+                    if reading_list_lookup:
+                        c_reading_list_um = mi.metadata_for_field(reading_list_lookup)
+                        c_reading_list = bool(c_reading_list_um['#value#'])
+                    m_reading_list = bool(flagbits & self.READING_FLAG)
+
+                    #  If unequal, determine sync master and update
+                    if reading_list_lookup and (c_reading_list != m_reading_list):
+                        self._log("Updating Reading list flag…")
+                        self._log("calibre last_modified: %s" % c_last_modified)
+                        self._log("Marvin last_modified: %s" % m_last_modified)
+                        if c_last_modified > m_last_modified:
+                            self._log("Using calibre as sync master. Reading list flag: %s" % c_reading_list)
+                            if c_reading_list:
+                                self._set_flags('set_read_flag', update_local_db=False)
+                            else:
+                                self._clear_flags('clear_read_flag', update_local_db=False)
+                        else:
+                            self._log("Using Marvin as sync master. Reading list flag: %s" % m_reading_list)
+                            if m_reading_list:
+                                self._set_flags('set_read_flag', update_local_db=False)
+                            else:
+                                self._clear_flags('clear_read_flag', update_local_db=False)
+                    else:
+                        if not reading_list_lookup:
+                            self._log("No custom column mapped for Reading list flag")
+                        elif not c_reading_list and not m_reading_list:
+                            self._log("No change: both flags already cleared")
+                        elif c_reading_list and m_reading_list:
+                            self._log("No change: both flags already set")
+
+            if update_gui:
+                updateCalibreGUIView()
+
     def _apply_progress(self, update_gui=True):
         '''
         Fetch Progress, apply to custom field
@@ -2172,119 +2286,6 @@ class BookStatusDialog(SizePersistedDialog):
                     mi.set_user_metadata(lookup, um)
                     db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                     commit=True, force_changes=True)
-            if update_gui:
-                updateCalibreGUIView()
-
-    def _apply_flags(self, row, update_gui=True):
-        '''
-        Synchronize Read and Reading list flags between calibre and connected iDevice
-        Compare metadata timestamps to determine master
-        '''
-
-        def _get_marvin_last_modified(book_id):
-            '''
-            Get LastModified timestamp for book_id
-            *** Temporarily using DateAdded until KG adds LastModified ***
-            '''
-            self._log_location("THIS NEEDS TO BE UPDATED TO LastModified WHEN AVAILABLE")
-            con = sqlite3.connect(self.parent.connected_device.local_db_path)
-            with con:
-                con.row_factory = sqlite3.Row
-
-                lm_cur = con.cursor()
-                lm_cur.execute('''SELECT
-                                   DateAdded
-                                  FROM Books
-                                  WHERE ID = '{0}'
-                               '''.format(book_id))
-                row = lm_cur.fetchone()
-                lm_cur.close()
-            last_modified = datetime.utcfromtimestamp(row[b'DateAdded']).replace(tzinfo=tz.tzutc())
-            return last_modified.astimezone(tz.tzlocal())
-
-        read_lookup = self.parent.prefs.get('read_field_lookup', None)
-        reading_list_lookup = self.parent.prefs.get('reading_list_lookup', None)
-        if read_lookup or reading_list_lookup:
-            self._log_location()
-
-            cid = self._selected_books()[row]['cid']
-            if cid is not None and (read_lookup or reading_list_lookup):
-                # Get the metadata object
-                db = self.opts.gui.current_db
-                mi = db.get_metadata(cid, index_is_id=True)
-
-                # Get the current Marvin flag values
-                flagbits = self.tm.get_flags(row).sort_key
-
-                # Get the Marvin LastModified date for this book
-                book_id = self._selected_books()[row]['book_id']
-                c_last_modified = mi.last_modified.astimezone(tz.tzlocal())
-                m_last_modified = _get_marvin_last_modified(book_id)
-
-                # ~~~~~~~~~ Process Read flag ~~~~~~~~~
-                c_read = False
-                if read_lookup:
-                    c_read_um = mi.metadata_for_field(read_lookup)
-                    c_read = bool(c_read_um['#value#'])
-                m_read = bool(flagbits & self.READ_FLAG)
-
-                #  If unequal, determine sync master and update
-                if read_lookup and (c_read != m_read):
-                    self._log("Updating Read flag…")
-                    self._log("calibre last_modified: %s" % c_last_modified)
-                    self._log("Marvin last_modified: %s" % m_last_modified)
-                    if c_last_modified > m_last_modified:
-                        self._log("Using calibre as sync master. Read flag: %s" % c_read)
-                        if c_read:
-                            self._set_flags('set_read_flag', update_local_db=False)
-                        else:
-                            self._clear_flags('clear_read_flag', update_local_db=False)
-                    else:
-                        self._log("Using Marvin as sync master. Read flag: %s" % m_read)
-                        if m_read:
-                            self._set_flags('set_read_flag', update_local_db=False)
-                        else:
-                            self._clear_flags('clear_read_flag', update_local_db=False)
-                else:
-                    if not read_lookup:
-                        self._log("No custom column mapped for Read flag")
-                    elif not c_read and not m_read:
-                        self._log("No change: both flags already cleared")
-                    elif c_read and m_read:
-                        self._log("No change: both flags already set")
-
-                # ~~~~~~~~~ Process Reading list flag ~~~~~~~~~
-                c_reading_list = False
-                if reading_list_lookup:
-                    c_reading_list_um = mi.metadata_for_field(reading_list_lookup)
-                    c_reading_list = bool(c_reading_list_um['#value#'])
-                m_reading_list = bool(flagbits & self.READING_FLAG)
-
-                #  If unequal, determine sync master and update
-                if reading_list_lookup and (c_reading_list != m_reading_list):
-                    self._log("Updating Reading list flag…")
-                    self._log("calibre last_modified: %s" % c_last_modified)
-                    self._log("Marvin last_modified: %s" % m_last_modified)
-                    if c_last_modified > m_last_modified:
-                        self._log("Using calibre as sync master. Reading list flag: %s" % c_reading_list)
-                        if c_reading_list:
-                            self._set_flags('set_read_flag', update_local_db=False)
-                        else:
-                            self._clear_flags('clear_read_flag', update_local_db=False)
-                    else:
-                        self._log("Using Marvin as sync master. Reading list flag: %s" % m_reading_list)
-                        if m_reading_list:
-                            self._set_flags('set_read_flag', update_local_db=False)
-                        else:
-                            self._clear_flags('clear_read_flag', update_local_db=False)
-                else:
-                    if not reading_list_lookup:
-                        self._log("No custom column mapped for Reading list flag")
-                    elif not c_reading_list and not m_reading_list:
-                        self._log("No change: both flags already cleared")
-                    elif c_reading_list and m_reading_list:
-                        self._log("No change: both flags already set")
-
             if update_gui:
                 updateCalibreGUIView()
 
@@ -2647,7 +2648,7 @@ class BookStatusDialog(SizePersistedDialog):
         elif action == 'clear_all_flags':
             mask = 0
 
-        local_db_update_required = False
+        local_update_required = False
 
         # Save the currently selected rows
         self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
@@ -2658,27 +2659,32 @@ class BookStatusDialog(SizePersistedDialog):
             book_id = selected_books[row]['book_id']
             flagbits = self.tm.get_flags(row).sort_key
 
-            if flagbits != mask:
-                path = selected_books[row]['path']
-                if mask == 0:
-                    flagbits = 0
-                    basename = "flags0.png"
-                    new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
-                                                                            'icons', basename),
-                                                               flagbits)
-                    # Update self.installed_books flags list
-                    self.installed_books[book_id].flags = []
+            self._log("%s: mask: %s  flagbits: %s" %
+                (selected_books[row]['title'], mask, flagbits))
 
-                elif flagbits & mask:
-                    # Clear the bit with XOR
-                    flagbits = flagbits ^ mask
-                    basename = "flags%d.png" % flagbits
-                    new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
-                                                                            'icons', basename),
-                                                               flagbits)
-                    # Update self.installed_books flags list
-                    self.installed_books[book_id].flags = _build_flag_list(flagbits)
+            path = selected_books[row]['path']
+            if mask == 0 and flagbits:
+                flagbits = 0
+                basename = "flags0.png"
+                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                        'icons', basename),
+                                                           flagbits)
+                # Update self.installed_books flags list
+                self.installed_books[book_id].flags = []
+                local_update_required = True
 
+            elif flagbits & mask:
+                # Clear the bit with XOR
+                flagbits = flagbits ^ mask
+                basename = "flags%d.png" % flagbits
+                new_flags_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
+                                                                        'icons', basename),
+                                                           flagbits)
+                # Update self.installed_books flags list
+                self.installed_books[book_id].flags = _build_flag_list(flagbits)
+                local_update_required = True
+
+            if local_update_required:
                 # Update the model
                 self.tm.set_flags(row, new_flags_widget)
 
@@ -2690,7 +2696,6 @@ class BookStatusDialog(SizePersistedDialog):
 
                 # Update Marvin db
                 self._inform_marvin_collections(book_id, update_local_db=False)
-                local_db_update_required = True
                 self._update_device_flags(book_id, path, _build_flag_list(flagbits))
             else:
                 self._log("Marvin flags already correct")
@@ -2703,7 +2708,7 @@ class BookStatusDialog(SizePersistedDialog):
                 self.tv.setSelection(rect, QItemSelectionModel.Select)
             self.saved_selection_region = None
 
-        if update_local_db and local_db_update_required:
+        if update_local_db and local_update_required:
             self._localize_marvin_database()
 
         Application.processEvents()
@@ -5167,7 +5172,7 @@ class BookStatusDialog(SizePersistedDialog):
         selected_books = self._selected_books()
         for row in selected_books:
             self.tv.selectRow(row)
-            self._apply_flags(row)
+            self._apply_flags()
 
         # Restore selection
         if self.saved_selection_region:
