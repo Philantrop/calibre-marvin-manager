@@ -2156,23 +2156,40 @@ class BookStatusDialog(SizePersistedDialog):
         def _get_marvin_last_modified(book_id):
             '''
             Get LastModified timestamp for book_id
-            *** Temporarily using DateOpened until KG adds LastModified ***
             '''
-            self._log_location("THIS NEEDS TO BE UPDATED TO LastModified WHEN AVAILABLE")
+            UPDATE_FIELD = b'LastModified'
+            #UPDATE_FIELD = b'DateOpened'
+            arg2 = ''
+
             con = sqlite3.connect(self.parent.connected_device.local_db_path)
             with con:
                 con.row_factory = sqlite3.Row
 
                 lm_cur = con.cursor()
                 lm_cur.execute('''SELECT
-                                   DateOpened
+                                   *
                                   FROM Books
                                   WHERE ID = '{0}'
                                '''.format(book_id))
                 row = lm_cur.fetchone()
+
+                last_modified = datetime.now(tz.tzutc())
+                if UPDATE_FIELD in row.keys():
+                    try:
+                        last_modified = datetime.utcfromtimestamp(row[UPDATE_FIELD]).replace(tzinfo=tz.tzutc())
+                    except:
+                        arg2 = "\n\t\t error retrieving {0}, returning now()".format(UPDATE_FIELD)
+                        import traceback
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        self._log_location(traceback.format_exception_only(exc_type, exc_value)[0].strip())
+                else:
+                    arg2 = "\n\t\t {0} unavailable, returning now()".format(UPDATE_FIELD)
+
+                last_modified = last_modified.astimezone(tz.tzlocal())
                 lm_cur.close()
-            last_modified = datetime.utcfromtimestamp(row[b'DateOpened']).replace(tzinfo=tz.tzutc())
-            return last_modified.astimezone(tz.tzlocal())
+
+            self._log_location(last_modified, "{0}".format(arg2))
+            return last_modified
 
         read_lookup = self.parent.prefs.get('read_field_lookup', None)
         reading_list_lookup = self.parent.prefs.get('reading_list_lookup', None)
