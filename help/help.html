@@ -167,15 +167,17 @@
 <p>Open the context menu for the Marvin XD icon (right-click the icon or click the down arrow), then click <strong>Customize plugin</strong> to display the <strong>Customize Marvin XD</strong> dialog.</p>
 <p>&nbsp;</p>
 <img src="images/custom_columns.png" alt="" class="inline" />
-<p>The <strong>Custom columns</strong> assignments section connects  Marvin  details to custom columns in calibre. For example, by selecting a custom column in calibre for Collections, you can synchronize collection assignments between calibre and Marvin. You may  specify custom columns for Annotations, Collections, Last read,   Progress and Word count, enabling you to transfer those Marvin details to calibre.</p>
+<p>The <strong>Custom columns</strong> assignments section connects  Marvin  details to custom columns in calibre. For example, by selecting a custom column in calibre for Collections, you can synchronize collection assignments between calibre and Marvin. You may  specify custom columns for <em>Annotations</em>, <em>Collections</em>, <em>Last read</em>, <em>Progress</em>, <em>Read</em>, <em>Reading list</em> and <em>Word count</em>, enabling you to synchronize those Marvin details to calibre.</p>
 <p>Clicking the combo box presents a list of existing custom columns eligible for use with the associated Marvin details.</p>
 <p>Clicking the Wizard button leads you through the steps to create a new custom column, or renames an existing custom column.</p>
+<p>The <em>Read</em> and <em>Reading list</em> flags are handled differently. The most recently updated environment is used as the sync master. For example, if you've set the <em>Read</em> flag in calibre, the <em>Read</em> flag will be set in Marvin when syncing. </p>
 <p style="clear:left;">&nbsp;</p>
 
 <img src="images/other_options.png" alt="" class="inline" />
 <p><strong>CSS:</strong> Customize the CSS applied to Annotations or Articles, Deep View and Vocabulary.</p>
-<p><strong>General options:</strong> <strong>Show reading progress as percentage: </strong>When checked<strong>,</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p> 
-<p><strong>Enable debug logging for Marvin XD, </strong><strong>Enable debug logging for libiMobileDevice</strong>: If you are having a problem with the plugin, you may be asked to enable one or both of these checkboxes, then restart calibre in debug mode from a terminal window to generate a debug log. </p>
+<p><strong>General options:</strong> <strong>Automatically refresh custom column content</strong>: When checked,  enabled custom column content will be synchronized upon opening Marvin XD for all books installed in Marvin that are also in your calibre library.<br />
+  <strong>Show reading progress as percentage: </strong>When checked<strong>,</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p> 
+<p><strong>Debug options: Enable debug logging for Marvin XD, </strong><strong>Enable debug logging for libiMobileDevice</strong>: If you are having a problem with the plugin, you may be asked to enable one or both of these checkboxes, then restart calibre in debug mode from a terminal window to generate a debug log. </p>
 <p>To start calibre in debug mode, type <tt>calibre-debug -g</tt> in a terminal window.</p>
 <p style="clear:left;">&nbsp;</p>
 
@@ -191,16 +193,6 @@
       <td>in calibre library</td>
       <td>Match status</td>
     </tr>
-    <tr class="white">
-      <td>White</td>
-      <td class="checked">&#x2715;</td>
-      <td>Installed in Marvin. The book is not in your calibre library.</td>
-    </tr>
-    <tr class="red">
-      <td>Red</td>
-      <td class="checked">&#x2715;</td>
-      <td>More than one copy in Marvin. The book is not in your calibre library.</td>
-    </tr>
     <tr class="green">
       <td>Green</td>
       <td class="checked">&#x2713;</td>
@@ -215,6 +207,16 @@
       <td>Orange</td>
       <td class="checked">&#x2713;</td>
       <td>Installed in calibre and Marvin, more than one copy in Marvin.</td>
+    </tr>
+    <tr class="white">
+      <td>White</td>
+      <td class="checked">&#x2715;</td>
+      <td>Installed in Marvin. The book is not in your calibre library.</td>
+    </tr>
+    <tr class="red">
+      <td>Red</td>
+      <td class="checked">&#x2715;</td>
+      <td>More than one copy in Marvin. The book is not in your calibre library.</td>
     </tr>
   </table>
   <p>Click <img src="images/hide_matches.png" alt="" align="absmiddle" /> to return to the regular display listing.</p>
@@ -351,28 +353,28 @@
   </tr>
   <tr class="action">
     <td>Clear all flags</td>
-    <td>Clear <strong>New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags for selected books.</td>
+    <td>Clear <strong>New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags for selected books  in Marvin and calibre (if custom columns enabled).</td>
     <td><ul>
       <li>Flags  context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
     <td>Clear New flag</td>
-    <td>Clear <strong>New</strong> flag for selected books.</td>
+    <td>Clear <strong>New</strong> flag for selected books  in Marvin and calibre (if custom column enabled).</td>
     <td><ul>
       <li>Flags  context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
     <td>Clear Read flag</td>
-    <td>Clear <strong>Read</strong> flag for selected books.</td>
+    <td>Clear <strong>Read</strong> flag for selected books  in Marvin and calibre (if custom column enabled).</td>
     <td><ul>
       <li>Flags  context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
     <td>Clear Reading list flag</td>
-    <td>Clear <strong>Reading list</strong> flag for selected books.</td>
+    <td>Clear <strong>Reading list</strong> flag for selected books  in Marvin and calibre (if custom column enabled).</td>
     <td><ul>
       <li>Flags  context menu</li>
     </ul></td>
@@ -513,30 +515,37 @@
   </tr>
   <tr class="action">
     <td>Set New flag</td>
-    <td>Set <strong>New</strong> flag for selected books.</td>
+    <td>Set <strong>New</strong> flag for selected books in Marvin and calibre (if custom column enabled).</td>
     <td><ul>
       <li>Flags context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
     <td>Set Read flag</td>
-    <td>Set <strong>Read</strong> flag for selected books.</td>
+    <td>Set <strong>Read</strong> flag for selected books  in Marvin and calibre (if custom column enabled).</td>
     <td><ul>
       <li>Flags context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
     <td>Set Reading list flag</td>
-    <td>Set <strong>Reading list</strong> flag for selected books.</td>
+    <td>Set <strong>Reading list</strong> flag for selected books  in Marvin and calibre (if custom column enabled).</td>
     <td><ul>
       <li>Flags context menu</li>
     </ul></td>
   </tr>
   <tr class="action">
     <td>Show match status</td>
-    <td>Toggle  display to show match status (colored rows) in main window.</td>
+    <td>Toggle display to show match status (colored rows) in main window.</td>
     <td><ul>
       <li>Main window button</li>
+      </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Synchronize flags</td>
+    <td>Sync <strong>Read</strong> and <strong>Reading list</strong> flags between calibre and Marvin, using most-recently updated metadata as master.</td>
+    <td><ul>
+      <li>Flags context menu</li>
       </ul></td>
   </tr>
   <tr class="action">
