@@ -550,6 +550,13 @@ class MarvinManagerAction(InterfaceAction):
 
         self.rebuild_menus()
 
+    def process_dropbox_sync_records(self):
+        '''
+        '''
+        self._log_location()
+
+        self.launch_library_scanner()
+
     def rebuild_menus(self):
         self._log_location()
         with self.menus_lock:
@@ -563,6 +570,12 @@ class MarvinManagerAction(InterfaceAction):
 
             # Add menu options for connected Marvin
             marvin_connected = False
+
+            # Surrogate for self.prefs.get('dropbox_syncing', False)
+            # Need to add Dropbox directory picker in Config, checkbox
+            dropbox_syncing_enabled = self.prefs.get('dropbox_syncing', False)
+            process_dropbox = False
+
             if self.connected_device and hasattr(self.connected_device, 'ios_reader_app'):
                 if (self.connected_device.ios_reader_app == 'Marvin' and
                         self.connected_device.ios_connection['connected'] is True):
@@ -584,6 +597,10 @@ class MarvinManagerAction(InterfaceAction):
                     self._log("Marvin not connected")
                     ac = self.create_menu_item(m, 'Marvin not connected')
                     ac.setEnabled(False)
+            elif not self.connected_device and dropbox_syncing_enabled:
+                process_dropbox = True
+                ac = self.create_menu_item(m, 'Synchronize via Dropbox')
+                ac.triggered.connect(self.process_dropbox_sync_records)
             else:
                 self._log("Marvin not connected")
                 ac = self.create_menu_item(m, 'Marvin not connected')
@@ -622,6 +639,10 @@ class MarvinManagerAction(InterfaceAction):
                 action = 'Reset column widths'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
+
+            # Process Dropbox sync records
+            if process_dropbox:
+                self.process_dropbox_sync_records()
 
     def reset_marvin_library(self):
         self._log_location("not implemented")
