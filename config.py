@@ -349,7 +349,7 @@ class ConfigWidget(QWidget):
         self.cfg_debug_options_qvl.addWidget(self.debug_libimobiledevice_checkbox)
 
         self.spacerItem2 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.column2_layout.addItem(self.spacerItem1)
+        self.column2_layout.addItem(self.spacerItem2)
 
         # ~~~~~~~~ End of construction zone ~~~~~~~~
         self.resize(self.sizeHint())
@@ -709,8 +709,6 @@ class ConfigWidget(QWidget):
         Called when checkbox changes state, or when restoring state
         Set enabled state of Dropbox folder picker to match
         '''
-        self._log_location(state)
-
         self.cfg_dropbox_folder_toolbutton.setEnabled(state)
         self.dropbox_location_lineedit.setEnabled(state)
 
