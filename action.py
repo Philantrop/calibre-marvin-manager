@@ -110,6 +110,7 @@ class MarvinManagerAction(InterfaceAction):
         self.book_status_dialog = None
         self.blocking_busy = MyBlockingBusy(self.gui, "Updating Marvin Library…", size=50)
         self.connected_device = None
+        self.dropbox_processed = False
         self.ios = None
         self.installed_books = None
         self.marvin_content_updated = False
@@ -597,10 +598,14 @@ class MarvinManagerAction(InterfaceAction):
                     self._log("Marvin not connected")
                     ac = self.create_menu_item(m, 'Marvin not connected')
                     ac.setEnabled(False)
-            elif not self.connected_device and dropbox_syncing_enabled:
-                process_dropbox = True
+
+            elif not self.connected_device:
                 ac = self.create_menu_item(m, 'Synchronize via Dropbox')
                 ac.triggered.connect(self.process_dropbox_sync_records)
+
+                # If syncing enabled in Config dialog, automatically process once
+                if dropbox_syncing_enabled and not self.dropbox_processed:
+                    process_dropbox = True
             else:
                 self._log("Marvin not connected")
                 ac = self.create_menu_item(m, 'Marvin not connected')
@@ -640,9 +645,10 @@ class MarvinManagerAction(InterfaceAction):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
-            # Process Dropbox sync records
+            # Process Dropbox sync records automatically once only.
             if process_dropbox:
                 self.process_dropbox_sync_records()
+                self.dropbox_processed = True
 
     def reset_marvin_library(self):
         self._log_location("not implemented")
