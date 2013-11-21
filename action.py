@@ -34,6 +34,7 @@ from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
     CompileUI, IndexLibrary, MyBlockingBusy, ProgressBar, Struct,
     get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
+from calibre_plugins.marvin_manager.dropbox import PullDropboxUpdates
 
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
@@ -553,10 +554,13 @@ class MarvinManagerAction(InterfaceAction):
 
     def process_dropbox_sync_records(self):
         '''
+        Scan local Dropbox folder for metadata update records
+        Show progress bar in dialog box reporting titles
         '''
         self._log_location()
 
         self.launch_library_scanner()
+        foo = PullDropboxUpdates(self)
 
     def rebuild_menus(self):
         self._log_location()
@@ -569,11 +573,9 @@ class MarvinManagerAction(InterfaceAction):
             ac.triggered.connect(self.show_about)
             m.addSeparator()
 
-            # Add menu options for connected Marvin
+            # Add menu options for connected Marvin, Dropbox syncing when no connection
             marvin_connected = False
 
-            # Surrogate for self.prefs.get('dropbox_syncing', False)
-            # Need to add Dropbox directory picker in Config, checkbox
             dropbox_syncing_enabled = self.prefs.get('dropbox_syncing', False)
             process_dropbox = False
 
@@ -600,10 +602,10 @@ class MarvinManagerAction(InterfaceAction):
                     ac.setEnabled(False)
 
             elif not self.connected_device:
-                ac = self.create_menu_item(m, 'Synchronize via Dropbox')
+                ac = self.create_menu_item(m, 'Update metadata via Dropbox')
                 ac.triggered.connect(self.process_dropbox_sync_records)
 
-                # If syncing enabled in Config dialog, automatically process once
+                # If syncing enabled in Config dialog, automatically process 1x
                 if dropbox_syncing_enabled and not self.dropbox_processed:
                     process_dropbox = True
             else:
