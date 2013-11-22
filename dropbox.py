@@ -267,26 +267,29 @@ class PullDropboxUpdates():
                 um = mi.metadata_for_field(lookup)
                 datatype = mapping['datatype']
 
-                self._log("processing '{0}'".format(ccm))
-                self._log("lookup: {0}".format(lookup))
-                self._log("datatype: %s" % datatype)
-
                 if ccm in ['Annotations']:
+                    '''
+                    # Not sure if we'll need this, depends on how Kris returns annotations
+                    if re.match(self.UTF_8_BOM, anns):
+                        anns = UnicodeDammit(anns).unicode
+                    '''
                     ann_el = book.find(mapping['attribute'])
                     if ann_el is not None:
-                        els = ann_el.getchildren()
                         anns = ''
-                        for el in els:
+                        for sub_element in ['head', 'body']:
+                            el = ann_el.find(sub_element)
                             anns += etree.tostring(el)
-                        if re.match(self.UTF_8_BOM, anns):
-                            anns = UnicodeDammit(anns).unicode
                         anns = self._inject_css(anns).encode('utf-8')
                         anns = "<?xml version='1.0' encoding='utf-8'?>" + anns
                         um['#value#'] = anns
+                        mi.set_user_metadata(lookup, um)
+                        mi_updated = True
 
                 elif ccm in ['Collections']:
                     cels = book.findall(mapping['attribute'])
                     um['#value#'] = [unicode(cel.text) for cel in cels]
+                    mi.set_user_metadata(lookup, um)
+                    mi_updated = True
 
                 else:
                     if datatype == 'bool':
@@ -311,12 +314,10 @@ class PullDropboxUpdates():
                             um['#value#'] = int(val)
 
                     else:
-                        self._log("datatype '{0}' not handled yet".format(datatype))
+                        self._log("*** datatype '{0}' not handled ***".format(datatype))
 
-                mi.set_user_metadata(lookup, um)
-                mi_updated = True
-            else:
-                self._log(" no mapped custom column")
+                    mi.set_user_metadata(lookup, um)
+                    mi_updated = True
 
             if mi_updated:
                 self.db.set_metadata(cid, mi, set_title=False, set_authors=False,
