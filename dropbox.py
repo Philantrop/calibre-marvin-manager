@@ -68,6 +68,7 @@ class PullDropboxUpdates():
                         pb.increment()
                         cid = self._find_in_calibre_db(book)
                         if cid:
+                            # *** Are we going to care about who's most recent?
                             c_last_modified = self._get_calibre_last_modified(cid)
                             m_last_modified = self._get_marvin_last_modified(book)
 
@@ -76,6 +77,9 @@ class PullDropboxUpdates():
                             elif m_last_modified > c_last_modified:
                                 self._log("Marvin metadata is newer")
                             self._update_calibre_metadata(book, cid)
+
+                            self._log("*** Deleting metadata update record: NOT IMPLEMENTED ***")
+                            #os.remove(update)
 
                     Application.processEvents()
                     time.sleep(1.0)
