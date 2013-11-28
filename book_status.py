@@ -4313,19 +4313,19 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _get_pubdate(row):
             pubdate = None
-            try:
-                pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
-            except:
-                if iswindows:
-                    ''' Windows doesn't like negative timestamps '''
-                    epoch = datetime(1970, 1, 1)
-                    pubdate = epoch + timedelta(seconds=int(row[b'DatePublished']))
-                else:
-                    self._log("Error getting pubdate for %s" % repr(row[b'Title']))
-                    self._log("DatePublished: %s" % repr(row[b'DatePublished']))
-                    import traceback
-                    self._log(traceback.format_exc())
-
+            if row[b'DatePublished'] is not None:
+                try:
+                    pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
+                except:
+                    if iswindows:
+                        ''' Windows doesn't like negative timestamps '''
+                        epoch = datetime(1970, 1, 1)
+                        pubdate = epoch + timedelta(seconds=int(row[b'DatePublished']))
+                    else:
+                        self._log("Error getting pubdate for %s" % repr(row[b'Title']))
+                        self._log("DatePublished: %s" % repr(row[b'DatePublished']))
+                        import traceback
+                        self._log(traceback.format_exc())
             return pubdate
 
         def _get_publisher(row):
