@@ -2963,7 +2963,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if book_data.series_index.endswith('.0'):
                     cs_index = book_data.series_index[:-2]
                 series_ts = "%s [%s]" % (book_data.series, cs_index)
-                index = float(book_data.series_index)
+                try:
+                    index = float(book_data.series_index)
+                except:
+                    index = 0.0
                 integer = int(index)
                 fraction = index - integer
                 series_sort = '%s %04d%s' % (book_data.series,
