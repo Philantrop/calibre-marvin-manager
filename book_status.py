@@ -4043,26 +4043,28 @@ class BookStatusDialog(SizePersistedDialog):
                 # ~~~~~~~~ pubdate ~~~~~~~~
 
                 if (mi.pubdate.year == 101 and mi.pubdate.month == 1 and
-                    row[b'DatePublished'] is None):
+                    not row[b'DatePublished']):
                     # Special case when calibre pubdate is unknown (101-01-01) and
                     # Marvin is None
                     pass
                 else:
                     if bool(row[b'DatePublished']) or bool(mi.pubdate):
-                        try:
-                            mb_pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
-                            mb_pubdate = mb_pubdate.replace(hour=0, minute=0, second=0)
-                        except:
-                            if iswindows:
-                                ''' Windows doesn't like negative timestamps '''
-                                epoch = datetime(1970, 1, 1)
-                                mb_pubdate = epoch + timedelta(seconds=int(row[b'DatePublished']))
-                            else:
-                                self._log("Error getting pubdate for %s" % repr(row[b'Title']))
-                                self._log("DatePublished: %s" % repr(row[b'DatePublished']))
-                                import traceback
-                                self._log(traceback.format_exc())
-                                mb_pubdate = None
+                        mb_pubdate = None
+                        if row[b'DatePublished']:
+                            try:
+                                mb_pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
+                                mb_pubdate = mb_pubdate.replace(hour=0, minute=0, second=0)
+                            except:
+                                if iswindows:
+                                    ''' Windows doesn't like negative timestamps '''
+                                    epoch = datetime(1970, 1, 1)
+                                    mb_pubdate = epoch + timedelta(seconds=int(row[b'DatePublished']))
+                                else:
+                                    self._log("Error getting pubdate for %s" % repr(row[b'Title']))
+                                    self._log("DatePublished: %s" % repr(row[b'DatePublished']))
+                                    import traceback
+                                    self._log(traceback.format_exc())
+                                    mb_pubdate = None
 
                         naive = mi.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
 
@@ -4089,7 +4091,7 @@ class BookStatusDialog(SizePersistedDialog):
                         mismatches['series'] = {'calibre': mi.series,
                                                 'Marvin': row[b'CalibreSeries']}
 
-                    csi = row[b'CalibreSeriesIndex']
+                    csi = row[b'CalibreSeriesIndex'] if row[b'CalibreSeriesIndex'] else 0.0
                     if bool(mi.series_index) or bool(csi):
                         if mi.series_index != float(csi):
                             mismatches['series_index'] = {'calibre': mi.series_index,
@@ -4148,7 +4150,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         def _get_pubdate(row):
             pubdate = None
-            if row[b'DatePublished'] is not None:
+            if row[b'DatePublished']:
                 try:
                     pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
                 except:
