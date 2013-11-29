@@ -663,7 +663,7 @@ class MarvinManagerAction(InterfaceAction):
 
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
-            self._log_location("BookStatus initialized")
+            self._log_location("{0} books".format(len(self.book_status_dialog.installed_books)))
             self.book_status_dialog.exec_()
 
             # Keep a copy of installed_books in case user reopens w/o disconnect

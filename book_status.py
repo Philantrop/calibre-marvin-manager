@@ -4492,7 +4492,9 @@ class BookStatusDialog(SizePersistedDialog):
             with open(lhc, 'rb') as hcf:
                 hash_cache = pickle.load(hcf)
 
-            self._log("remote hash cache: version %d" % hash_cache['version'])
+            self._log("remote hash cache: v{0}, {1} books in cache".format(
+                hash_cache['version'],
+                len(hash_cache) - 1))
 
         else:
             # Confirm path to remote folder is valid store point
@@ -4716,7 +4718,7 @@ class BookStatusDialog(SizePersistedDialog):
         '''
         Create the initial dict of installed books with hash values
         '''
-        self._log_location("%d" % len(cached_books))
+        self._log_location("%d books" % len(cached_books))
 
         # Fetch pre-existing hash cache from device, purge orphans
         self.hash_cache = self._localize_hash_cache(cached_books)
