@@ -4315,7 +4315,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _get_pubdate(row):
             pubdate = None
-            if row[b'DatePublished']:
+            if row[b'DatePublished'] > '':
                 try:
                     pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
                 except:
@@ -4660,12 +4660,20 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                  show_command=self.prefs.get('show_staged_commands', False))
 
         # Wait for completion
-        results = self._wait_for_command_completion(command_name,
-                                                    timeout_override=timeout_override,
-                                                    get_response=get_response,
-                                                    update_local_db=update_local_db)
+        try:
+            results = self._wait_for_command_completion(command_name,
+                timeout_override=timeout_override,
+                get_response=get_response,
+                update_local_db=update_local_db)
+        except:
+            results = {'code': '2',
+                       'status': "ERROR communicating with connected device"}
 
-        self.parent.connected_device.set_busy_flag(False)
+        try:
+            self.parent.connected_device.set_busy_flag(False)
+        except:
+            self._log("ERROR communicating while clearing connected_device.busy_flag")
+
         QApplication.restoreOverrideCursor()
         return results
 
@@ -5956,7 +5964,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 return MessageBox(MessageBox.WARNING, title, msg,
                                   show_copy_button=False).exec_()
 
-        pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata")
+        pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata",
+            frameless=False, on_top=True)
         total_books = len(selected_books)
         # Show progress in dispatched method - 2 times
         pb.set_maximum(total_books * 2)

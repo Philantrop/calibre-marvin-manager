@@ -340,13 +340,19 @@ class MyBlockingBusy(QDialog):
 
 class ProgressBar(QDialog):
     def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
-                 label='Label goes here', on_top=False):
+                 label='Label goes here', frameless=True, on_top=False):
         if on_top:
+            _flags = Qt.WindowStaysOnTopHint
+            if frameless:
+                _flags |= Qt.FramelessWindowHint
             QDialog.__init__(self, parent=parent,
-                             flags=Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
+                             flags=_flags)
         else:
+            _flags = Qt.Dialog
+            if frameless:
+                _flags |= Qt.FramelessWindowHint
             QDialog.__init__(self, parent=parent,
-                             flags=Qt.FramelessWindowHint)
+                             flags=_flags)
         self.application = Application
         self.setWindowTitle(window_title)
         self.l = QVBoxLayout(self)
