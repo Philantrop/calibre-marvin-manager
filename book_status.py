@@ -4444,8 +4444,6 @@ class BookStatusDialog(SizePersistedDialog):
                 timeout_override=timeout_override,
                 get_response=get_response,
                 update_local_db=update_local_db)
-            # *** Force error ***
-            #foo
         except:
             import traceback
             details = "An error occurred while executing '{0}'.\n\n".format(command_name)
