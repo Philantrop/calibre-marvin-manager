@@ -1686,9 +1686,9 @@ class BookStatusDialog(SizePersistedDialog):
         results = self._issue_command(command_name, update_soup,
                                       get_response="html_response.html",
                                       update_local_db=False)
+        self._busy_operation_teardown()
         if results['code']:
-            self._busy_operation_teardown()
-            return self._show_command_error(results)
+            return self._show_command_error(command_type, results)
         else:
             response = results['response']
 
@@ -1711,7 +1711,6 @@ class BookStatusDialog(SizePersistedDialog):
             'refresh': refresh
             }
 
-        self._busy_operation_teardown()
 
         klass = os.path.join(dialog_resources_path, 'html_viewer.py')
         if os.path.exists(klass):
@@ -2427,8 +2426,10 @@ class BookStatusDialog(SizePersistedDialog):
 
                 results = self._issue_command(command_name, update_soup, update_local_db=False)
                 if results['code']:
-                    self._log_location("ERROR: %s" % results)
-                    break
+                    if not silent:
+                        pb.hide()
+                    self._show_command_error(command_name, results)
+                    return stats
 
                 if not silent:
                     pb.increment()
@@ -3479,7 +3480,7 @@ class BookStatusDialog(SizePersistedDialog):
             self._busy_operation_teardown()
 
             if results['code']:
-                return self._show_command_error('Generate Deep View', results)
+                return self._show_command_error(command_type, results)
 
             # Get the latest DeepViewPrepared status for selected books
             book_ids = [selected_books[row]['book_id'] for row in selected_books.keys()]
@@ -4415,7 +4416,7 @@ class BookStatusDialog(SizePersistedDialog):
                                       update_local_db=update_local_db)
         self._busy_operation_teardown()
         if results['code']:
-            self._log_location("ERROR: %s" % results)
+            return self._show_command_error(command_name, results)
 
     def _issue_command(self, command_name, update_soup,
                        get_response=None,
@@ -4918,14 +4919,14 @@ class BookStatusDialog(SizePersistedDialog):
 
         Application.processEvents()
 
-    def _show_command_error(self, results):
+    def _show_command_error(self, command, results):
         '''
         Display contents of a non-successful result
         '''
         self._log_location(results)
         title = "Results"
-        msg = ("<p>{0}.</p>".format(results['status']) +
-               "<p>Click 'Show details' for more information.</p>")
+        msg = ("<p>Error communicating with Marvin while executing <tt>{0}</tt> command.</p>".format(command) +
+               "<p>Click <b>Show details</b> for more information.</p>")
         details = results['details']
         MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
                    show_copy_button=False).exec_()
@@ -5092,7 +5093,7 @@ class BookStatusDialog(SizePersistedDialog):
                     results = self._issue_command(command_name, update_soup,
                                                   update_local_db=update_local_db)
                     if results['code']:
-                        self._log_location("ERROR: %s" % results)
+                        return self._show_command_error(command_name, results)
 
                     # Update cached_books
                     cached_books[path]['cover_hash'] = cover_hash
@@ -5157,7 +5158,7 @@ class BookStatusDialog(SizePersistedDialog):
                 results = self._issue_command(command_name, update_soup,
                                               update_local_db=update_local_db)
                 if results['code']:
-                    self._log_location("ERROR: %s" % results)
+                    return self._show_command_error(command_name, results)
 
         pb.increment()
 
@@ -5429,7 +5430,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                         results = self._issue_command(command_name, update_soup)
                         if results['code']:
-                            self._log_location("ERROR: %s" % results)
+                            return self._show_command_error(command_type, results)
 
         for ctr in details['rename']:
             if ctr in details['locations']['Marvin'] and ctr not in deleted_in_marvin:
@@ -5479,7 +5480,7 @@ class BookStatusDialog(SizePersistedDialog):
 
                         results = self._issue_command(command_name, update_soup)
                         if results['code']:
-                            self._log_location("ERROR: %s" % results)
+                            return self._show_command_error(command_type, results)
 
     def _update_locked_status(self, action):
         '''
@@ -5525,14 +5526,16 @@ class BookStatusDialog(SizePersistedDialog):
             book_tag['uuid'] = self.installed_books[book_id].uuid
             manifest_tag.insert(0, book_tag)
 
-        if len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER:
+        show_spinner = bool(len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER)
+        if show_spinner:
             self._busy_operation_setup(self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup, update_local_db=True)
-        if results['code']:
-            self._log_location("ERROR: %s" % results)
 
-        if len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER:
+        if show_spinner:
             self._busy_operation_teardown()
+
+        if results['code']:
+            return self._show_command_error('update_locked_status', results)
 
     def _update_marvin_collections(self, book_id, updated_marvin_collections):
         '''
@@ -5587,7 +5590,7 @@ class BookStatusDialog(SizePersistedDialog):
         update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
         results = self._issue_command(command_name, update_soup)
         if results['code']:
-            return self._show_command_error(results)
+            return self._show_command_error('_update_marvin_metadata', results)
 
         # 2x progress on purpose
         pb.increment()
