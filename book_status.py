@@ -4041,7 +4041,6 @@ class BookStatusDialog(SizePersistedDialog):
                                                 'Marvin': row[b'CalibreCoverHash']}
 
                 # ~~~~~~~~ pubdate ~~~~~~~~
-
                 if (mi.pubdate.year == 101 and mi.pubdate.month == 1 and
                     not row[b'DatePublished']):
                     # Special case when calibre pubdate is unknown (101-01-01) and
@@ -4150,7 +4149,7 @@ class BookStatusDialog(SizePersistedDialog):
 
         def _get_pubdate(row):
             pubdate = None
-            if row[b'DatePublished'] > '':
+            if row[b'DatePublished'] != '' and row[b'DatePublished'] is not None:
                 try:
                     pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
                 except:
@@ -4444,14 +4443,21 @@ class BookStatusDialog(SizePersistedDialog):
                 timeout_override=timeout_override,
                 get_response=get_response,
                 update_local_db=update_local_db)
+            # *** Force error ***
+            #foo
         except:
+            import traceback
+            details = "An error occurred while executing '{0}'.\n\n".format(command_name)
+            details += traceback.format_exc()
             results = {'code': '2',
-                       'status': "ERROR communicating with connected device"}
+                       'status': "Error communicating with Marvin",
+                       'details': details}
 
+        # Try to reset the busy flag, although it might fail
         try:
             self.parent.connected_device.set_busy_flag(False)
         except:
-            self._log("ERROR communicating while clearing connected_device.busy_flag")
+            pass
 
         QApplication.restoreOverrideCursor()
         return results
@@ -4912,12 +4918,13 @@ class BookStatusDialog(SizePersistedDialog):
 
         Application.processEvents()
 
-    def _show_command_error(self, operation, results):
+    def _show_command_error(self, results):
         '''
+        Display contents of a non-successful result
         '''
-        self._log_location()
+        self._log_location(results)
         title = "Results"
-        msg = ("<p>{0} {1}.</p>".format(operation, results['status']) +
+        msg = ("<p>{0}.</p>".format(results['status']) +
                "<p>Click 'Show details' for more information.</p>")
         details = results['details']
         MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
@@ -5580,7 +5587,7 @@ class BookStatusDialog(SizePersistedDialog):
         update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
         results = self._issue_command(command_name, update_soup)
         if results['code']:
-            self._log_location("ERROR: %s" % results)
+            return self._show_command_error(results)
 
         # 2x progress on purpose
         pb.increment()
