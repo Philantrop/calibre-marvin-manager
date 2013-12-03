@@ -19,12 +19,13 @@ from PyQt4.Qt import (Qt, QCursor, QIcon, QMenu, QTimer, QUrl,
 
 from calibre.constants import DEBUG
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
+from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup
 from calibre.gui2 import Application, open_url
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
-from calibre.devices.usbms.driver import debug_print
+from calibre.library import current_library_name
 from calibre.utils.config import config_dir
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
@@ -318,7 +319,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     # subclass override
     def library_changed(self, db):
-        self._log_location()
+        self._log_location(current_library_name())
         self.indexed_library = None
         self.library_indexed = False
         self.library_scanner = None
