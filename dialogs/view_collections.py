@@ -17,7 +17,7 @@ from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.utils.icu import sort_key
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
-from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
+from calibre_plugins.marvin_manager.common_utils import Logger, SizePersistedDialog
 
 from PyQt4.Qt import (Qt, QDialogButtonBox, QIcon, QPalette,
                       pyqtSignal)
@@ -32,9 +32,7 @@ if True:
 ADD_NEW_COLLECTION_ENABLED = True
 RENAMING_ENABLED = False
 
-class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-
+class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog, Logger):
     marvin_device_status_changed = pyqtSignal(str)
 
     def accept(self):
@@ -326,37 +324,6 @@ class CollectionsViewerDialog(SizePersistedDialog, Ui_Dialog):
         if self.calibre_collections is not None:
             self.calibre_lw.setSortingEnabled(True)
         self.marvin_lw.setSortingEnabled(True)
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % msg)
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = args[0]
-        if len(args) > 1:
-            arg2 = args[1]
-
-        debug_print(self.LOCATION_TEMPLATE.format(
-            cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))
 
     def _merge_collections(self):
         '''

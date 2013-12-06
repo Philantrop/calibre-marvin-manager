@@ -15,19 +15,19 @@ from calibre.gui2 import question_dialog, error_dialog
 from calibre.gui2.dialogs.device_category_editor import DeviceCategoryEditor, ListWidgetItem
 from calibre.gui2.dialogs.device_category_editor_ui import Ui_DeviceCategoryEditor
 
+from calibre_plugins.marvin_manager.common_utils import Logger
+
 from PyQt4.Qt import (Qt, QDialog, QIcon,
                       pyqtSignal)
 
 
-class MyDeviceCategoryEditor(DeviceCategoryEditor):
+class MyDeviceCategoryEditor(DeviceCategoryEditor, Logger):
     '''
     subclass of gui2.dialogs.device_category_editor
     .available_tags is QListWidget
     .rename_button
     .delete_button
     '''
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-
     marvin_device_status_changed = pyqtSignal(str)
 
     def __init__(self, parent, tag_to_match, data, key, connected_device):
@@ -127,34 +127,3 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor):
                          'Select a collection to rename.').exec_()
             return
         self.available_tags.editItem(item)
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % msg)
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = args[0]
-        if len(args) > 1:
-            arg2 = args[1]
-
-        debug_print(self.LOCATION_TEMPLATE.format(
-            cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))

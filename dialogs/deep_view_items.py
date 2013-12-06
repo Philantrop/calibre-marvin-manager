@@ -14,6 +14,7 @@ from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import warning_dialog
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
+from calibre_plugins.marvin_manager.common_utils import Logger
 
 from PyQt4.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap,
                       QSize)
@@ -25,14 +26,11 @@ if True:
     sys.path.remove(dialog_resources_path)
 
 
-class DeepViewItems(QDialog, Ui_Dialog):
+class DeepViewItems(QDialog, Ui_Dialog, Logger):
     '''
     Present user with a list of DV items
     items keys(): ['ID', 'Name', 'Cnt', 'Loc', 'Flag', 'Note', 'Confidence']
     '''
-
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-
 
     def __init__(self, parent, title, items, verbose=True):
         QDialog.__init__(self, parent)
@@ -97,35 +95,3 @@ class DeepViewItems(QDialog, Ui_Dialog):
 
     def esc(self, *args):
         self.cancel()
-
-    # ~~~~~~ Helpers ~~~~~~
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % msg)
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = args[0]
-        if len(args) > 1:
-            arg2 = args[1]
-
-        debug_print(self.LOCATION_TEMPLATE.format(
-            cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))
