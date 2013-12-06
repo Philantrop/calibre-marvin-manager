@@ -21,7 +21,7 @@ from calibre_plugins.marvin_manager.appearance import (AnnotationsAppearance,
     default_elements, default_timestamp)
 
 from calibre_plugins.marvin_manager.common_utils import (Logger,
-    existing_annotations, get_icon, move_annotations)
+    existing_annotations, get_cc_mapping, get_icon, move_annotations, set_cc_mapping)
 
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
                       QGridLayout, QGroupBox, QFileDialog, QIcon,
@@ -353,54 +353,46 @@ class ConfigWidget(QWidget, Logger):
         self.resize(self.sizeHint())
 
         # ~~~~~~~~ Populate/restore config options ~~~~~~~~
-        #  Collections comboBox
-        self.populate_collections()
-        cf = self.prefs.get('collection_field_comboBox', '')
-        idx = self.collection_field_comboBox.findText(cf)
-        if idx > -1:
-            self.collection_field_comboBox.setCurrentIndex(idx)
-
         #  Annotations comboBox
         self.populate_annotations()
-        cf = self.prefs.get('annotations_field_comboBox', '')
-        idx = self.annotations_field_comboBox.findText(cf)
-        if idx > -1:
-            self.annotations_field_comboBox.setCurrentIndex(idx)
+
+        #  Collections comboBox
+        self.populate_collections()
 
         #  Last read comboBox
         self.populate_date_read()
-        cf = self.prefs.get('date_read_field_comboBox', '')
-        idx = self.date_read_field_comboBox.findText(cf)
-        if idx > -1:
-            self.date_read_field_comboBox.setCurrentIndex(idx)
+#         cf = self.prefs.get('date_read_field_comboBox', '')
+#         idx = self.date_read_field_comboBox.findText(cf)
+#         if idx > -1:
+#             self.date_read_field_comboBox.setCurrentIndex(idx)
 
         #  Progress comboBox
         self.populate_progress()
-        cf = self.prefs.get('progress_field_comboBox', '')
-        idx = self.progress_field_comboBox.findText(cf)
-        if idx > -1:
-            self.progress_field_comboBox.setCurrentIndex(idx)
+#         cf = self.prefs.get('progress_field_comboBox', '')
+#         idx = self.progress_field_comboBox.findText(cf)
+#         if idx > -1:
+#             self.progress_field_comboBox.setCurrentIndex(idx)
 
         #  Read comboBox
         self.populate_read()
-        cf = self.prefs.get('read_field_comboBox', '')
-        idx = self.read_field_comboBox.findText(cf)
-        if idx > -1:
-            self.read_field_comboBox.setCurrentIndex(idx)
+#         cf = self.prefs.get('read_field_comboBox', '')
+#         idx = self.read_field_comboBox.findText(cf)
+#         if idx > -1:
+#             self.read_field_comboBox.setCurrentIndex(idx)
 
         #  Reading list comboBox
         self.populate_reading_list()
-        cf = self.prefs.get('reading_list_field_comboBox', '')
-        idx = self.reading_list_field_comboBox.findText(cf)
-        if idx > -1:
-            self.reading_list_field_comboBox.setCurrentIndex(idx)
+#         cf = self.prefs.get('reading_list_field_comboBox', '')
+#         idx = self.reading_list_field_comboBox.findText(cf)
+#         if idx > -1:
+#             self.reading_list_field_comboBox.setCurrentIndex(idx)
 
         #  Word count comboBox
         self.populate_word_count()
-        cf = self.prefs.get('word_count_field_comboBox', '')
-        idx = self.word_count_field_comboBox.findText(cf)
-        if idx > -1:
-            self.word_count_field_comboBox.setCurrentIndex(idx)
+#         cf = self.prefs.get('word_count_field_comboBox', '')
+#         idx = self.word_count_field_comboBox.findText(cf)
+#         if idx > -1:
+#             self.word_count_field_comboBox.setCurrentIndex(idx)
 
         """
         # Restore Dropbox settings, hook changes
@@ -638,22 +630,31 @@ class ConfigWidget(QWidget, Logger):
             self._log("ERROR: Can't import from '%s'" % klass)
 
     def populate_annotations(self):
-        #self.eligible_annotations_fields = self.get_eligible_custom_fields(eligible_types=['comments'])
         datatype = self.WIZARD_PROFILES['Annotations']['datatype']
         self.eligible_annotations_fields = self.get_eligible_custom_fields([datatype])
         self.annotations_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_annotations_fields.keys(), key=lambda s: s.lower())
         self.annotations_field_comboBox.addItems(ecf)
 
+        # Retrieve stored value
+        existing = get_cc_mapping('annotations', 'combobox')
+        if existing:
+            ci = self.annotations_field_comboBox.findText(existing)
+            self.annotations_field_comboBox.setCurrentIndex(ci)
+
     def populate_collections(self):
-        #self.eligible_collection_fields = self.get_eligible_custom_fields(['enumeration', 'text'],
-        #                                                                          is_multiple=True)
         datatype = self.WIZARD_PROFILES['Collections']['datatype']
         self.eligible_collection_fields = self.get_eligible_custom_fields([datatype],
                                                                           is_multiple=True)
         self.collection_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_collection_fields.keys(), key=lambda s: s.lower())
         self.collection_field_comboBox.addItems(ecf)
+
+        # Retrieve stored value
+        existing = get_cc_mapping('collections', 'combobox')
+        if existing:
+            ci = self.collection_field_comboBox.findText(existing)
+            self.collection_field_comboBox.setCurrentIndex(ci)
 
     def populate_date_read(self):
         #self.eligible_date_read_fields = self.get_eligible_custom_fields(['datetime'])
@@ -663,6 +664,12 @@ class ConfigWidget(QWidget, Logger):
         ecf = sorted(self.eligible_date_read_fields.keys(), key=lambda s: s.lower())
         self.date_read_field_comboBox.addItems(ecf)
 
+        # Retrieve stored value
+        existing = get_cc_mapping('date_read', 'combobox')
+        if existing:
+            ci = self.date_read_field_comboBox.findText(existing)
+            self.date_read_field_comboBox.setCurrentIndex(ci)
+
     def populate_progress(self):
         #self.eligible_progress_fields = self.get_eligible_custom_fields(['float'])
         datatype = self.WIZARD_PROFILES['Progress']['datatype']
@@ -671,6 +678,12 @@ class ConfigWidget(QWidget, Logger):
         ecf = sorted(self.eligible_progress_fields.keys(), key=lambda s: s.lower())
         self.progress_field_comboBox.addItems(ecf)
 
+        # Retrieve stored value
+        existing = get_cc_mapping('progress', 'combobox')
+        if existing:
+            ci = self.progress_field_comboBox.findText(existing)
+            self.progress_field_comboBox.setCurrentIndex(ci)
+
     def populate_read(self):
         datatype = self.WIZARD_PROFILES['Read']['datatype']
         self.eligible_read_fields = self.get_eligible_custom_fields([datatype])
@@ -678,12 +691,24 @@ class ConfigWidget(QWidget, Logger):
         ecf = sorted(self.eligible_read_fields.keys(), key=lambda s: s.lower())
         self.read_field_comboBox.addItems(ecf)
 
+        # Retrieve stored value
+        existing = get_cc_mapping('read', 'combobox')
+        if existing:
+            ci = self.read_field_comboBox.findText(existing)
+            self.read_field_comboBox.setCurrentIndex(ci)
+
     def populate_reading_list(self):
         datatype = self.WIZARD_PROFILES['Reading list']['datatype']
         self.eligible_reading_list_fields = self.get_eligible_custom_fields([datatype])
         self.reading_list_field_comboBox.addItems([''])
         ecf = sorted(self.eligible_reading_list_fields.keys(), key=lambda s: s.lower())
         self.reading_list_field_comboBox.addItems(ecf)
+
+        # Retrieve stored value
+        existing = get_cc_mapping('reading_list', 'combobox')
+        if existing:
+            ci = self.reading_list_field_comboBox.findText(existing)
+            self.reading_list_field_comboBox.setCurrentIndex(ci)
 
     def populate_word_count(self):
         #self.eligible_word_count_fields = self.get_eligible_custom_fields(['int'])
@@ -693,6 +718,13 @@ class ConfigWidget(QWidget, Logger):
         ecf = sorted(self.eligible_word_count_fields.keys(), key=lambda s: s.lower())
         self.word_count_field_comboBox.addItems(ecf)
 
+        # Retrieve stored value
+        existing = get_cc_mapping('word_count', 'combobox')
+        if existing:
+            ci = self.word_count_field_comboBox.findText(existing)
+            self.word_count_field_comboBox.setCurrentIndex(ci)
+
+    """
     def select_dropbox_folder(self):
         '''
         '''
@@ -704,7 +736,6 @@ class ConfigWidget(QWidget, Logger):
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
         self.dropbox_location_lineedit.setText(unicode(dropbox_location))
 
-    """
     def set_dropbox_syncing(self, state):
         '''
         Called when checkbox changes state, or when restoring state
@@ -738,61 +769,54 @@ class ConfigWidget(QWidget, Logger):
     def save_settings(self):
         self._log_location()
 
-        # Save annotations field
+        # Annotations
         cf = str(self.annotations_field_comboBox.currentText())
-        self.prefs.set('annotations_field_comboBox', cf)
+        field = None
         if cf:
-            self.prefs.set('annotations_field_lookup', self.eligible_annotations_fields[cf])
-        else:
-            self.prefs.set('annotations_field_lookup', '')
+            field = self.eligible_annotations_fields[cf]
+        set_cc_mapping('annotations', combobox=cf, field=field)
 
-        # Save collection field
+        # Collections
         cf = str(self.collection_field_comboBox.currentText())
-        self.prefs.set('collection_field_comboBox', cf)
+        field = None
         if cf:
-            self.prefs.set('collection_field_lookup', self.eligible_collection_fields[cf])
-        else:
-            self.prefs.set('collection_field_lookup', '')
+            field = self.eligible_collection_fields[cf]
+        set_cc_mapping('collections', combobox=cf, field=field)
 
         # Save Date read field
         cf = str(self.date_read_field_comboBox.currentText())
-        self.prefs.set('date_read_field_comboBox', cf)
+        field = None
         if cf:
-            self.prefs.set('date_read_field_lookup', self.eligible_date_read_fields[cf])
-        else:
-            self.prefs.set('date_read_field_lookup', '')
+            field = self.eligible_date_read_fields[cf]
+        set_cc_mapping('date_read', combobox=cf, field=field)
 
         # Save Progress field
         cf = str(self.progress_field_comboBox.currentText())
-        self.prefs.set('progress_field_comboBox', cf)
+        field = none
         if cf:
-            self.prefs.set('progress_field_lookup', self.eligible_progress_fields[cf])
-        else:
-            self.prefs.set('progress_field_lookup', '')
+            field = self.eligible_progress_fields[cf]
+        set_cc_mapping('progress', combobox=cf, field=field)
 
         # Save Read field
         cf = str(self.read_field_comboBox.currentText())
-        self.prefs.set('read_field_comboBox', cf)
+        field = None
         if cf:
-            self.prefs.set('read_field_lookup', self.eligible_read_fields[cf])
-        else:
-            self.prefs.set('read_field_lookup', '')
+            field = self.eligible_read_fields[cf]
+        set_cc_mapping('read', combobox=cf, field=field)
 
         # Save Reading list field
         cf = str(self.reading_list_field_comboBox.currentText())
-        self.prefs.set('reading_list_field_comboBox', cf)
+        field = None
         if cf:
-            self.prefs.set('reading_list_field_lookup', self.eligible_reading_list_fields[cf])
-        else:
-            self.prefs.set('reading_list_field_lookup', '')
+            field = self.eligible_reading_list_fields[cf]
+        set_cc_mapping('reading_list', combobox=cf, field=field)
 
         # Save Word count field
         cf = str(self.word_count_field_comboBox.currentText())
-        self.prefs.set('word_count_field_comboBox', cf)
+        field = None
         if cf:
-            self.prefs.set('word_count_field_lookup', self.eligible_word_count_fields[cf])
-        else:
-            self.prefs.set('word_count_field_lookup', '')
+            field = self.eligible_word_count_fields[cf]
+        set_cc_mapping('word_count', combobox=cf, field=field)
 
         '''
         # Save Dropbox settings

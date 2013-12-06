@@ -16,10 +16,11 @@ from time import sleep
 from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup
+from calibre.ebooks.metadata.book.base import Metadata
 from calibre.gui2 import Application
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2.progress_indicator import ProgressIndicator
-from calibre.ebooks.metadata.book.base import Metadata
+from calibre.library import current_library_name
 from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
 
@@ -338,7 +339,7 @@ class MyBlockingBusy(QDialog):
         self.pi.stopAnimation()
 
 
-class ProgressBar(QDialog):
+class ProgressBar(QDialog, Logger):
     def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
                  label='Label goes here', frameless=True, on_top=False):
         if on_top:
@@ -372,7 +373,7 @@ class ProgressBar(QDialog):
         self.close_requested = False
 
     def closeEvent(self, event):
-        debug_print("ProgressBar:closeEvent()")
+        self._log_location()
         self.close_requested = True
 
     def increment(self):
@@ -701,6 +702,26 @@ def existing_annotations(parent, field, return_all=False):
        _log("no active field")
 
     return annotation_map
+
+
+def get_cc_mapping(cc_name, element, default=None):
+    '''
+    Return the element mapped to cc_name in prefs
+    '''
+    from calibre_plugins.marvin_manager.config import plugin_prefs
+
+    if element not in ['field', 'combobox']:
+        raise ValueError("invalid element '{0}' requested for custom column '{1}'".format(
+            element, cc_name))
+
+    ans = default
+    cc_mappings = plugin_prefs.get('cc_mappings', {})
+    current_library = current_library_name()
+    if (current_library in cc_mappings and
+        cc_name in cc_mappings[current_library] and
+        element in cc_mappings[current_library][cc_name]):
+        ans = cc_mappings[current_library][cc_name][element]
+    return ans
 
 
 def get_icon(icon_name):
@@ -1080,6 +1101,22 @@ def save_state(ui, prefs, save_position=False):
             if type(qt_type) is QString:
                 qt_type = unicode(qt_type)
             prefs.set(control, qt_type)
+
+
+def set_cc_mapping(cc_name, field=None, combobox=None):
+    '''
+    Store element to cc_name in prefs:cc_mappings
+    '''
+    from calibre_plugins.marvin_manager.config import plugin_prefs
+
+    cc_mappings = plugin_prefs.get('cc_mappings', {})
+    current_library = current_library_name()
+    if current_library in cc_mappings:
+        cc_mappings[current_library][cc_name]['field'] = field
+        cc_mappings[current_library][cc_name]['combobox'] = combobox
+    else:
+        cc_mappings[current_library] = {cc_name: {'field': field, 'combobox': combobox}}
+    plugin_prefs.set('cc_mappings', cc_mappings)
 
 
 def set_plugin_icon_resources(name, resources):
