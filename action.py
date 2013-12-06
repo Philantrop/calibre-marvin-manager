@@ -31,15 +31,16 @@ from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    CompileUI, IndexLibrary, MyBlockingBusy, ProgressBar, Struct,
+    CompileUI, IndexLibrary, Logger, MyBlockingBusy, ProgressBar, Struct,
     get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
+#from calibre_plugins.marvin_manager.dropbox import PullDropboxUpdates
 
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
 PLUGIN_ICONS = ['images/connected.png', 'images/disconnected.png']
 
-class MarvinManagerAction(InterfaceAction):
+class MarvinManagerAction(InterfaceAction, Logger):
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -110,6 +111,7 @@ class MarvinManagerAction(InterfaceAction):
         self.book_status_dialog = None
         self.blocking_busy = MyBlockingBusy(self.gui, "Updating Marvin Library…", size=50)
         self.connected_device = None
+        self.dropbox_processed = False
         self.ios = None
         self.installed_books = None
         self.marvin_content_updated = False
@@ -550,6 +552,18 @@ class MarvinManagerAction(InterfaceAction):
 
         self.rebuild_menus()
 
+    """
+    def process_dropbox_sync_records(self):
+        '''
+        Scan local Dropbox folder for metadata update records
+        Show progress bar in dialog box reporting titles
+        '''
+        self._log_location()
+
+        self.launch_library_scanner()
+        foo = PullDropboxUpdates(self)
+    """
+
     def rebuild_menus(self):
         self._log_location()
         with self.menus_lock:
@@ -561,8 +575,12 @@ class MarvinManagerAction(InterfaceAction):
             ac.triggered.connect(self.show_about)
             m.addSeparator()
 
-            # Add menu options for connected Marvin
+            # Add menu options for connected Marvin, Dropbox syncing when no connection
             marvin_connected = False
+
+            dropbox_syncing_enabled = self.prefs.get('dropbox_syncing', False)
+            process_dropbox = False
+
             if self.connected_device and hasattr(self.connected_device, 'ios_reader_app'):
                 if (self.connected_device.ios_reader_app == 'Marvin' and
                         self.connected_device.ios_connection['connected'] is True):
@@ -584,6 +602,14 @@ class MarvinManagerAction(InterfaceAction):
                     self._log("Marvin not connected")
                     ac = self.create_menu_item(m, 'Marvin not connected')
                     ac.setEnabled(False)
+
+            elif False and not self.connected_device:
+                ac = self.create_menu_item(m, 'Update metadata via Dropbox')
+                ac.triggered.connect(self.process_dropbox_sync_records)
+
+                # If syncing enabled in Config dialog, automatically process 1x
+                if dropbox_syncing_enabled and not self.dropbox_processed:
+                    process_dropbox = True
             else:
                 self._log("Marvin not connected")
                 ac = self.create_menu_item(m, 'Marvin not connected')
@@ -622,6 +648,11 @@ class MarvinManagerAction(InterfaceAction):
                 action = 'Reset column widths'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
+
+            # Process Dropbox sync records automatically once only.
+            if process_dropbox:
+                self.process_dropbox_sync_records()
+                self.dropbox_processed = True
 
     def reset_marvin_library(self):
         self._log_location("not implemented")
@@ -697,34 +728,3 @@ class MarvinManagerAction(InterfaceAction):
         self.busy_window.accept()
         self.busy_window = None
         Application.restoreOverrideCursor()
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % str(msg))
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = str(args[0])
-        if len(args) > 1:
-            arg2 = str(args[1])
-
-        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-                    func=sys._getframe(1).f_code.co_name,
-                    arg1=arg1, arg2=arg2))
-

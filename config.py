@@ -20,12 +20,12 @@ from calibre.utils.config import JSONConfig
 from calibre_plugins.marvin_manager.appearance import (AnnotationsAppearance,
     default_elements, default_timestamp)
 
-from calibre_plugins.marvin_manager.common_utils import (existing_annotations,
-    get_icon, move_annotations)
+from calibre_plugins.marvin_manager.common_utils import (Logger,
+    existing_annotations, get_icon, move_annotations)
 
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
-                      QGridLayout, QGroupBox, QIcon,
-                      QLabel, QPlainTextEdit, QPushButton,
+                      QGridLayout, QGroupBox, QFileDialog, QIcon,
+                      QLabel, QLineEdit, QPlainTextEdit, QPushButton,
                       QSizePolicy, QSpacerItem, QThread, QTimer, QToolButton,
                       QVBoxLayout, QWidget,
                       SIGNAL)
@@ -33,13 +33,10 @@ from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
 plugin_prefs = JSONConfig('plugins/Marvin XD')
 
 
-class ConfigWidget(QWidget):
+class ConfigWidget(QWidget, Logger):
     '''
     Config dialog for Marvin Manager
     '''
-
-    # Location reporting template
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     WIZARD_PROFILES = {
         'Annotations': {
@@ -101,13 +98,18 @@ class ConfigWidget(QWidget):
 
         self._log_location()
 
-        self.l = QVBoxLayout()
+        self.l = QGridLayout()
         self.setLayout(self.l)
+        self.column1_layout = QVBoxLayout()
+        self.l.addLayout(self.column1_layout, 0, 0)
+        self.column2_layout = QVBoxLayout()
+        self.l.addLayout(self.column2_layout, 0, 1)
 
+        # ----------------------------- Column 1 -----------------------------
         # ~~~~~~~~ Create the Custom fields options group box ~~~~~~~~
         self.cfg_custom_fields_gb = QGroupBox(self)
         self.cfg_custom_fields_gb.setTitle('Custom column assignments')
-        self.l.addWidget(self.cfg_custom_fields_gb)
+        self.column1_layout.addWidget(self.cfg_custom_fields_gb)
 
         self.cfg_custom_fields_qgl = QGridLayout(self.cfg_custom_fields_gb)
         current_row = 0
@@ -243,13 +245,14 @@ class ConfigWidget(QWidget):
         self.cfg_custom_fields_qgl.addWidget(self.cfg_word_count_wizard, current_row, 2)
         current_row += 1
 
-        spacerItem1 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.cfg_custom_fields_qgl.addItem(spacerItem1)
+        self.spacerItem1 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.column1_layout.addItem(self.spacerItem1)
 
+        # ----------------------------- Column 2 -----------------------------
         # ~~~~~~~~ Create the CSS group box ~~~~~~~~
         self.cfg_css_options_gb = QGroupBox(self)
         self.cfg_css_options_gb.setTitle('CSS')
-        self.l.addWidget(self.cfg_css_options_gb)
+        self.column2_layout.addWidget(self.cfg_css_options_gb)
         self.cfg_css_options_qgl = QGridLayout(self.cfg_css_options_gb)
 
         current_row = 0
@@ -275,10 +278,43 @@ class ConfigWidget(QWidget):
         self.connect(self.cfg_css_editor_label, SIGNAL('clicked()'), self.edit_css)
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_label, current_row, 1)
 
+
+        """
+        # ~~~~~~~~ Create the Dropbox syncing group box ~~~~~~~~
+        self.cfg_dropbox_syncing_gb = QGroupBox(self)
+        self.cfg_dropbox_syncing_gb.setTitle('Dropbox')
+        self.column2_layout.addWidget(self.cfg_dropbox_syncing_gb)
+        self.cfg_dropbox_syncing_qgl = QGridLayout(self.cfg_dropbox_syncing_gb)
+        current_row = 0
+
+        # ++++++++ Syncing enabled checkbox ++++++++
+        self.dropbox_syncing_checkbox = QCheckBox('Enable Dropbox updates')
+        self.dropbox_syncing_checkbox.setObjectName('dropbox_syncing')
+        self.dropbox_syncing_checkbox.setToolTip('Refresh custom column content from Marvin metadata')
+        self.cfg_dropbox_syncing_qgl.addWidget(self.dropbox_syncing_checkbox,
+            current_row, 0, 1, 3)
+        current_row += 1
+
+        # ++++++++ Dropbox folder picker ++++++++
+        self.dropbox_folder_icon = QIcon(os.path.join(self.resources_path, 'icons', 'dropbox.png'))
+        self.cfg_dropbox_folder_toolbutton = QToolButton()
+        self.cfg_dropbox_folder_toolbutton.setIcon(self.dropbox_folder_icon)
+        self.cfg_dropbox_folder_toolbutton.setToolTip("Specify Dropbox folder location on your computer")
+        self.cfg_dropbox_folder_toolbutton.clicked.connect(self.select_dropbox_folder)
+        self.cfg_dropbox_syncing_qgl.addWidget(self.cfg_dropbox_folder_toolbutton,
+            current_row, 1)
+
+        # ++++++++ Dropbox location lineedit ++++++++
+        self.dropbox_location_lineedit = QLineEdit()
+        self.dropbox_location_lineedit.setPlaceholderText("Dropbox folder location")
+        self.cfg_dropbox_syncing_qgl.addWidget(self.dropbox_location_lineedit,
+            current_row, 2)
+        """
+
         # ~~~~~~~~ Create the General options group box ~~~~~~~~
         self.cfg_runtime_options_gb = QGroupBox(self)
         self.cfg_runtime_options_gb.setTitle('General options')
-        self.l.addWidget(self.cfg_runtime_options_gb)
+        self.column2_layout.addWidget(self.cfg_runtime_options_gb)
         self.cfg_runtime_options_qvl = QVBoxLayout(self.cfg_runtime_options_gb)
 
         # ++++++++ Auto refresh checkbox ++++++++
@@ -296,7 +332,7 @@ class ConfigWidget(QWidget):
         # ~~~~~~~~ Create the Debug options group box ~~~~~~~~
         self.cfg_debug_options_gb = QGroupBox(self)
         self.cfg_debug_options_gb.setTitle('Debug options')
-        self.l.addWidget(self.cfg_debug_options_gb)
+        self.column2_layout.addWidget(self.cfg_debug_options_gb)
         self.cfg_debug_options_qvl = QVBoxLayout(self.cfg_debug_options_gb)
 
         # ++++++++ Debug logging checkboxes ++++++++
@@ -310,74 +346,79 @@ class ConfigWidget(QWidget):
         self.debug_libimobiledevice_checkbox.setToolTip('Print libiMobileDevice diagnostic messages to console')
         self.cfg_debug_options_qvl.addWidget(self.debug_libimobiledevice_checkbox)
 
-        # Group box spacer
-        spacerItem2 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.cfg_runtime_options_qvl.addItem(spacerItem2)
-
-        # Widget spacer
-        spacerItem3 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.l.addItem(spacerItem3)
+        self.spacerItem2 = QSpacerItem(20, 20, QSizePolicy.Minimum, QSizePolicy.Expanding)
+        self.column2_layout.addItem(self.spacerItem2)
 
         # ~~~~~~~~ End of construction zone ~~~~~~~~
         self.resize(self.sizeHint())
 
-        # Populate/restore the Collections comboBox
+        # ~~~~~~~~ Populate/restore config options ~~~~~~~~
+        #  Collections comboBox
         self.populate_collections()
         cf = self.prefs.get('collection_field_comboBox', '')
         idx = self.collection_field_comboBox.findText(cf)
         if idx > -1:
             self.collection_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Annotations comboBox
+        #  Annotations comboBox
         self.populate_annotations()
         cf = self.prefs.get('annotations_field_comboBox', '')
         idx = self.annotations_field_comboBox.findText(cf)
         if idx > -1:
             self.annotations_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Last read comboBox
+        #  Last read comboBox
         self.populate_date_read()
         cf = self.prefs.get('date_read_field_comboBox', '')
         idx = self.date_read_field_comboBox.findText(cf)
         if idx > -1:
             self.date_read_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Progress comboBox
+        #  Progress comboBox
         self.populate_progress()
         cf = self.prefs.get('progress_field_comboBox', '')
         idx = self.progress_field_comboBox.findText(cf)
         if idx > -1:
             self.progress_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Read comboBox
+        #  Read comboBox
         self.populate_read()
         cf = self.prefs.get('read_field_comboBox', '')
         idx = self.read_field_comboBox.findText(cf)
         if idx > -1:
             self.read_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Reading list comboBox
+        #  Reading list comboBox
         self.populate_reading_list()
         cf = self.prefs.get('reading_list_field_comboBox', '')
         idx = self.reading_list_field_comboBox.findText(cf)
         if idx > -1:
             self.reading_list_field_comboBox.setCurrentIndex(idx)
 
-        # Populate/restore the Word count comboBox
+        #  Word count comboBox
         self.populate_word_count()
         cf = self.prefs.get('word_count_field_comboBox', '')
         idx = self.word_count_field_comboBox.findText(cf)
         if idx > -1:
             self.word_count_field_comboBox.setCurrentIndex(idx)
 
+        """
+        # Restore Dropbox settings, hook changes
+        dropbox_syncing = self.prefs.get('dropbox_syncing', False)
+        self.dropbox_syncing_checkbox.setChecked(dropbox_syncing)
+        self.set_dropbox_syncing(dropbox_syncing)
+        self.dropbox_syncing_checkbox.clicked.connect(partial(self.set_dropbox_syncing))
+        self.dropbox_location_lineedit.setText(self.prefs.get('dropbox_folder', ''))
+        """
+
         # Restore general settings
         self.auto_refresh_checkbox.setChecked(self.prefs.get('auto_refresh_at_startup', False))
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
-        self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
-        self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
 
-        # Hook changes to diagnostic checkboxes
+        # Restore debug settings, hook changes
+        self.debug_plugin_checkbox.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_plugin_checkbox.stateChanged.connect(self.set_restart_required)
+        self.debug_libimobiledevice_checkbox.setChecked(self.prefs.get('debug_libimobiledevice', False))
         self.debug_libimobiledevice_checkbox.stateChanged.connect(self.set_restart_required)
 
         # Hook changes to Annotations comboBox
@@ -652,6 +693,27 @@ class ConfigWidget(QWidget):
         ecf = sorted(self.eligible_word_count_fields.keys(), key=lambda s: s.lower())
         self.word_count_field_comboBox.addItems(ecf)
 
+    def select_dropbox_folder(self):
+        '''
+        '''
+        self._log_location()
+        dropbox_location = QFileDialog.getExistingDirectory(
+            self,
+            "Dropbox folder",
+            os.path.expanduser("~"),
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
+        self.dropbox_location_lineedit.setText(unicode(dropbox_location))
+
+    """
+    def set_dropbox_syncing(self, state):
+        '''
+        Called when checkbox changes state, or when restoring state
+        Set enabled state of Dropbox folder picker to match
+        '''
+        self.cfg_dropbox_folder_toolbutton.setEnabled(state)
+        self.dropbox_location_lineedit.setEnabled(state)
+    """
+
     def set_restart_required(self, state):
         '''
         Set restart_required flag to show show dialog when closing dialog
@@ -732,6 +794,12 @@ class ConfigWidget(QWidget):
         else:
             self.prefs.set('word_count_field_lookup', '')
 
+        '''
+        # Save Dropbox settings
+        self.prefs.set('dropbox_syncing', self.dropbox_syncing_checkbox.isChecked())
+        self.prefs.set('dropbox_folder', unicode(self.dropbox_location_lineedit.text()))
+        '''
+
         # Save general settings
         self.prefs.set('auto_refresh_at_startup', self.auto_refresh_checkbox.isChecked())
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
@@ -750,36 +818,6 @@ class ConfigWidget(QWidget):
     def start_inventory(self):
         self._log_location()
         self.annotated_books_scanner.start()
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % msg)
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = args[0]
-        if len(args) > 1:
-            arg2 = args[1]
-
-        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-                    func=sys._getframe(1).f_code.co_name,
-                    arg1=arg1, arg2=arg2))
 
 
 class ClickableQLabel(QLabel):

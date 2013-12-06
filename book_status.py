@@ -50,7 +50,7 @@ from calibre_plugins.marvin_manager.annotations import merge_annotations
 
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
-    MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
+    Logger, MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
     get_icon, updateCalibreGUIView)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'dialogs')
@@ -834,7 +834,7 @@ class MarkupTableModel(QAbstractTableModel):
         self.parent.repaint()
 
 
-class BookStatusDialog(SizePersistedDialog):
+class BookStatusDialog(SizePersistedDialog, Logger):
     '''
     '''
     UTF_8_BOM = r'\xef\xbb\xbf'
@@ -850,9 +850,6 @@ class BookStatusDialog(SizePersistedDialog):
     MAX_ELEMENT_DEPTH = 6
     UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
     WATCHDOG_TIMEOUT = 10.0
-
-    # Location reporting template
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     # Flag constants
     if True:
@@ -4747,36 +4744,6 @@ class BookStatusDialog(SizePersistedDialog):
             hash_cache = self._purge_cached_orphans(cached_books)
 
         return hash_cache
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % str(msg))
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = str(args[0])
-        if len(args) > 1:
-            arg2 = str(args[1])
-
-        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-                    func=sys._getframe(1).f_code.co_name,
-                    arg1=arg1, arg2=arg2))
 
     def _purge_cached_orphans(self, cached_books):
         '''

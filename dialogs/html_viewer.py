@@ -15,7 +15,7 @@ from calibre.ebooks.BeautifulSoup import BeautifulSoup
 from calibre.gui2 import Application, open_url
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
-from calibre_plugins.marvin_manager.common_utils import SizePersistedDialog
+from calibre_plugins.marvin_manager.common_utils import Logger, SizePersistedDialog
 
 from PyQt4.Qt import (Qt, QAction, QApplication, QDialogButtonBox, QIcon, QKeySequence,
                       QPalette, QSize, QSizePolicy,
@@ -29,9 +29,7 @@ if True:
     sys.path.remove(dialog_resources_path)
 
 
-class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-
+class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog, Logger):
     marvin_device_status_changed = pyqtSignal(str)
 
     def accept(self):
@@ -218,34 +216,3 @@ class HTMLViewerDialog(SizePersistedDialog, Ui_Dialog):
         QWebVew apparently has a default size of 800, 600
         '''
         return QSize(400,200)
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % msg)
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = args[0]
-        if len(args) > 1:
-            arg2 = args[1]
-
-        debug_print(self.LOCATION_TEMPLATE.format(
-            cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))
