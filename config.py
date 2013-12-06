@@ -355,44 +355,12 @@ class ConfigWidget(QWidget, Logger):
         # ~~~~~~~~ Populate/restore config options ~~~~~~~~
         #  Annotations comboBox
         self.populate_annotations()
-
-        #  Collections comboBox
         self.populate_collections()
-
-        #  Last read comboBox
         self.populate_date_read()
-#         cf = self.prefs.get('date_read_field_comboBox', '')
-#         idx = self.date_read_field_comboBox.findText(cf)
-#         if idx > -1:
-#             self.date_read_field_comboBox.setCurrentIndex(idx)
-
-        #  Progress comboBox
         self.populate_progress()
-#         cf = self.prefs.get('progress_field_comboBox', '')
-#         idx = self.progress_field_comboBox.findText(cf)
-#         if idx > -1:
-#             self.progress_field_comboBox.setCurrentIndex(idx)
-
-        #  Read comboBox
         self.populate_read()
-#         cf = self.prefs.get('read_field_comboBox', '')
-#         idx = self.read_field_comboBox.findText(cf)
-#         if idx > -1:
-#             self.read_field_comboBox.setCurrentIndex(idx)
-
-        #  Reading list comboBox
         self.populate_reading_list()
-#         cf = self.prefs.get('reading_list_field_comboBox', '')
-#         idx = self.reading_list_field_comboBox.findText(cf)
-#         if idx > -1:
-#             self.reading_list_field_comboBox.setCurrentIndex(idx)
-
-        #  Word count comboBox
         self.populate_word_count()
-#         cf = self.prefs.get('word_count_field_comboBox', '')
-#         idx = self.word_count_field_comboBox.findText(cf)
-#         if idx > -1:
-#             self.word_count_field_comboBox.setCurrentIndex(idx)
 
         """
         # Restore Dropbox settings, hook changes
@@ -520,7 +488,7 @@ class ConfigWidget(QWidget, Logger):
             '''
             '''
             cb = getattr(self, comboBox)
-
+            cb.blockSignals(True)
             all_items = [str(cb.itemText(i))
                          for i in range(cb.count())]
             if previous and previous in all_items:
@@ -529,9 +497,13 @@ class ConfigWidget(QWidget, Logger):
 
             cb.clear()
             cb.addItems(sorted(all_items, key=lambda s: s.lower()))
+
+            # Select the new destination in the comboBox
             idx = cb.findText(destination)
             if idx > -1:
                 cb.setCurrentIndex(idx)
+
+            cb.blockSignals(False)
 
         from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
@@ -563,9 +535,10 @@ class ConfigWidget(QWidget, Logger):
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_annotations_fields[destination] = label
 
-                    # Save Date read field manually in case user cancels
-                    self.prefs.set('annotations_field_comboBox', destination)
-                    self.prefs.set('annotations_field_lookup', label)
+                    # Save manually in case user cancels
+                    #self.prefs.set('annotations_field_comboBox', destination)
+                    #self.prefs.set('annotations_field_lookup', label)
+                    set_cc_mapping('annotations', comboBox=destination, field=label)
 
                 elif source == 'Collections':
                     _update_combo_box("collection_field_comboBox", destination, previous)
@@ -573,9 +546,10 @@ class ConfigWidget(QWidget, Logger):
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_collection_fields[destination] = label
 
-                    # Save Date read field manually in case user cancels
-                    self.prefs.set('collection_field_comboBox', destination)
-                    self.prefs.set('collection_field_lookup', label)
+                    # Save manually in case user cancels
+                    #self.prefs.set('collection_field_comboBox', destination)
+                    #self.prefs.set('collection_field_lookup', label)
+                    set_cc_mapping('collections', comboBox=destination, field=label)
 
                 elif source == 'Last read':
                     _update_combo_box("date_read_field_comboBox", destination, previous)
@@ -583,9 +557,10 @@ class ConfigWidget(QWidget, Logger):
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_date_read_fields[destination] = label
 
-                    # Save Date read field manually in case user cancels
-                    self.prefs.set('date_read_field_comboBox', destination)
-                    self.prefs.set('date_read_field_lookup', label)
+                    # Save manually in case user cancels
+                    #self.prefs.set('date_read_field_comboBox', destination)
+                    #self.prefs.set('date_read_field_lookup', label)
+                    set_cc_mapping('date_read', comboBox=destination, field=label)
 
                 elif source == "Progress":
                     _update_combo_box("progress_field_comboBox", destination, previous)
@@ -593,9 +568,10 @@ class ConfigWidget(QWidget, Logger):
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_progress_fields[destination] = label
 
-                    # Save Progress field manually in case user cancels
-                    self.prefs.set('progress_field_comboBox', destination)
-                    self.prefs.set('progress_field_lookup', label)
+                    # Save manually in case user cancels
+                    #self.prefs.set('progress_field_comboBox', destination)
+                    #self.prefs.set('progress_field_lookup', label)
+                    set_cc_mapping('progress', comboBox=destination, field=label)
 
                 elif source == "Read":
                     _update_combo_box("read_field_comboBox", destination, previous)
@@ -603,9 +579,10 @@ class ConfigWidget(QWidget, Logger):
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_read_fields[destination] = label
 
-                    # Save Read field manually in case user cancels
-                    self.prefs.set('read_field_comboBox', destination)
-                    self.prefs.set('read_field_lookup', label)
+                    # Save manually in case user cancels
+                    #self.prefs.set('read_field_comboBox', destination)
+                    #self.prefs.set('read_field_lookup', label)
+                    set_cc_mapping('read', comboBox=destination, field=label)
 
                 elif source == "Reading list":
                     _update_combo_box("reading_list_field_comboBox", destination, previous)
@@ -613,9 +590,10 @@ class ConfigWidget(QWidget, Logger):
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_reading_list_fields[destination] = label
 
-                    # Save Reading list field manually in case user cancels
-                    self.prefs.set('reading_list_field_comboBox', destination)
-                    self.prefs.set('reading_list_field_lookup', label)
+                    # Save manually in case user cancels
+                    #self.prefs.set('reading_list_field_comboBox', destination)
+                    #self.prefs.set('reading_list_field_lookup', label)
+                    set_cc_mapping('reading_list', comboBox=destination, field=label)
 
                 elif source == "Word count":
                     _update_combo_box("word_count_field_comboBox", destination, previous)
@@ -623,9 +601,10 @@ class ConfigWidget(QWidget, Logger):
                     # Add/update the new destination so save_settings() can find it
                     self.eligible_word_count_fields[destination] = label
 
-                    # Save Word count field manually in case user cancels
-                    self.prefs.set('word_count_field_comboBox', destination)
-                    self.prefs.set('word_count_field_lookup', label)
+                    # Save manually in case user cancels
+                    #self.prefs.set('word_count_field_comboBox', destination)
+                    #self.prefs.set('word_count_field_lookup', label)
+                    set_cc_mapping('word_count', comboBox=destination, field=label)
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -759,12 +738,10 @@ class ConfigWidget(QWidget, Logger):
         self._log_location("%s => %s" % (cb, repr(cf)))
 
         if cb == 'annotations_field_comboBox':
-            self.prefs.set(cb, cf)
+            field = None
             if cf:
-                self.prefs.set('annotations_field_lookup', self.eligible_annotations_fields[cf])
-            else:
-                self.prefs.set('annotations_field_lookup', '')
-            self.prefs.commit()
+                field = self.eligible_annotations_fields[cf]
+            set_cc_mapping('annotations', combobox=cf, field=field)
 
     def save_settings(self):
         self._log_location()
