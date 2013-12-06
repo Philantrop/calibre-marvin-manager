@@ -20,8 +20,8 @@ from calibre.utils.config import JSONConfig
 from calibre_plugins.marvin_manager.appearance import (AnnotationsAppearance,
     default_elements, default_timestamp)
 
-from calibre_plugins.marvin_manager.common_utils import (existing_annotations,
-    get_icon, move_annotations)
+from calibre_plugins.marvin_manager.common_utils import (Logger,
+    existing_annotations, get_icon, move_annotations)
 
 from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
                       QGridLayout, QGroupBox, QFileDialog, QIcon,
@@ -33,13 +33,10 @@ from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
 plugin_prefs = JSONConfig('plugins/Marvin XD')
 
 
-class ConfigWidget(QWidget):
+class ConfigWidget(QWidget, Logger):
     '''
     Config dialog for Marvin Manager
     '''
-
-    # Location reporting template
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     WIZARD_PROFILES = {
         'Annotations': {
@@ -282,6 +279,7 @@ class ConfigWidget(QWidget):
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_label, current_row, 1)
 
 
+        """
         # ~~~~~~~~ Create the Dropbox syncing group box ~~~~~~~~
         self.cfg_dropbox_syncing_gb = QGroupBox(self)
         self.cfg_dropbox_syncing_gb.setTitle('Dropbox')
@@ -311,7 +309,7 @@ class ConfigWidget(QWidget):
         self.dropbox_location_lineedit.setPlaceholderText("Dropbox folder location")
         self.cfg_dropbox_syncing_qgl.addWidget(self.dropbox_location_lineedit,
             current_row, 2)
-
+        """
 
         # ~~~~~~~~ Create the General options group box ~~~~~~~~
         self.cfg_runtime_options_gb = QGroupBox(self)
@@ -404,12 +402,14 @@ class ConfigWidget(QWidget):
         if idx > -1:
             self.word_count_field_comboBox.setCurrentIndex(idx)
 
+        """
         # Restore Dropbox settings, hook changes
         dropbox_syncing = self.prefs.get('dropbox_syncing', False)
         self.dropbox_syncing_checkbox.setChecked(dropbox_syncing)
         self.set_dropbox_syncing(dropbox_syncing)
         self.dropbox_syncing_checkbox.clicked.connect(partial(self.set_dropbox_syncing))
         self.dropbox_location_lineedit.setText(self.prefs.get('dropbox_folder', ''))
+        """
 
         # Restore general settings
         self.auto_refresh_checkbox.setChecked(self.prefs.get('auto_refresh_at_startup', False))
@@ -704,6 +704,7 @@ class ConfigWidget(QWidget):
             QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks)
         self.dropbox_location_lineedit.setText(unicode(dropbox_location))
 
+    """
     def set_dropbox_syncing(self, state):
         '''
         Called when checkbox changes state, or when restoring state
@@ -711,6 +712,7 @@ class ConfigWidget(QWidget):
         '''
         self.cfg_dropbox_folder_toolbutton.setEnabled(state)
         self.dropbox_location_lineedit.setEnabled(state)
+    """
 
     def set_restart_required(self, state):
         '''
@@ -792,9 +794,11 @@ class ConfigWidget(QWidget):
         else:
             self.prefs.set('word_count_field_lookup', '')
 
+        '''
         # Save Dropbox settings
         self.prefs.set('dropbox_syncing', self.dropbox_syncing_checkbox.isChecked())
         self.prefs.set('dropbox_folder', unicode(self.dropbox_location_lineedit.text()))
+        '''
 
         # Save general settings
         self.prefs.set('auto_refresh_at_startup', self.auto_refresh_checkbox.isChecked())
@@ -814,36 +818,6 @@ class ConfigWidget(QWidget):
     def start_inventory(self):
         self._log_location()
         self.annotated_books_scanner.start()
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % msg)
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = args[0]
-        if len(args) > 1:
-            arg2 = args[1]
-
-        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-                    func=sys._getframe(1).f_code.co_name,
-                    arg1=arg1, arg2=arg2))
 
 
 class ClickableQLabel(QLabel):

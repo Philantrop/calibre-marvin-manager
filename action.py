@@ -31,16 +31,16 @@ from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    CompileUI, IndexLibrary, MyBlockingBusy, ProgressBar, Struct,
+    CompileUI, IndexLibrary, Logger, MyBlockingBusy, ProgressBar, Struct,
     get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
-from calibre_plugins.marvin_manager.dropbox import PullDropboxUpdates
+#from calibre_plugins.marvin_manager.dropbox import PullDropboxUpdates
 
 # The first icon is the plugin icon, referenced by position.
 # The rest of the icons are referenced by name
 PLUGIN_ICONS = ['images/connected.png', 'images/disconnected.png']
 
-class MarvinManagerAction(InterfaceAction):
+class MarvinManagerAction(InterfaceAction, Logger):
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -552,6 +552,7 @@ class MarvinManagerAction(InterfaceAction):
 
         self.rebuild_menus()
 
+    """
     def process_dropbox_sync_records(self):
         '''
         Scan local Dropbox folder for metadata update records
@@ -561,6 +562,7 @@ class MarvinManagerAction(InterfaceAction):
 
         self.launch_library_scanner()
         foo = PullDropboxUpdates(self)
+    """
 
     def rebuild_menus(self):
         self._log_location()
@@ -601,7 +603,7 @@ class MarvinManagerAction(InterfaceAction):
                     ac = self.create_menu_item(m, 'Marvin not connected')
                     ac.setEnabled(False)
 
-            elif not self.connected_device:
+            elif False and not self.connected_device:
                 ac = self.create_menu_item(m, 'Update metadata via Dropbox')
                 ac.triggered.connect(self.process_dropbox_sync_records)
 
@@ -726,34 +728,3 @@ class MarvinManagerAction(InterfaceAction):
         self.busy_window.accept()
         self.busy_window = None
         Application.restoreOverrideCursor()
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % str(msg))
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = str(args[0])
-        if len(args) > 1:
-            arg2 = str(args[1])
-
-        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-                    func=sys._getframe(1).f_code.co_name,
-                    arg1=arg1, arg2=arg2))
-

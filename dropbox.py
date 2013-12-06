@@ -20,11 +20,11 @@ from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.utils.date import strptime
 
 import calibre_plugins.marvin_manager.config as cfg
-from calibre_plugins.marvin_manager.common_utils import ProgressBar, updateCalibreGUIView
+from calibre_plugins.marvin_manager.common_utils import (Logger, ProgressBar,
+    updateCalibreGUIView)
 
-class PullDropboxUpdates():
+class PullDropboxUpdates(Logger):
     # Location reporting template
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
     UTF_8_BOM = r'\xef\xbb\xbf'
 
     prefs = cfg.plugin_prefs
@@ -175,36 +175,6 @@ class PullDropboxUpdates():
         m_last_modified = m_last_modified.astimezone(tz.tzlocal())
         self._log_location(m_last_modified)
         return m_last_modified
-
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % str(msg))
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = str(args[0])
-        if len(args) > 1:
-            arg2 = str(args[1])
-
-        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-                    func=sys._getframe(1).f_code.co_name,
-                    arg1=arg1, arg2=arg2))
 
     def _update_calibre_metadata(self, book, cid):
         '''

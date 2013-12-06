@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import cStringIO, os, re
+import cStringIO, os, re, sys
 
 from collections import defaultdict
 from time import sleep
@@ -60,6 +60,40 @@ plugin_tmpdir = 'calibre_annotations_plugin'
 plugin_icon_resources = {}
 
 '''     Base classes    '''
+
+class Logger():
+    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+    def _log(self, msg=None):
+        '''
+        Print msg to console
+        '''
+        from calibre_plugins.marvin_manager.config import plugin_prefs
+        if not plugin_prefs.get('debug_plugin', False):
+            return
+
+        if msg:
+            debug_print(" %s" % str(msg))
+        else:
+            debug_print()
+
+    def _log_location(self, *args):
+        '''
+        Print location, args to console
+        '''
+        from calibre_plugins.marvin_manager.config import plugin_prefs
+        if not plugin_prefs.get('debug_plugin', False):
+            return
+
+        arg1 = arg2 = ''
+
+        if len(args) > 0:
+            arg1 = str(args[0])
+        if len(args) > 1:
+            arg2 = str(args[1])
+
+        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
+                    func=sys._getframe(1).f_code.co_name,
+                    arg1=arg1, arg2=arg2))
 
 
 class Book(Metadata):
@@ -596,12 +630,45 @@ class CompileUI():
 
 '''     Helper functions   '''
 
+def _log(msg=None):
+    '''
+    Print msg to console
+    '''
+    from calibre_plugins.marvin_manager.config import plugin_prefs
+    if not plugin_prefs.get('debug_plugin', False):
+        return
+
+    if msg:
+        debug_print(" %s" % str(msg))
+    else:
+        debug_print()
+
+
+def _log_location(*args):
+    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
+    from calibre_plugins.marvin_manager.config import plugin_prefs
+    if not plugin_prefs.get('debug_plugin', False):
+        return
+
+    arg1 = arg2 = ''
+
+    if len(args) > 0:
+        arg1 = str(args[0])
+    if len(args) > 1:
+        arg2 = str(args[1])
+
+    debug_print(LOCATION_TEMPLATE.format(cls='common_utils',
+                func=sys._getframe(1).f_code.co_name,
+                arg1=arg1, arg2=arg2))
+
+
 def existing_annotations(parent, field, return_all=False):
     '''
     Return count of existing annotations, or existence of any
     '''
     #import calibre_plugins.marvin_manager.config as cfg
-    debug_print("common_utils:existing_annotations(%s)" % repr(field))
+    _log_location(field)
     annotation_map = []
     if field:
         db = parent.opts.gui.current_db
@@ -620,12 +687,12 @@ def existing_annotations(parent, field, return_all=False):
                 if not return_all:
                     break
         if return_all:
-            debug_print(" Identified %d annotated books of %d total books" %
+            _log("Identified %d annotated books of %d total books" %
                 (len(annotation_map), len(db.data)))
 
-        debug_print(" annotation_map: %s" % repr(annotation_map))
+        _log("annotation_map: %s" % repr(annotation_map))
     else:
-        debug_print(" no active field")
+       _log("no active field")
 
     return annotation_map
 
@@ -687,8 +754,8 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
     '''
     import calibre_plugins.marvin_manager.config as cfg
 
-    debug_print("common_utils:move_annotations(%s)" % repr(annotation_map))
-    debug_print(" %s -> %s" % (old_destination_field, new_destination_field))
+    _log_location(annotation_map)
+    _log(" %s -> %s" % (old_destination_field, new_destination_field))
 
     db = parent.opts.gui.current_db
     id = db.FIELD_MAP['id']
@@ -909,10 +976,11 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                msg=msg,
                show_copy_button=False,
                parent=parent.gui).exec_()
-    debug_print(" INFO: %s" % msg)
+    _log("INFO: %s" % msg)
 
     # Update the UI
     updateCalibreGUIView()
+
 
 def inventory_controls(ui, dump_controls=False):
     '''
@@ -934,9 +1002,11 @@ def inventory_controls(ui, dump_controls=False):
             controls[control_list] = control_dict[control_list]
 
     if dump_controls:
+        _log_location()
+        _log("Inventoried controls:")
         for control_type in CONTROL_TYPES:
             if control_type in controls:
-                print("  %s: %s" % (control_type, controls[control_type]))
+                _log(" %s: %s" % (control_type, controls[control_type]))
 
     return controls
 
@@ -979,8 +1049,9 @@ def restore_state(ui, prefs, restore_position=False):
                                 if callable(setter_ref):
                                     setter_ref(result)
                 else:
-                    print(" invalid CONTROL_SET tuple for '%s'" % control)
-                    print("  maximum of two chained methods")
+                    _log_location()
+                    _log("invalid CONTROL_SET tuple for '%s'" % control)
+                    _log("maximum of two chained methods")
 
 
 def save_state(ui, prefs, save_position=False):
