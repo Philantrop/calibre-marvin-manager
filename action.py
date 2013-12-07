@@ -266,7 +266,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def init_prefs(self):
         '''
-        Set the initial default values as needed
+        Set the initial default values as needed, do any needed maintenance
         '''
         pref_map = {
             'plugin_version': "%d.%d.%d" % self.interface_action_base_plugin.version,

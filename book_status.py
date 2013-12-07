@@ -51,7 +51,7 @@ from calibre_plugins.marvin_manager.annotations import merge_annotations
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
     Logger, MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
-    get_icon, updateCalibreGUIView)
+    get_cc_mapping, get_icon, updateCalibreGUIView)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'dialogs')
 
@@ -122,7 +122,7 @@ class MyTableView(QTableView):
 
         elif col == self.parent.COLLECTIONS_COL:
             #cfl = self.parent.prefs.get('collection_field_lookup', '')
-            cfl = get_cc_mapping('collections', 'field', '')
+            cfl = get_cc_mapping('collections', 'field', None)
 
             ac = menu.addAction("Add collection assignments")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'star.png')))
@@ -1807,7 +1807,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Get all calibre collection names
         calibre_collection_list = []
         #cfl = self.parent.prefs.get('collection_field_lookup', '')
-        cfl = get_cc_mapping('collections', 'field', '')
+        cfl = get_cc_mapping('collections', 'field', None)
         if cfl:
             db = self.opts.gui.current_db
             calibre_collection_list = db.all_custom(db.field_metadata.key_to_label(cfl))
@@ -3774,8 +3774,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         None if no collection_field_lookup assigned or book does not exist in library
         '''
         #cfl = self.prefs.get('collection_field_lookup', '')
-        cfl = get_cc_mapping('collections', 'field', '')
-        if cfl == '' or cid is None:
+        cfl = get_cc_mapping('collections', 'field', None)
+        if cfl is None or cid is None:
             return None
         else:
             lib_collections = []

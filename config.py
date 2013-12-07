@@ -540,7 +540,7 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     #self.prefs.set('annotations_field_comboBox', destination)
                     #self.prefs.set('annotations_field_lookup', label)
-                    set_cc_mapping('annotations', comboBox=destination, field=label)
+                    set_cc_mapping('annotations', combobox=destination, field=label)
 
                 elif source == 'Collections':
                     _update_combo_box("collection_field_comboBox", destination, previous)
@@ -551,7 +551,7 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     #self.prefs.set('collection_field_comboBox', destination)
                     #self.prefs.set('collection_field_lookup', label)
-                    set_cc_mapping('collections', comboBox=destination, field=label)
+                    set_cc_mapping('collections', combobox=destination, field=label)
 
                 elif source == 'Last read':
                     _update_combo_box("date_read_field_comboBox", destination, previous)
@@ -562,7 +562,7 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     #self.prefs.set('date_read_field_comboBox', destination)
                     #self.prefs.set('date_read_field_lookup', label)
-                    set_cc_mapping('date_read', comboBox=destination, field=label)
+                    set_cc_mapping('date_read', combobox=destination, field=label)
 
                 elif source == "Progress":
                     _update_combo_box("progress_field_comboBox", destination, previous)
@@ -573,7 +573,7 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     #self.prefs.set('progress_field_comboBox', destination)
                     #self.prefs.set('progress_field_lookup', label)
-                    set_cc_mapping('progress', comboBox=destination, field=label)
+                    set_cc_mapping('progress', combobox=destination, field=label)
 
                 elif source == "Read":
                     _update_combo_box("read_field_comboBox", destination, previous)
@@ -584,7 +584,7 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     #self.prefs.set('read_field_comboBox', destination)
                     #self.prefs.set('read_field_lookup', label)
-                    set_cc_mapping('read', comboBox=destination, field=label)
+                    set_cc_mapping('read', combobox=destination, field=label)
 
                 elif source == "Reading list":
                     _update_combo_box("reading_list_field_comboBox", destination, previous)
@@ -595,7 +595,7 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     #self.prefs.set('reading_list_field_comboBox', destination)
                     #self.prefs.set('reading_list_field_lookup', label)
-                    set_cc_mapping('reading_list', comboBox=destination, field=label)
+                    set_cc_mapping('reading_list', combobox=destination, field=label)
 
                 elif source == "Word count":
                     _update_combo_box("word_count_field_comboBox", destination, previous)
@@ -606,7 +606,7 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     #self.prefs.set('word_count_field_comboBox', destination)
                     #self.prefs.set('word_count_field_lookup', label)
-                    set_cc_mapping('word_count', comboBox=destination, field=label)
+                    set_cc_mapping('word_count', combobox=destination, field=label)
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
@@ -771,7 +771,7 @@ class ConfigWidget(QWidget, Logger):
 
         # Save Progress field
         cf = str(self.progress_field_comboBox.currentText())
-        field = none
+        field = None
         if cf:
             field = self.eligible_progress_fields[cf]
         set_cc_mapping('progress', combobox=cf, field=field)

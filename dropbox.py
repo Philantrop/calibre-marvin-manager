@@ -21,7 +21,7 @@ from calibre.utils.date import strptime
 
 import calibre_plugins.marvin_manager.config as cfg
 from calibre_plugins.marvin_manager.common_utils import (Logger, ProgressBar,
-    updateCalibreGUIView)
+    get_cc_mapping, updateCalibreGUIView)
 
 class PullDropboxUpdates(Logger):
     # Location reporting template

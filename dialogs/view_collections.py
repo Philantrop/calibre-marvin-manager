@@ -17,7 +17,8 @@ from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.utils.icu import sort_key
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
-from calibre_plugins.marvin_manager.common_utils import Logger, SizePersistedDialog
+from calibre_plugins.marvin_manager.common_utils import (Logger, SizePersistedDialog,
+    get_cc_mapping)
 
 from PyQt4.Qt import (Qt, QDialogButtonBox, QIcon, QPalette,
                       pyqtSignal)
