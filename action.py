@@ -156,9 +156,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
         # Compile .ui files as needed
         CompileUI(self)
 
+        '''
         # Hook exit in case we need to do cleanup
-        #atexit.register(self.onexit)
-
+        atexit.register(self.onexit)
+        '''
 
     def inflate_dialog_resources(self):
         '''
@@ -275,6 +276,23 @@ class MarvinManagerAction(InterfaceAction, Logger):
         for pm in pref_map:
             if not self.prefs.get(pm, None):
                 self.prefs.set(pm, pref_map[pm])
+
+        # Clean up JSON file < v1.1.0
+        if self.interface_action_base_plugin.version < (1, 1, 0):
+            self._log_location("Updating prefs from %d.%d.%d to 1.1.0" %
+                self.interface_action_base_plugin.version)
+            for obsolete_setting in [
+                'annotations_field_comboBox', 'annotations_field_lookup',
+                'collection_field_comboBox', 'collection_field_lookup',
+                'date_read_field_comboBox', 'date_read_field_lookup',
+                'progress_field_comboBox', 'progress_field_lookup',
+                'read_field_comboBox', 'read_field_lookup',
+                'reading_list_field_comboBox', 'reading_list_field_lookup',
+                'word_count_field_comboBox', 'word_count_field_lookup']:
+                if self.prefs.get(obsolete_setting, None) is not None:
+                    self._log("removing obsolete entry '{0}'".format(obsolete_setting))
+                    self.prefs.__delitem__(obsolete_setting)
+            self.prefs.set('plugin_version', "%d.%d.%d" % self.interface_action_base_plugin.version)
 
     # subclass override
     def initialization_complete(self):
