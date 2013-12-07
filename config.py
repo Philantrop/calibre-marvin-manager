@@ -382,8 +382,11 @@ class ConfigWidget(QWidget, Logger):
         self.debug_libimobiledevice_checkbox.stateChanged.connect(self.set_restart_required)
 
         # Hook changes to Annotations comboBox
-        self.annotations_field_comboBox.currentIndexChanged.connect(
-            partial(self.save_combobox_setting, 'annotations_field_comboBox'))
+#         self.annotations_field_comboBox.currentIndexChanged.connect(
+#             partial(self.save_combobox_setting, 'annotations_field_comboBox'))
+        self.connect(self.annotations_field_comboBox,
+                     SIGNAL('currentIndexChanged(const QString &)'),
+                     self.annotations_destination_changed)
 
         # Launch the annotated_books_scanner
         #field = plugin_prefs.get('annotations_field_lookup', None)
@@ -392,6 +395,55 @@ class ConfigWidget(QWidget, Logger):
         self.connect(self.annotated_books_scanner, self.annotated_books_scanner.signal,
             self.inventory_complete)
         QTimer.singleShot(1, self.start_inventory)
+
+    def annotations_destination_changed(self, qs_new_destination_name):
+        '''
+        If the destination field changes, move all existing annotations from old to new
+        '''
+        self._log_location(str(qs_new_destination_name))
+        #self._log("self.eligible_annotations_fields: %s" % self.eligible_annotations_fields)
+
+        old_destination_field = get_cc_mapping('annotations', 'field', None)
+        old_destination_name = get_cc_mapping('annotations', 'combobox', None)
+
+        self._log("old_destination_field: %s" % old_destination_field)
+        self._log("old_destination_name: %s" % old_destination_name)
+
+        new_destination_name = str(qs_new_destination_name)
+        self._log("new_destination_name: %s" % new_destination_name)
+
+        if old_destination_name == new_destination_name:
+            self._log_location("old_destination_name = new_destination_name, no changes")
+            return
+
+        new_destination_field = self.eligible_annotations_fields[new_destination_name]
+
+        if existing_annotations(self.parent, old_destination_field):
+            command = self.launch_new_destination_dialog(old_destination_name, new_destination_name)
+
+            if command == 'move':
+                set_cc_mapping('annotations', field=new_destination_field, combobox=new_destination_name)
+
+                if self.annotated_books_scanner.isRunning():
+                    self.annotated_books_scanner.wait()
+                move_annotations(self, self.annotated_books_scanner.annotation_map,
+                    old_destination_field, new_destination_field)
+
+            elif command == 'change':
+                # Keep the updated destination field, but don't move annotations
+                pass
+
+            elif command == 'cancel':
+                # Restore previous destination
+                self.annotations_field_comboBox.blockSignals(True)
+                old_index = self.annotations_field_comboBox.findText(old_destination_name)
+                self.annotations_field_comboBox.setCurrentIndex(old_index)
+                self.annotations_field_comboBox.blockSignals(False)
+
+        else:
+            # No existing annotations, just update prefs
+            self._log("no existing annotations, updating destination to '{0}'".format(new_destination_name))
+            set_cc_mapping('annotations', field=new_destination_field, combobox=new_destination_name)
 
     def configure_appearance(self):
         '''
@@ -610,6 +662,22 @@ class ConfigWidget(QWidget, Logger):
         else:
             self._log("ERROR: Can't import from '%s'" % klass)
 
+    def launch_new_destination_dialog(self, old, new):
+        '''
+        Return 'move', 'change' or 'cancel'
+        '''
+        from calibre_plugins.marvin_manager.book_status import dialog_resources_path
+        self._log_location()
+        klass = os.path.join(dialog_resources_path, 'new_destination.py')
+        if os.path.exists(klass):
+            self._log("importing new destination dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('new_destination')
+            sys.path.remove(dialog_resources_path)
+            dlg = this_dc.NewDestinationDialog(self, old, new)
+            dlg.exec_()
+            return dlg.command
+
     def populate_annotations(self):
         datatype = self.WIZARD_PROFILES['Annotations']['datatype']
         self.eligible_annotations_fields = self.get_eligible_custom_fields([datatype])
@@ -732,6 +800,7 @@ class ConfigWidget(QWidget, Logger):
         '''
         self.restart_required = True
 
+    """
     def save_combobox_setting(self, cb, index):
         '''
         Apply changes immediately
@@ -744,6 +813,7 @@ class ConfigWidget(QWidget, Logger):
             if cf:
                 field = self.eligible_annotations_fields[cf]
             set_cc_mapping('annotations', combobox=cf, field=field)
+    """
 
     def save_settings(self):
         self._log_location()
@@ -832,7 +902,7 @@ class ClickableQLabel(QLabel):
         self.emit(SIGNAL('clicked()'))
 
 
-class InventoryAnnotatedBooks(QThread):
+class InventoryAnnotatedBooks(QThread, Logger):
 
     def __init__(self, gui, field, get_date_range=False):
         QThread.__init__(self, gui)
@@ -854,20 +924,15 @@ class InventoryAnnotatedBooks(QThread):
         '''
         Find all annotated books in library
         '''
+        self._log_location()
         cids = self.cdb.search_getting_ids('formats:EPUB', '')
         for cid in cids:
             mi = self.cdb.get_metadata(cid, index_is_id=True)
-            if self.field == 'Comments':
-                if mi.comments:
-                    soup = BeautifulSoup(mi.comments)
-                else:
-                    continue
-            else:
-                raw = mi.get_user_metadata(self.field, False)
-                if hasattr(raw, '#value#') and raw['#value#']:
-                    soup = BeautifulSoup(raw['#value#'])
-                    if soup.find('div', 'user_annotations') is not None:
-                        self.annotation_map.append(mi.id)
+            raw = mi.get_user_metadata(self.field, False)
+            if raw['#value#'] is not None:
+                soup = BeautifulSoup(raw['#value#'])
+                if soup.find('div', 'user_annotations') is not None:
+                    self.annotation_map.append(mi.id)
 
     def get_annotations_date_range(self):
         '''
