@@ -179,51 +179,51 @@ class PullDropboxUpdates(Logger):
     def _update_calibre_metadata(self, book, cid):
         '''
         Update cid mapped custom columns from book metadata
-        Annotations     comments    html                annotations_field_lookup
-        Collections     text                            collection_field_lookup
-        Last read       datetime                        date_read_field_lookup
+        Annotations     comments    html                annotations
+        Collections     text                            collections
+        Last read       datetime                        date_read
         *Notes          comments    html
-        Progress        float       50.0                progress_field_lookup
+        Progress        float       50.0                progress
         *Rating
-        Read            bool        True|False|None     read_field_lookup
-        Reading list    bool        True|False|None     reading_list_field_lookup
-        Word count      int         12345               word_count_field_lookup
+        Read            bool        True|False|None     read
+        Reading list    bool        True|False|None     reading_list
+        Word count      int         12345               word_count
         '''
         CUSTOM_COLUMN_MAPPINGS = {
             'Annotations': {
                 'attribute': './annotations',
                 'datatype': 'comments',
-                'lookup': 'annotations_field_lookup'
+                'lookup': get_cc_mapping('annotations', 'field', None)
             },
             'Collections': {
                 'attribute': './collections/collection',
                 'datatype': 'text',
-                'lookup': 'collection_field_lookup'
+                'lookup': get_cc_mapping('collections', 'field', None)
             },
             'Last read': {
                 'attribute': 'dateopened',
                 'datatype': 'datetime',
-                'lookup': 'date_read_field_lookup'
+                'lookup': get_cc_mapping('date_read', 'field', None)
             },
             'Progress': {
                 'attribute': 'progress',
                 'datatype': 'float',
-                'lookup': 'progress_field_lookup'
+                'lookup': get_cc_mapping('progress', 'field', None)
             },
             'Read': {
                 'attribute': 'isread',
                 'datatype': 'bool',
-                'lookup': 'read_field_lookup'
+                'lookup': get_cc_mapping('read', 'field', None)
             },
             'Reading list': {
                 'attribute': 'readinglist',
                 'datatype': 'bool',
-                'lookup': 'reading_list_field_lookup'
+                'lookup': get_cc_mapping('reading_list', 'field', None)
             },
             'Word count': {
                 'attribute': 'wordcount',
                 'datatype': 'int',
-                'lookup': 'word_count_field_lookup'
+                'lookup': get_cc_mapping('word_count', 'field', None)
             }
         }
 

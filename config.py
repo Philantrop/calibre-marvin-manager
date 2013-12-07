@@ -386,7 +386,8 @@ class ConfigWidget(QWidget, Logger):
             partial(self.save_combobox_setting, 'annotations_field_comboBox'))
 
         # Launch the annotated_books_scanner
-        field = plugin_prefs.get('annotations_field_lookup', None)
+        #field = plugin_prefs.get('annotations_field_lookup', None)
+        field = get_cc_mapping('annotations', 'field', None)
         self.annotated_books_scanner = InventoryAnnotatedBooks(self.gui, field)
         self.connect(self.annotated_books_scanner, self.annotated_books_scanner.signal,
             self.inventory_complete)
@@ -426,7 +427,8 @@ class ConfigWidget(QWidget, Logger):
 
         # If there were changes, and there are existing annotations,
         # and there is an active Annotations field, offer to re-render
-        field = plugin_prefs.get("annotations_field_lookup", None)
+        #field = plugin_prefs.get("annotations_field_lookup", None)
+        field = get_cc_mapping('annotations', 'field', None)
         if osh.digest() != nsh.digest() and existing_annotations(self.parent, field):
             title = 'Update annotations?'
             msg = '<p>Update existing annotations to new appearance settings?</p>'
