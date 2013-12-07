@@ -28,22 +28,13 @@ if True:
 
 class NewDestinationDialog(QDialog, Ui_Dialog, Logger):
 
-    def __init__(self, parent, old, new, hide_icon=True):
+    def __init__(self, parent, old, new):
         QDialog.__init__(self, parent.gui)
         self.db = parent.gui.current_db
         self.gui = parent.gui
 
         self.setupUi(self)
         self._log_location()
-
-        # Populate the icon
-        if hide_icon:
-            self.icon.setVisible(False)
-        else:
-            self.icon.setText('')
-            self.icon.setMaximumSize(QSize(40, 40))
-            self.icon.setScaledContents(True)
-            self.icon.setPixmap(QPixmap(I('swap.png')))
 
         # Hook the button events
         self.bb.clicked.connect(partial(self.button_clicked, 'cancel'))
@@ -55,6 +46,7 @@ class NewDestinationDialog(QDialog, Ui_Dialog, Logger):
         self.change_label.setText(str(self.change_label.text()).format(old=old, new=new))
 
         self.command = 'cancel'
+        self.do_resize()
 
     def button_clicked(self, button):
         '''
@@ -65,6 +57,12 @@ class NewDestinationDialog(QDialog, Ui_Dialog, Logger):
 
     def close(self):
         super(NewDestinationDialog, self).close()
+
+    def do_resize(self):
+        sz = self.sizeHint() + QSize(100, 0)
+        sz.setWidth(min(450, sz.width()))
+        sz.setHeight(min(280, sz.height()))
+        self.resize(sz)
 
     def esc(self, *args):
         self.close()
