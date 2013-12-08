@@ -1407,17 +1407,17 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             rows_to_refresh = sorted(self._selected_books())
 
         if rows_to_refresh:
-            self._busy_panel_setup("Refreshing %s for %s" %
-                                       (cols_to_refresh,
-                                        "1 book…" if len(rows_to_refresh) == 1 else
-                                        "%d books…" % len(rows_to_refresh)),
-                                        on_top=False,
-                                        show_cancel=True)
+            msg = "Refreshing %s for %s" % (cols_to_refresh,
+                "1 book…" if len(rows_to_refresh) == 1 else
+                "%d books…" % len(rows_to_refresh))
+            self._busy_status_setup(msg=msg)
 
             for row in rows_to_refresh:
+                '''
                 if self.busy_panel.cancel_status == self.busy_panel.REQUESTED:
                     self._log("user requested cancel")
                     break
+                '''
                 self.tv.selectRow(row)
                 self._fetch_annotations(update_gui=False)
                 self._apply_date_read(update_gui=False)
@@ -1429,7 +1429,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._localize_marvin_database()
 
             updateCalibreGUIView()
-            self._busy_panel_teardown()
+            self._busy_status_teardown()
 
             # Restore selection
             if self.saved_selection_region:
@@ -1742,11 +1742,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._log("ERROR: unsupported action '%s'" % action)
             return
 
-        self._busy_panel_setup("Retrieving %s…" % group_box_title)
+        self._busy_status_setup(msg="Retrieving %s…" % group_box_title)
         results = self._issue_command(command_name, update_soup,
                                       get_response="html_response.html",
                                       update_local_db=False)
-        self._busy_panel_teardown()
+        self._busy_status_teardown()
+
         if results['code']:
             return self._show_command_error(command_type, results)
         else:
@@ -1853,9 +1854,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                    'active_cids': self.library_collections.ids,
                                    'locations': current_collections}
 
-                        self._busy_panel_setup("Updating collections…")
+                        self._busy_status_setup(msg="Updating collections…")
                         self._update_global_collections(details)
-                        self._busy_panel_teardown()
+                        self._busy_status_teardown()
 
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
@@ -2071,19 +2072,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         added[item]['model_row'] = model_row
                         self.tm.set_calibre_id(model_row, cid)
 
-            pb = ProgressBar(parent=self.opts.gui, window_title="Updating calibre metadata")
             total_books = len(added)
-            # Show progress in dispatched method - 2 times
-            pb.set_maximum(total_books * 2)
-            pb.set_value(0)
-            pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
-            pb.show()
+            self._busy_status_setup()
 
             db = self.opts.gui.current_db
             cached_books = self.parent.connected_device.cached_books
 
             # Update calibre metadata from Marvin metadata, bind uuid
-            for item in added:
+            for i, item in enumerate(added):
                 mismatches = {}
                 this_book = cached_books[added[item]['path']]
                 mismatches['authors'] = {'Marvin': this_book['authors']}
@@ -2105,11 +2101,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                 # Update calibre metadata to match Marvin metadata
                 # Book is added to updated_match_quality for flashing
+                if total_books > 1:
+                    msg = "Updating calibre metadata: {0} of {1}".format(i+1, total_books)
+                else:
+                    msg = "Updating calibre metadata"
+                self._busy_status_msg(msg=msg)
                 self._update_calibre_metadata(added[item]['book_id'],
                                               added[item]['cid'],
                                               mismatches,
                                               added[item]['model_row'],
-                                              pb,
                                               update_local_db=False)
 
                 # Update .application_id in gui.booklists to match our new cid
@@ -2120,10 +2120,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         book.application_id = added[item]['cid']
                         break
 
-            pb.hide()
-
             # Update local_db
             self._localize_marvin_database()
+            self._busy_status_teardown()
 
             # Launch row flasher
             self._flash_affected_rows()
@@ -2492,7 +2491,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                       str(self.busy_panel.msg))
         else:
             QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-            self.busy_panel = MyBlockingBusy(self, title, size=60,
+            self.busy_panel = MyBlockingBusy(self.parent.gui, title, size=60,
                                               on_top=on_top,
                                               show_cancel=show_cancel)
             self.busy_panel.start()
@@ -2511,7 +2510,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         else:
             self._log("no active busy_window")
 
-    def _busy_status_msg(self, msg):
+    def _busy_status_msg(self, msg=''):
         self._log_location(msg)
         self.busy_status_label.setText(msg)
         Application.processEvents()
@@ -2521,8 +2520,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         self._log_location(msg)
         self.busy = True
-        self.tv.blockSignals(True)
-        self.dialogButtonBox.blockSignals(True)
+        #self.tv.blockSignals(True)
+        self.tv.setEnabled(False)
+        #self.dialogButtonBox.blockSignals(True)
+        self.dialogButtonBox.setEnabled(False)
+        self.filter_le.setEnabled(False)
+        self.filter_tb.setEnabled(False)
         self.busy_status_pi.setVisible(True)
         self.busy_status_label.setText(msg)
         self.busy_status_pi.startAnimation()
@@ -2534,8 +2537,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.busy_status_label.setText('')
         self.busy_status_pi.stopAnimation()
         self.busy_status_pi.setVisible(False)
-        self.dialogButtonBox.blockSignals(False)
-        self.tv.blockSignals(False)
+        #self.dialogButtonBox.blockSignals(False)
+        self.filter_le.setEnabled(True)
+        self.filter_tb.setEnabled(True)
+        self.dialogButtonBox.setEnabled(True)
+        #self.tv.blockSignals(False)
+        self.tv.setEnabled(True)
         self.busy = False
 
     def _calculate_word_count(self, silent=False):
@@ -2566,17 +2573,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         selected_books = self._selected_books()
         if selected_books:
             if not silent:
-                pb = ProgressBar(parent=self.opts.gui, window_title="Calculating word count")
+                msg = "Calculating word count"
                 total_books = len(selected_books)
-                pb.set_maximum(total_books)
-                pb.set_value(0)
-                pb.set_label('{:^100}'.format("1 of %d" % (total_books)))
-                pb.show()
+                self._busy_status_setup()
 
             # Save the selection region for restoration
             self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
-            for row in sorted(selected_books.keys()):
+            for i, row in enumerate(sorted(selected_books.keys())):
                 # Do we already know the word count?
                 cwc = self.tm.get_word_count(row).sort_key
                 if cwc:
@@ -2589,7 +2593,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.tv.selectRow(row)
 
                 if not silent:
-                    pb.set_label('{:^100}'.format(selected_books[row]['title']))
+                    if total_books > 1:
+                        msg = "Calculating word count: {0} of {1}".format(i+1, total_books)
+                    else:
+                        msg = "Calculating word count"
+                    self._busy_status_msg(msg=msg)
 
                 # Copy the remote epub to local storage
                 path = selected_books[row]['path']
@@ -2654,25 +2662,23 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 results = self._issue_command(command_name, update_soup, update_local_db=False)
                 if results['code']:
                     if not silent:
-                        pb.hide()
+                        #pb.hide()
+                        self._busy_status_teardown()
                     self._show_command_error(command_name, results)
                     return stats
 
-                if not silent:
-                    pb.increment()
+            # Update local_db for all changes
+            if db_update:
+                self._localize_marvin_database()
 
             if not silent:
-                pb.hide()
+                self._busy_status_teardown()
 
             # Restore selection
             if self.saved_selection_region:
                 for rect in self.saved_selection_region.rects():
                     self.tv.setSelection(rect, QItemSelectionModel.Select)
                 self.saved_selection_region = None
-
-            # Update local_db for all changes
-            if db_update:
-                self._localize_marvin_database()
 
         else:
             self._log("No selected books")
@@ -4695,14 +4701,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         update_soup.manifest.insert(0, book_tag)
 
-        local_busy_window = False
-        if not self.busy_panel:
-            local_busy_window = True
-            self._busy_panel_setup(self.UPDATING_MARVIN_MESSAGE)
+        local_busy = False
+        if self.busy:
+            self._busy_status_msg(msg=self.UPDATING_MARVIN_MESSAGE)
+        else:
+            local_busy = True
+            self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup,
                                       update_local_db=update_local_db)
-        if local_busy_window:
-            self._busy_panel_teardown()
+        if local_busy:
+            self._busy_status_teardown()
 
         if results['code']:
             return self._show_command_error(command_name, results)
@@ -4755,7 +4763,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Copy remote_db_path from iOS to local storage using device pointers
         '''
         self._log_location("starting")
-        msg = "Updating Marvin database"
+        msg = "Refreshing database"
         local_busy = False
         if self.busy:
             self._busy_status_msg(msg=msg)
@@ -5827,11 +5835,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         show_spinner = bool(len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER)
         if show_spinner:
-            self._busy_panel_setup(self.UPDATING_MARVIN_MESSAGE)
+            self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup, update_local_db=True)
 
         if show_spinner:
-            self._busy_panel_teardown()
+            self._busy_status_teardown()
 
         if results['code']:
             return self._show_command_error('update_locked_status', results)
@@ -6045,12 +6053,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             mismatches = self.installed_books[book_id].metadata_mismatches
-            #self._busy_status_msg("Updating '{0}'".format(self.installed_books[book_id].title))
+            #self._busy_status_msg(msg="Updating '{0}'".format(self.installed_books[book_id].title))
             if total_books > 1:
                 msg = "Updating metadata: {0} of {1}".format(i+1, total_books)
             else:
                 msg = "Updating metadata"
-            self._busy_status_msg(msg)
+            self._busy_status_msg(msg=msg)
             if action == 'export_metadata':
                 # Apply calibre metadata to Marvin
                 self._update_marvin_metadata(book_id, cid, mismatches, row)
