@@ -39,6 +39,7 @@ from calibre.ebooks.oeb.iterator import EbookIterator
 from calibre.gui2 import Application, Dispatcher, error_dialog, warning_dialog
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.gui2.dialogs.progress import ProgressDialog
+from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.date import strptime
 from calibre.utils.icu import sort_key
@@ -1251,6 +1252,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Spacer
         self.filter_spacer = QSpacerItem(16, 16, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.filter_hb.addItem(self.filter_spacer)
+
+        if False:
+            # *** Busy spinner ***
+            self.busy_msg = QLabel("")
+            self.filter_hb.addWidget(self.busy_msg, 0, Qt.AlignRight)
+            self.filter_hb.addSpacing(10)
+            self.pi = ProgressIndicator(self)
+            self.pi.setDisplaySize(24)
+            self.filter_hb.addWidget(self.pi, 0, Qt.AlignHCenter)
+            self.filter_hb.addSpacing(10)
 
         self.l.addLayout(self.filter_hb)
 
@@ -3649,14 +3660,21 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 manifest_tag.insert(0, book_tag)
             update_soup.command.insert(0, manifest_tag)
 
-            self._busy_operation_setup("Generating Deep View for %s" %
-                                     ("1 book…" if len(selected_books) == 1 else
-                                      "%d books…" % len(selected_books)),
-                                      show_cancel=True)
+            busy_msg = ("Generating Deep View for %s" %
+                ("1 book…" if len(selected_books) == 1 else
+                 "%d books…" % len(selected_books)))
+
+            self._busy_operation_setup(busy_msg, show_cancel=True)
+#             self.tv.blockSignals(True)
+#             self.busy_msg.setText(busy_msg)
+#             self.pi.startAnimation()
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
                                           update_local_db=True)
             self._busy_operation_teardown()
+#             self.busy_msg.setText('')
+#             self.pi.stopAnimation()
+#             self.tv.blockSignals(False)
 
             if results['code']:
                 return self._show_command_error(command_type, results)
@@ -5992,7 +6010,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                   show_copy_button=False).exec_()
 
         pb = ProgressBar(parent=self.opts.gui, window_title="Updating metadata",
-            frameless=False, on_top=True)
+            frameless=False, on_top=False)
         total_books = len(selected_books)
         # Show progress in dispatched method - 2 times
         pb.set_maximum(total_books * 2)
