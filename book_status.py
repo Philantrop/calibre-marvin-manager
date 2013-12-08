@@ -74,7 +74,11 @@ class MyTableView(QTableView):
         selected_books = self.parent._selected_books()
         menu = QMenu(self)
 
-        if col == self.parent.ANNOTATIONS_COL:
+        if self.parent.busy:
+            # Don't show context menu if busy
+            pass
+
+        elif col == self.parent.ANNOTATIONS_COL:
             calibre_cids = False
             for row in selected_books:
                 if selected_books[row]['cid'] is not None:
@@ -617,66 +621,69 @@ class MarkupTableModel(QAbstractTableModel):
             return Qt.AlignRight
 
         elif role == Qt.ToolTipRole:
-            match_quality = self.get_match_quality(row)
-            tip = '<p>'
-            if match_quality == self.GREEN:
-                tip += 'Matched in calibre library'
-            elif match_quality == self.YELLOW:
-                tip += 'Matched in calibre library with differing metadata'
-            elif match_quality == self.ORANGE:
-                tip += 'Duplicate of matched book in calibre library'
-            elif match_quality == self.RED:
-                tip += 'Duplicated in Marvin library'
+            if self.parent.busy:
+                return "<p>Please wait until current operation completes</p>"
             else:
-                tip += 'Book in Marvin library only'
+                match_quality = self.get_match_quality(row)
+                tip = '<p>'
+                if match_quality == self.GREEN:
+                    tip += 'Matched in calibre library'
+                elif match_quality == self.YELLOW:
+                    tip += 'Matched in calibre library with differing metadata'
+                elif match_quality == self.ORANGE:
+                    tip += 'Duplicate of matched book in calibre library'
+                elif match_quality == self.RED:
+                    tip += 'Duplicated in Marvin library'
+                else:
+                    tip += 'Book in Marvin library only'
 
-            # Add the suffix based upon column
-            if col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
-                return tip + "<br/>Double-click to view metadata<br/>Right-click for more options</p>"
+                # Add the suffix based upon column
+                if col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
+                    return tip + "<br/>Double-click to view metadata<br/>Right-click for more options</p>"
 
-            elif col in [self.parent.ANNOTATIONS_COL,
-                         self.parent.ARTICLES_COL]:
-                has_content = bool(self.arraydata[row][col])
-                if has_content:
-                    return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
+                elif col in [self.parent.ANNOTATIONS_COL,
+                             self.parent.ARTICLES_COL]:
+                    has_content = bool(self.arraydata[row][col])
+                    if has_content:
+                        return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
+                    else:
+                        return tip + '</p>'
+
+                elif col == self.parent.COLLECTIONS_COL:
+                    has_content = bool(self.arraydata[row][col].sort_key)
+                    if has_content:
+                        return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
+                    else:
+                        return tip + '<br/>Right-click for more options</p>'
+
+                elif col in [self.parent.VOCABULARY_COL]:
+                    has_content = bool(self.arraydata[row][col])
+                    if has_content:
+                        return tip + "<br/>>Double-click to view Vocabulary words<br/>Right-click for more options</p>"
+                    else:
+                        return tip + '<br/>Right-click for options</p>'
+
+
+                elif col in [self.parent.DEEP_VIEW_COL]:
+                    has_content = bool(self.arraydata[row][col])
+                    if has_content:
+                        return tip + "<br/>Double-click to view Deep View content<br/>Right-click for more options</p>"
+                    else:
+                        return tip + '<br/>Double-click to generate Deep View content<br/>Right-click for more options</p>'
+
+                elif col in [self.parent.FLAGS_COL]:
+                    return tip + "<br/>Right-click for options</p>"
+
+                elif col == self.parent.LOCKED_COL:
+                    return ("<p>Double-click to toggle locked status" +
+                            "<br/>Right-click for more options</p>")
+
+                elif col in [self.parent.WORD_COUNT_COL]:
+                    return (tip + "<br/>Double-click to generate word count" +
+                                  "<br/>Right-click to generate word count for multiple books</p>")
+
                 else:
                     return tip + '</p>'
-
-            elif col == self.parent.COLLECTIONS_COL:
-                has_content = bool(self.arraydata[row][col].sort_key)
-                if has_content:
-                    return tip + "<br/>Double-click to view details<br/>Right-click for more options</p>"
-                else:
-                    return tip + '<br/>Right-click for more options</p>'
-
-            elif col in [self.parent.VOCABULARY_COL]:
-                has_content = bool(self.arraydata[row][col])
-                if has_content:
-                    return tip + "<br/>>Double-click to view Vocabulary words<br/>Right-click for more options</p>"
-                else:
-                    return tip + '<br/>Right-click for options</p>'
-
-
-            elif col in [self.parent.DEEP_VIEW_COL]:
-                has_content = bool(self.arraydata[row][col])
-                if has_content:
-                    return tip + "<br/>Double-click to view Deep View content<br/>Right-click for more options</p>"
-                else:
-                    return tip + '<br/>Double-click to generate Deep View content<br/>Right-click for more options</p>'
-
-            elif col in [self.parent.FLAGS_COL]:
-                return tip + "<br/>Right-click for options</p>"
-
-            elif col == self.parent.LOCKED_COL:
-                return ("<p>Double-click to toggle locked status" +
-                        "<br/>Right-click for more options</p>")
-
-            elif col in [self.parent.WORD_COUNT_COL]:
-                return (tip + "<br/>Double-click to generate word count" +
-                              "<br/>Right-click to generate word count for multiple books</p>")
-
-            else:
-                return tip + '</p>'
 
         elif role != Qt.DisplayRole:
             return QVariant()
@@ -1189,6 +1196,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.tv.horizontalHeader().setClickable(False)
 
     def initialize(self, parent):
+        self.busy = False
         self.busy_panel = None
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = None
@@ -1253,15 +1261,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.filter_spacer = QSpacerItem(16, 16, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.filter_hb.addItem(self.filter_spacer)
 
-        if True:
-            # *** Busy spinner ***
-            self.busy_msg = QLabel("")
-            self.filter_hb.addWidget(self.busy_msg, 0, Qt.AlignRight)
-            self.filter_hb.addSpacing(10)
-            self.pi = ProgressIndicator(self)
-            self.pi.setDisplaySize(24)
-            self.filter_hb.addWidget(self.pi, 0, Qt.AlignHCenter)
-            self.filter_hb.addSpacing(10)
+        # Busy status
+        self.busy_status_label = QLabel("")
+        self.filter_hb.addWidget(self.busy_status_label, 0, Qt.AlignRight)
+        self.filter_hb.addSpacing(10)
+        self.busy_status_pi = ProgressIndicator(self)
+        self.busy_status_pi.setDisplaySize(24)
+        self.filter_hb.addWidget(self.busy_status_pi, 0, Qt.AlignHCenter)
+        self.busy_status_pi.setVisible(False)
+        self.filter_hb.addSpacing(10)
 
         self.l.addLayout(self.filter_hb)
 
@@ -2503,6 +2511,28 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         else:
             self._log("no active busy_window")
 
+    def _busy_status_setup(self, msg, show_cancel=False):
+        '''
+        '''
+        self._log_location(msg)
+        self.busy = True
+        self.tv.blockSignals(True)
+        self.dialogButtonBox.blockSignals(True)
+        self.busy_status_pi.setVisible(True)
+        self.busy_status_label.setText(msg)
+        self.busy_status_pi.startAnimation()
+
+    def _busy_status_teardown(self):
+        '''
+        '''
+        self._log_location()
+        self.busy_status_label.setText('')
+        self.busy_status_pi.stopAnimation()
+        self.busy_status_pi.setVisible(False)
+        self.dialogButtonBox.blockSignals(False)
+        self.tv.blockSignals(False)
+        self.busy = False
+
     def _calculate_word_count(self, silent=False):
         '''
         Calculate word count for each selected book
@@ -2526,6 +2556,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location()
 
         stats = {}
+        db_update = False
 
         selected_books = self._selected_books()
         if selected_books:
@@ -2546,6 +2577,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if cwc:
                     stats[selected_books[row]['book_id']] = cwc
                     continue
+
+                db_update = True
 
                 # Highlight book we're working on
                 self.tv.selectRow(row)
@@ -2633,7 +2666,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.saved_selection_region = None
 
             # Update local_db for all changes
-            self._localize_marvin_database()
+            if db_update:
+                self._localize_marvin_database()
 
         else:
             self._log("No selected books")
@@ -3600,9 +3634,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         if selected_books:
 
             # Estimate worst-case time required to generate DV, covering word count calculations
-            self._busy_panel_setup("Estimating time to completion…")
+            self._busy_status_setup("Estimating time…")
             word_counts = self._calculate_word_count(silent=True)
-            self._busy_panel_teardown()
+            self._busy_status_teardown()
 
             twc = sum(word_counts.itervalues())
             total_seconds = twc/WORST_CASE_CONVERSION_RATE + 1
@@ -3664,11 +3698,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 ("1 book…" if len(selected_books) == 1 else
                  "%d books…" % len(selected_books)))
 
-            self._busy_panel_setup(busy_msg, show_cancel=True)
+            self._busy_status_setup(busy_msg, show_cancel=True)
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
                                           update_local_db=True)
-            self._busy_panel_teardown()
+            self._busy_status_teardown()
 
             if results['code']:
                 return self._show_command_error(command_type, results)
@@ -4716,10 +4750,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Copy remote_db_path from iOS to local storage using device pointers
         '''
         self._log_location("starting")
-        local_busy_window = False
-        if not self.busy_panel:
-            self._busy_panel_setup("Updating local database")
-            local_busy_window = True
+#         local_busy_window = False
+#         if not self.busy_panel:
+#             self._busy_panel_setup("Updating local database")
+#             local_busy_window = True
+        self._busy_status_setup("Updating local database")
 
         local_db_path = self.parent.connected_device.local_db_path
         remote_db_path = self.parent.connected_device.books_subpath
@@ -4731,8 +4766,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         with open(local_db_path, 'wb') as out:
             self.ios.copy_from_idevice(remote_db_path, out)
 
-        if local_busy_window:
-            self._busy_panel_teardown()
+#         if local_busy_window:
+#             self._busy_panel_teardown()
+        self._busy_status_teardown()
         self._log_location("finished")
 
     def _localize_hash_cache(self, cached_books):
@@ -6104,7 +6140,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         import traceback
 
         # POLLING_DELAY affects the frequency with which the spinner is updated
-        POLLING_DELAY = 0.5
+        POLLING_DELAY = 0.25
         msg = ''
         if timeout_override:
             msg = "using timeout_override %d" % timeout_override
