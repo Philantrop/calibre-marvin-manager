@@ -24,7 +24,7 @@ from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QColor, QCursor, QDialogButtonBox, QFont, QFontMetrics, QGridLayout,
                       QHeaderView, QHBoxLayout, QIcon,
                       QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
-                      QPainter, QPixmap, QProgressDialog,
+                      QPainter, QPixmap, QProgressDialog, QPushButton,
                       QSize, QSizePolicy, QSpacerItem, QString,
                       QTableView, QTableWidget, QTableWidgetItem, QTimer, QToolButton,
                       QVariant, QVBoxLayout, QWidget,
@@ -852,7 +852,9 @@ class MarkupTableModel(QAbstractTableModel):
 class BookStatusDialog(SizePersistedDialog, Logger):
     '''
     '''
-    UTF_8_BOM = r'\xef\xbb\xbf'
+#     CANCEL_NOT_REQUESTED = 0
+#     CANCEL_REQUESTED = 1
+#     CANCEL_ACKNOWLEDGED = 2
     CHECKMARK = u"\u2713"
     CIRCLE_SLASH = u"\u20E0"
     DEFAULT_REFRESH_TEXT = 'Refresh custom columns'
@@ -864,6 +866,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     MATH_TIMES = u" \u00d7 "
     MAX_ELEMENT_DEPTH = 6
     UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
+    UTF_8_BOM = r'\xef\xbb\xbf'
     WATCHDOG_TIMEOUT = 10.0
 
     # Flag constants
@@ -973,6 +976,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location()
         self._save_column_widths()
         super(BookStatusDialog, self).accept()
+
+    def busy_cancel_click(self):
+        '''
+        Capture the click, disable the button
+        '''
+        self._log_location()
+        self.busy_cancel_requested = True
+        self._busy_status_msg(msg="Cancelling, please wait…")
+        self.busy_cancel_button.setEnabled(False)
 
     def capture_sort_column(self, sort_column):
         sort_order = self.tv.horizontalHeader().sortIndicatorOrder()
@@ -1197,6 +1209,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
     def initialize(self, parent):
         self.busy = False
+        self.busy_cancel_requested = False
         self.busy_panel = None
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = None
@@ -1211,6 +1224,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.library_uuid_map = None
         self.local_cache_folder = self.parent.connected_device.temp_dir
         self.local_hash_cache = None
+        self.marvin_cancellation_required = False
         self.remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
         self.remote_hash_cache = None
         self.show_match_colors = self.prefs.get('show_match_colors', False)
@@ -1264,6 +1278,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Busy status
         self.busy_status_label = QLabel('')
         self.filter_hb.addWidget(self.busy_status_label, 0, Qt.AlignRight)
+
+        self.filter_hb.addSpacing(10)
+        self.busy_cancel_button = QPushButton(QIcon(I('window-close.png')), 'Cancel')
+        self.filter_hb.addWidget(self.busy_cancel_button, 0, Qt.AlignHCenter)
+        self.busy_cancel_button.setVisible(False)
+        self.busy_cancel_button.clicked.connect(self.busy_cancel_click)
+
         self.filter_hb.addSpacing(10)
         self.busy_status_pi = ProgressIndicator(self)
         self.busy_status_pi.setDisplaySize(24)
@@ -1410,14 +1431,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             msg = "Refreshing %s for %s" % (cols_to_refresh,
                 "1 book…" if len(rows_to_refresh) == 1 else
                 "%d books…" % len(rows_to_refresh))
-            self._busy_status_setup(msg=msg)
+            self._busy_status_setup(msg=msg, show_cancel=len(rows_to_refresh) > 1)
 
             for row in rows_to_refresh:
-                '''
-                if self.busy_panel.cancel_status == self.busy_panel.REQUESTED:
-                    self._log("user requested cancel")
+                if self.busy_cancel_requested:
                     break
-                '''
+
                 self.tv.selectRow(row)
                 self._fetch_annotations(update_gui=False)
                 self._apply_date_read(update_gui=False)
@@ -2515,33 +2534,38 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.busy_status_label.setText(msg)
         Application.processEvents()
 
-    def _busy_status_setup(self, msg='', show_cancel=False):
+    def _busy_status_setup(self, msg='', show_cancel=False,
+        marvin_cancellation_required=False):
         '''
         '''
         self._log_location(msg)
         self.busy = True
-        #self.tv.blockSignals(True)
         self.tv.setEnabled(False)
-        #self.dialogButtonBox.blockSignals(True)
         self.dialogButtonBox.setEnabled(False)
         self.filter_le.setEnabled(False)
         self.filter_tb.setEnabled(False)
         self.busy_status_pi.setVisible(True)
         self.busy_status_label.setText(msg)
         self.busy_status_pi.startAnimation()
+        if show_cancel:
+            self.busy_cancel_button.setVisible(True)
+            self.busy_cancel_button.setEnabled(True)
+            self.busy_cancel_requested = False
+        self.marvin_cancellation_required = marvin_cancellation_required
 
     def _busy_status_teardown(self):
         '''
         '''
         self._log_location()
         self.busy_status_label.setText('')
+        self.busy_cancel_button.setVisible(False)
+        self.busy_cancel_button.setEnabled(True)
+        self.busy_cancel_requested = False
         self.busy_status_pi.stopAnimation()
         self.busy_status_pi.setVisible(False)
-        #self.dialogButtonBox.blockSignals(False)
         self.filter_le.setEnabled(True)
         self.filter_tb.setEnabled(True)
         self.dialogButtonBox.setEnabled(True)
-        #self.tv.blockSignals(False)
         self.tv.setEnabled(True)
         self.busy = False
 
@@ -2575,12 +2599,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if not silent:
                 msg = "Calculating word count"
                 total_books = len(selected_books)
-                self._busy_status_setup()
+                self._busy_status_setup(show_cancel=len(selected_books) > 1)
 
             # Save the selection region for restoration
             self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
             for i, row in enumerate(sorted(selected_books.keys())):
+                if self.busy_cancel_requested:
+                    break
+
                 # Do we already know the word count?
                 cwc = self.tm.get_word_count(row).sort_key
                 if cwc:
@@ -3709,7 +3736,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 ("1 book…" if len(selected_books) == 1 else
                  "%d books…" % len(selected_books)))
 
-            self._busy_status_setup(msg=busy_msg, show_cancel=True)
+            self._busy_status_setup(msg=busy_msg, show_cancel=len(selected_books) > 1,
+                marvin_cancellation_required=True)
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
                                           update_local_db=True)
@@ -5458,7 +5486,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 results = self._issue_command(command_name, update_soup,
                                               update_local_db=update_local_db)
                 if results['code']:
-                    return self._show_command_error(command_name, results)
+                    #return self._show_command_error(command_name, results)
+                    return results
 
         self._clear_selected_rows()
 
@@ -5469,6 +5498,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.updated_match_quality[model_row] = {'book_id': book_id,
                                                  'old': old,
                                                  'new': new}
+        return None
 
     def _update_collection_match(self, book, row):
         '''
@@ -5897,7 +5927,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
         results = self._issue_command(command_name, update_soup)
         if results['code']:
-            return self._show_command_error('_update_marvin_metadata', results)
+            #return self._show_command_error('_update_marvin_metadata', results)
+            return results
 
         # Update in-memory caches
         cached_books = self.parent.connected_device.cached_books
@@ -6024,6 +6055,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.updated_match_quality[model_row] = {'book_id': book_id,
                                                  'old': old,
                                                  'new': self.GREEN}
+        return None
 
     def _update_metadata(self, action):
         '''
@@ -6046,8 +6078,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                   show_copy_button=False).exec_()
 
         total_books = len(selected_books)
-        self._busy_status_setup()
+        self._busy_status_setup(show_cancel=total_books > 1)
         self.updated_match_quality = {}
+        errors = []
 
         for i, row in enumerate(sorted(selected_books)):
             book_id = self._selected_book_id(row)
@@ -6061,23 +6094,34 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._busy_status_msg(msg=msg)
             if action == 'export_metadata':
                 # Apply calibre metadata to Marvin
-                self._update_marvin_metadata(book_id, cid, mismatches, row)
+                error = self._update_marvin_metadata(book_id, cid, mismatches, row)
+                if error:
+                    errors.append(error)
 
             elif action == 'import_metadata':
                 # Apply Marvin metadata to calibre
-                self._update_calibre_metadata(book_id, cid, mismatches, row)
+                error = self._update_calibre_metadata(book_id, cid, mismatches, row)
+                if error:
+                    errors.append(error)
 
             # Clear the metadata_mismatch
             self.installed_books[book_id].metadata_mismatches = {}
 
-#             if pb.close_requested:
-#                 break
+            if self.busy_cancel_requested:
+                break
 
-        #pb.hide()
         self._busy_status_teardown()
 
         # Launch row flasher
         self._flash_affected_rows()
+
+        if errors:
+            # Construct a compilation of the error details
+            self._log("collected errors: %s" % errors)
+            details = ''
+            for error in errors:
+                details += "{0}\n".format(error['details'])
+            self._show_command_error('_update_marvin_metadata', {'details': details})
 
     def _update_reading_progress(self, book, row):
         '''
@@ -6210,22 +6254,22 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                 break
 
                             # Cancel requested?
-                            if self.busy_panel is not None:
-                                if self.busy_panel.cancel_status == self.busy_panel.REQUESTED:
-                                    self._log("user requested cancel")
+                            if self.busy_cancel_requested and self.marvin_cancellation_required:
+                                self._log("user requesting cancellation")
 
-                                    # Create "cancel.command" in staging folder
-                                    ft = (b'/'.join([self.parent.connected_device.staging_folder,
-                                                     b'cancel.tmp']))
-                                    fs = (b'/'.join([self.parent.connected_device.staging_folder,
-                                                     b'cancel.command']))
-                                    self.ios.write("please stop", ft)
-                                    self.ios.rename(ft, fs)
+                                # Create "cancel.command" in staging folder
+                                ft = (b'/'.join([self.parent.connected_device.staging_folder,
+                                                 b'cancel.tmp']))
+                                fs = (b'/'.join([self.parent.connected_device.staging_folder,
+                                                 b'cancel.command']))
+                                self.ios.write("please stop", ft)
+                                self.ios.rename(ft, fs)
 
-                                    # Change dialog text
-                                    self.busy_panel.set_text("Completing current book…")
+                                # Update status
+                                self._busy_status_msg(msg="Completing operation on current book…")
 
-                                    self.busy_panel.cancel_status = self.busy_panel.ACKNOWLEDGED
+                                # Clear flags so we can complete processing
+                                self.marvin_cancellation_required = False
 
                             status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                             code = status.get('code')
@@ -6285,9 +6329,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         final_status = "cancelled by user"
                     results = {'code': int(final_code), 'status': final_status}
 
-                    if final_code not in ['0', '3']:
-                        messages = status.find('messages')
-                        msgs = [msg.text for msg in messages]
+                    if final_code not in ['0']:
+                        if final_code == '3':
+                            msgs = ['operation cancelled by user']
+                        else:
+                            messages = status.find('messages')
+                            msgs = [msg.text for msg in messages]
                         details = '\n'.join(["code: %s" % final_code, "status: %s" % final_status])
                         details += '\n'.join(msgs)
                         self._log(details)

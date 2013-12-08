@@ -14,7 +14,7 @@ from functools import partial
 from lxml import etree, html
 from zipfile import ZipFile
 
-from PyQt4.Qt import (Qt, QCursor, QIcon, QMenu, QTimer, QUrl,
+from PyQt4.Qt import (Qt, QApplication, QCursor, QIcon, QMenu, QTimer, QUrl,
                       pyqtSignal)
 
 from calibre.constants import DEBUG
