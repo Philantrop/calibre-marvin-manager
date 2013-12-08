@@ -1222,7 +1222,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         self.installed_books = self._generate_booklist()
 
-        self._busy_operation_setup("Preparing Marvin library view…")
+        self._busy_panel_setup("Preparing Marvin library view…")
 
         # ~~~~~~~~ Create the dialog ~~~~~~~~
         self.setWindowTitle(u'Marvin Library: %d books' % len(self.installed_books))
@@ -1337,7 +1337,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.resize_dialog()
         self.tv.setFocus()
 
-        self._busy_operation_teardown()
+        self._busy_panel_teardown()
 
         if self.parent.prefs.get('auto_refresh_at_startup', False):
             self.refresh_custom_columns(all_books=True, report_results=False)
@@ -1399,7 +1399,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             rows_to_refresh = sorted(self._selected_books())
 
         if rows_to_refresh:
-            self._busy_operation_setup("Refreshing %s for %s" %
+            self._busy_panel_setup("Refreshing %s for %s" %
                                        (cols_to_refresh,
                                         "1 book…" if len(rows_to_refresh) == 1 else
                                         "%d books…" % len(rows_to_refresh)),
@@ -1421,7 +1421,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._localize_marvin_database()
 
             updateCalibreGUIView()
-            self._busy_operation_teardown()
+            self._busy_panel_teardown()
 
             # Restore selection
             if self.saved_selection_region:
@@ -1734,11 +1734,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._log("ERROR: unsupported action '%s'" % action)
             return
 
-        self._busy_operation_setup("Retrieving %s…" % group_box_title)
+        self._busy_panel_setup("Retrieving %s…" % group_box_title)
         results = self._issue_command(command_name, update_soup,
                                       get_response="html_response.html",
                                       update_local_db=False)
-        self._busy_operation_teardown()
+        self._busy_panel_teardown()
         if results['code']:
             return self._show_command_error(command_type, results)
         else:
@@ -1845,9 +1845,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                    'active_cids': self.library_collections.ids,
                                    'locations': current_collections}
 
-                        self._busy_operation_setup("Updating collections…")
+                        self._busy_panel_setup("Updating collections…")
                         self._update_global_collections(details)
-                        self._busy_operation_teardown()
+                        self._busy_panel_teardown()
 
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
@@ -2474,7 +2474,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         return parameters_tag
 
-    def _busy_operation_setup(self, title, on_top=False, show_cancel=False):
+    def _busy_panel_setup(self, title, on_top=False, show_cancel=False):
         '''
         '''
         self._log_location(title)
@@ -2491,7 +2491,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.busy_window.show()
             Application.processEvents()
 
-    def _busy_operation_teardown(self):
+    def _busy_panel_teardown(self):
         '''
         '''
         self._log_location()
@@ -3534,9 +3534,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         if False:
             ''' Scan library books for hashes '''
             if self.library_scanner.isRunning():
-                self._busy_operation_setup("Scanning calibre library…")
+                self._busy_panel_setup("Scanning calibre library…")
                 self.library_scanner.wait()
-                self._busy_operation_teardown()
+                self._busy_panel_teardown()
 
         # Save a reference to the title, uuid map
         self.library_title_map = self.library_scanner.title_map
@@ -3600,9 +3600,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         if selected_books:
 
             # Estimate worst-case time required to generate DV, covering word count calculations
-            self._busy_operation_setup("Estimating time to completion…")
+            self._busy_panel_setup("Estimating time to completion…")
             word_counts = self._calculate_word_count(silent=True)
-            self._busy_operation_teardown()
+            self._busy_panel_teardown()
 
             twc = sum(word_counts.itervalues())
             total_seconds = twc/WORST_CASE_CONVERSION_RATE + 1
@@ -3664,14 +3664,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 ("1 book…" if len(selected_books) == 1 else
                  "%d books…" % len(selected_books)))
 
-            self._busy_operation_setup(busy_msg, show_cancel=True)
+            self._busy_panel_setup(busy_msg, show_cancel=True)
 #             self.tv.blockSignals(True)
 #             self.busy_msg.setText(busy_msg)
 #             self.pi.startAnimation()
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
                                           update_local_db=True)
-            self._busy_operation_teardown()
+            self._busy_panel_teardown()
 #             self.busy_msg.setText('')
 #             self.pi.stopAnimation()
 #             self.tv.blockSignals(False)
@@ -4401,12 +4401,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             cover_hash_cids = sorted(self.archived_cover_hashes.keys())
             #self._log("cover_hash keys: %s" % cover_hash_cids)
 
-            self._busy_operation_setup("Removing obsolete cover hashes")
+            self._busy_panel_setup("Removing obsolete cover hashes")
             for ch_cid in cover_hash_cids:
                 if ch_cid not in active_cids:
                     self._log("removing orphan cid %s from archived_cover_hashes" % ch_cid)
                     del self.archived_cover_hashes[ch_cid]
-            self._busy_operation_teardown()
+            self._busy_panel_teardown()
 
         # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
 
@@ -4422,14 +4422,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             # Wait for device driver to complete initialization, but tell user what's happening
             if not hasattr(self.parent.connected_device, "cached_books"):
-                self._busy_operation_setup("Waiting for driver to finish initialization…")
+                self._busy_panel_setup("Waiting for driver to finish initialization…")
 
             while True:
                 if not hasattr(self.parent.connected_device, "cached_books"):
                     Application.processEvents()
                 else:
                     if self.busy_window is not None:
-                        self._busy_operation_teardown()
+                        self._busy_panel_teardown()
                     break
 
             # Is there a valid mainDb?
@@ -4665,11 +4665,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         local_busy_window = False
         if not self.busy_window:
             local_busy_window = True
-            self._busy_operation_setup(self.UPDATING_MARVIN_MESSAGE)
+            self._busy_panel_setup(self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup,
                                       update_local_db=update_local_db)
         if local_busy_window:
-            self._busy_operation_teardown()
+            self._busy_panel_teardown()
 
         if results['code']:
             return self._show_command_error(command_name, results)
@@ -4724,7 +4724,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location("starting")
         local_busy_window = False
         if not self.busy_window:
-            self._busy_operation_setup("Updating local database")
+            self._busy_panel_setup("Updating local database")
             local_busy_window = True
 
         local_db_path = self.parent.connected_device.local_db_path
@@ -4738,7 +4738,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.ios.copy_from_idevice(remote_db_path, out)
 
         if local_busy_window:
-            self._busy_operation_teardown()
+            self._busy_panel_teardown()
         self._log_location("finished")
 
     def _localize_hash_cache(self, cached_books):
@@ -4857,10 +4857,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Scan library books for hashes
         if self.library_scanner.isRunning():
-            #self._busy_operation_setup("Waiting for library scan to complete…")
+            #self._busy_panel_setup("Waiting for library scan to complete…")
             #Application.processEvents()
             self.library_scanner.wait()
-            #self._busy_operation_teardown()
+            #self._busy_panel_teardown()
 
         uuid_map = library_scanner.uuid_map
         total_books = len(uuid_map)
@@ -5795,11 +5795,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         show_spinner = bool(len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER)
         if show_spinner:
-            self._busy_operation_setup(self.UPDATING_MARVIN_MESSAGE)
+            self._busy_panel_setup(self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup, update_local_db=True)
 
         if show_spinner:
-            self._busy_operation_teardown()
+            self._busy_panel_teardown()
 
         if results['code']:
             return self._show_command_error('update_locked_status', results)

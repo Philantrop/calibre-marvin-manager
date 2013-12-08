@@ -360,7 +360,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         # Reset self.installed_books
         self.installed_books = None
 
-        self._busy_operation_teardown()
+        self._busy_panel_teardown()
 
     def main_menu_button_clicked(self):
         '''
@@ -727,10 +727,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def start_library_indexing(self):
         self._log_location()
-        self._busy_operation_setup("Indexing calibre library…")
+        self._busy_panel_setup("Indexing calibre library…")
         self.library_scanner.start()
 
-    def _busy_operation_setup(self, title, show_cancel=False):
+    def _busy_panel_setup(self, title, show_cancel=False):
         '''
         '''
         self._log_location()
@@ -739,7 +739,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self.busy_window.start()
         self.busy_window.show()
 
-    def _busy_operation_teardown(self):
+    def _busy_panel_teardown(self):
         '''
         '''
         self._log_location()
