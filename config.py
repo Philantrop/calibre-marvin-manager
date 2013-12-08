@@ -915,16 +915,19 @@ class InventoryAnnotatedBooks(QThread, Logger):
         self.signal = SIGNAL("inventory_complete")
 
     def run(self):
-        self.find_all_annotated_books()
-        if self.get_date_range:
+        if self.field is not None:
+            self.find_all_annotated_books()
+        else:
+            self._log_location("No annotations field specified")
+        if self.annotation_map and self.get_date_range:
             self.get_annotations_date_range()
-        self.emit(self.signal, "%d annotated books" % len(self.annotation_map))
+        self.emit(self.signal, "{0} annotated books".format(len(self.annotation_map)))
 
     def find_all_annotated_books(self):
         '''
         Find all annotated books in library
         '''
-        self._log_location()
+        self._log_location("field: {0}".format(self.field))
         cids = self.cdb.search_getting_ids('formats:EPUB', '')
         for cid in cids:
             mi = self.cdb.get_metadata(cid, index_is_id=True)
