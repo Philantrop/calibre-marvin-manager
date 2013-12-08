@@ -1189,7 +1189,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.tv.horizontalHeader().setClickable(False)
 
     def initialize(self, parent):
-        self.busy_window = None
+        self.busy_panel = None
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = None
         self.icon = get_icon(parent.icon)
@@ -1231,7 +1231,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.setLayout(self.l)
         self.perfect_width = 0
 
-        # ~~~~~~~~ Create the filter ~~~~~~~~
+        # ~~~~~~~~ Create the filter~~~~~~~~
         self.filter_hb = QHBoxLayout()
 
         # Line edit
@@ -1253,7 +1253,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.filter_spacer = QSpacerItem(16, 16, QSizePolicy.Expanding, QSizePolicy.Minimum)
         self.filter_hb.addItem(self.filter_spacer)
 
-        if False:
+        if True:
             # *** Busy spinner ***
             self.busy_msg = QLabel("")
             self.filter_hb.addWidget(self.busy_msg, 0, Qt.AlignRight)
@@ -1407,7 +1407,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                         show_cancel=True)
 
             for row in rows_to_refresh:
-                if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                if self.busy_panel.cancel_status == self.busy_panel.REQUESTED:
                     self._log("user requested cancel")
                     break
                 self.tv.selectRow(row)
@@ -2479,26 +2479,26 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         self._log_location(title)
 
-        if self.busy_window:
+        if self.busy_panel:
             self._log("busy_window is already active with '%s'" %
-                      str(self.busy_window.msg))
+                      str(self.busy_panel.msg))
         else:
             QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-            self.busy_window = MyBlockingBusy(self, title, size=60,
+            self.busy_panel = MyBlockingBusy(self, title, size=60,
                                               on_top=on_top,
                                               show_cancel=show_cancel)
-            self.busy_window.start()
-            self.busy_window.show()
+            self.busy_panel.start()
+            self.busy_panel.show()
             Application.processEvents()
 
     def _busy_panel_teardown(self):
         '''
         '''
         self._log_location()
-        if self.busy_window:
-            self.busy_window.stop()
-            self.busy_window.accept()
-            self.busy_window = None
+        if self.busy_panel:
+            self.busy_panel.stop()
+            self.busy_panel.accept()
+            self.busy_panel = None
             QApplication.restoreOverrideCursor()
         else:
             self._log("no active busy_window")
@@ -3665,16 +3665,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                  "%d books…" % len(selected_books)))
 
             self._busy_panel_setup(busy_msg, show_cancel=True)
-#             self.tv.blockSignals(True)
-#             self.busy_msg.setText(busy_msg)
-#             self.pi.startAnimation()
             results = self._issue_command(command_name, update_soup,
                                           timeout_override=timeout,
                                           update_local_db=True)
             self._busy_panel_teardown()
-#             self.busy_msg.setText('')
-#             self.pi.stopAnimation()
-#             self.tv.blockSignals(False)
 
             if results['code']:
                 return self._show_command_error(command_type, results)
@@ -4428,7 +4422,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if not hasattr(self.parent.connected_device, "cached_books"):
                     Application.processEvents()
                 else:
-                    if self.busy_window is not None:
+                    if self.busy_panel is not None:
                         self._busy_panel_teardown()
                     break
 
@@ -4663,7 +4657,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         update_soup.manifest.insert(0, book_tag)
 
         local_busy_window = False
-        if not self.busy_window:
+        if not self.busy_panel:
             local_busy_window = True
             self._busy_panel_setup(self.UPDATING_MARVIN_MESSAGE)
         results = self._issue_command(command_name, update_soup,
@@ -4723,7 +4717,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         self._log_location("starting")
         local_busy_window = False
-        if not self.busy_window:
+        if not self.busy_panel:
             self._busy_panel_setup("Updating local database")
             local_busy_window = True
 
@@ -6175,8 +6169,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                 break
 
                             # Cancel requested?
-                            if self.busy_window is not None:
-                                if self.busy_window.cancel_status == self.busy_window.REQUESTED:
+                            if self.busy_panel is not None:
+                                if self.busy_panel.cancel_status == self.busy_panel.REQUESTED:
                                     self._log("user requested cancel")
 
                                     # Create "cancel.command" in staging folder
@@ -6188,9 +6182,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                     self.ios.rename(ft, fs)
 
                                     # Change dialog text
-                                    self.busy_window.set_text("Completing current book…")
+                                    self.busy_panel.set_text("Completing current book…")
 
-                                    self.busy_window.cancel_status = self.busy_window.ACKNOWLEDGED
+                                    self.busy_panel.cancel_status = self.busy_panel.ACKNOWLEDGED
 
                             status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
                             code = status.get('code')
