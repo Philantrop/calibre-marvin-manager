@@ -6310,6 +6310,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         final_status = "cancelled by user"
                     results = {'code': int(final_code), 'status': final_status}
 
+                    '''
+                    if True and command_name == 'update_metadata':
+                        # *** Fake some errors to test ***
+                        self._log("***falsifying error reporting***")
+                        results = {'code': 2, 'status': 'completed with errors',
+                            'details': "[Title - Author.epub] Cannot locate book to update metadata - skipping"}
+                    '''
+
                     if final_code not in ['0']:
                         if final_code == '3':
                             msgs = ['operation cancelled by user']
