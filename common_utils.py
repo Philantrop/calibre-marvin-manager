@@ -494,7 +494,6 @@ class InventoryCollections(QThread):
         QThread.__init__(self, parent)
         self.signal = SIGNAL("collection_inventory_complete")
         self.cdb = parent.opts.gui.current_db
-        #self.cfl = parent.prefs.get('collection_field_lookup', None)
         self.cfl = get_cc_mapping('collections', 'field', None)
         self.ids = []
         #self.heatmap = {}

@@ -389,7 +389,6 @@ class ConfigWidget(QWidget, Logger):
                      self.annotations_destination_changed)
 
         # Launch the annotated_books_scanner
-        #field = plugin_prefs.get('annotations_field_lookup', None)
         field = get_cc_mapping('annotations', 'field', None)
         self.annotated_books_scanner = InventoryAnnotatedBooks(self.gui, field)
         self.connect(self.annotated_books_scanner, self.annotated_books_scanner.signal,
@@ -479,7 +478,6 @@ class ConfigWidget(QWidget, Logger):
 
         # If there were changes, and there are existing annotations,
         # and there is an active Annotations field, offer to re-render
-        #field = plugin_prefs.get("annotations_field_lookup", None)
         field = get_cc_mapping('annotations', 'field', None)
         if osh.digest() != nsh.digest() and existing_annotations(self.parent, field):
             title = 'Update annotations?'
@@ -590,8 +588,6 @@ class ConfigWidget(QWidget, Logger):
                     self.eligible_annotations_fields[destination] = label
 
                     # Save manually in case user cancels
-                    #self.prefs.set('annotations_field_comboBox', destination)
-                    #self.prefs.set('annotations_field_lookup', label)
                     set_cc_mapping('annotations', combobox=destination, field=label)
 
                 elif source == 'Collections':
@@ -601,8 +597,6 @@ class ConfigWidget(QWidget, Logger):
                     self.eligible_collection_fields[destination] = label
 
                     # Save manually in case user cancels
-                    #self.prefs.set('collection_field_comboBox', destination)
-                    #self.prefs.set('collection_field_lookup', label)
                     set_cc_mapping('collections', combobox=destination, field=label)
 
                 elif source == 'Last read':
@@ -612,8 +606,6 @@ class ConfigWidget(QWidget, Logger):
                     self.eligible_date_read_fields[destination] = label
 
                     # Save manually in case user cancels
-                    #self.prefs.set('date_read_field_comboBox', destination)
-                    #self.prefs.set('date_read_field_lookup', label)
                     set_cc_mapping('date_read', combobox=destination, field=label)
 
                 elif source == "Progress":
@@ -623,8 +615,6 @@ class ConfigWidget(QWidget, Logger):
                     self.eligible_progress_fields[destination] = label
 
                     # Save manually in case user cancels
-                    #self.prefs.set('progress_field_comboBox', destination)
-                    #self.prefs.set('progress_field_lookup', label)
                     set_cc_mapping('progress', combobox=destination, field=label)
 
                 elif source == "Read":
@@ -634,8 +624,6 @@ class ConfigWidget(QWidget, Logger):
                     self.eligible_read_fields[destination] = label
 
                     # Save manually in case user cancels
-                    #self.prefs.set('read_field_comboBox', destination)
-                    #self.prefs.set('read_field_lookup', label)
                     set_cc_mapping('read', combobox=destination, field=label)
 
                 elif source == "Reading list":
@@ -645,8 +633,6 @@ class ConfigWidget(QWidget, Logger):
                     self.eligible_reading_list_fields[destination] = label
 
                     # Save manually in case user cancels
-                    #self.prefs.set('reading_list_field_comboBox', destination)
-                    #self.prefs.set('reading_list_field_lookup', label)
                     set_cc_mapping('reading_list', combobox=destination, field=label)
 
                 elif source == "Word count":
@@ -656,8 +642,6 @@ class ConfigWidget(QWidget, Logger):
                     self.eligible_word_count_fields[destination] = label
 
                     # Save manually in case user cancels
-                    #self.prefs.set('word_count_field_comboBox', destination)
-                    #self.prefs.set('word_count_field_lookup', label)
                     set_cc_mapping('word_count', combobox=destination, field=label)
         else:
             self._log("ERROR: Can't import from '%s'" % klass)

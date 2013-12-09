@@ -85,7 +85,6 @@ class MyTableView(QTableView):
                     calibre_cids = True
                     break
 
-            #afn = self.parent.prefs.get('annotations_field_comboBox', None)
             afn = get_cc_mapping('annotations', 'combobox', None)
             no_annotations = not selected_books[row]['has_annotations']
 
@@ -126,7 +125,6 @@ class MyTableView(QTableView):
                 pass
 
         elif col == self.parent.COLLECTIONS_COL:
-            #cfl = self.parent.prefs.get('collection_field_lookup', '')
             cfl = get_cc_mapping('collections', 'field', None)
 
             ac = menu.addAction("Add collection assignments")
@@ -254,9 +252,7 @@ class MyTableView(QTableView):
                     calibre_cids = True
                     break
 
-            #read_field = self.parent.prefs.get('read_field_comboBox', None)
             read_field = get_cc_mapping('read', 'combobox', None)
-            #reading_list_field = self.parent.prefs.get('reading_list_field_comboBox', None)
             reading_list_field = get_cc_mapping('reading_list', 'combobox', None)
             if read_field or reading_list_field:
                 menu.addSeparator()
@@ -271,7 +267,6 @@ class MyTableView(QTableView):
                 ac.setEnabled(bool(calibre_cids))
 
         elif col == self.parent.LAST_OPENED_COL:
-            #date_read_field = self.parent.prefs.get('date_read_field_comboBox', None)
             date_read_field = get_cc_mapping('date_read', 'combobox', None)
 
             # Test for calibre cids
@@ -330,7 +325,6 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_unlocked", row))
 
         elif col == self.parent.PROGRESS_COL:
-            #progress_field = self.parent.prefs.get('progress_field_comboBox', None)
             progress_field = get_cc_mapping('progress', 'combobox', None)
 
             # Test for calibre cids
@@ -414,7 +408,6 @@ class MyTableView(QTableView):
                 pass
 
         elif col == self.parent.WORD_COUNT_COL:
-            #word_count_field = self.parent.prefs.get('word_count_field_comboBox', None)
             word_count_field = get_cc_mapping('word_count', 'combobox', None)
 
             # Test for calibre cids
@@ -1369,7 +1362,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._busy_panel_teardown()
 
         if self.parent.prefs.get('auto_refresh_at_startup', False):
+            self._busy_panel_setup("Refreshing custom column content…")
             self.refresh_custom_columns(all_books=True, report_results=False)
+            self._busy_panel_teardown()
             self._clear_selected_rows()
 
     def launch_collections_scanner(self):
@@ -1414,7 +1409,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         enabled = []
         for cfn in ['annotations', 'date_read', 'progress', 'read',
             'reading_list','word_count']:
-            #cfv = self.parent.prefs.get(cfn, None)
             cfv = get_cc_mapping(cfn, 'combobox', None)
             if cfv:
                 enabled.append(cfv)
@@ -1550,7 +1544,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         annotations = self._get_formatted_annotations(book_id)
 
         footer = None
-        #afn = self.parent.prefs.get('annotations_field_comboBox', None)
         afn = get_cc_mapping('annotations', 'combobox', None)
         if afn:
             refresh = {
@@ -1845,7 +1838,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Get all calibre collection names
         calibre_collection_list = []
-        #cfl = self.parent.prefs.get('collection_field_lookup', '')
         cfl = get_cc_mapping('collections', 'field', None)
         if cfl:
             db = self.opts.gui.current_db
@@ -2156,7 +2148,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Fetch the LAST_OPENED date, convert to datetime, apply to custom field
         '''
-        #lookup = self.parent.prefs.get('date_read_field_lookup', None)
         lookup = get_cc_mapping('date_read', 'field', None)
         if lookup:
             self._log_location()
@@ -2234,9 +2225,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._log_location(last_modified, "{0}".format(arg2))
             return last_modified
 
-        #read_lookup = self.parent.prefs.get('read_field_lookup', None)
         read_lookup = get_cc_mapping('read', 'field', None)
-        reading_list_lookup = self.parent.prefs.get('reading_list_lookup', None)
+        reading_list_lookup = get_cc_mapping('reading_list', 'field', None)
         if read_lookup or reading_list_lookup:
             selected_books = self._selected_books()
             self._log_location(selected_books[selected_books.keys()[0]]['title'])
@@ -2327,7 +2317,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Fetch Progress, apply to custom field
         Need to assert force_changes for db to allow custom field to be set to None.
         '''
-        #lookup = self.parent.prefs.get('progress_field_lookup', None)
         lookup = get_cc_mapping('progress', 'field', None)
         if lookup:
             self._log_location()
@@ -2355,7 +2344,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Fetch Progress, apply to custom field
         '''
-        #lookup = self.parent.prefs.get('word_count_field_lookup', None)
         lookup = get_cc_mapping('word_count', 'field', None)
         if lookup:
             self._log_location()
@@ -3382,7 +3370,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Retrieve formatted annotations
         '''
-        #lookup = self.parent.prefs.get('annotations_field_lookup', None)
         lookup = get_cc_mapping('annotations', 'field', None)
         if lookup:
             self._log_location()
@@ -3858,7 +3845,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Return a sorted list of current calibre collection assignments or
         None if no collection_field_lookup assigned or book does not exist in library
         '''
-        #cfl = self.prefs.get('collection_field_lookup', '')
         cfl = get_cc_mapping('collections', 'field', None)
         if cfl is None or cid is None:
             return None
@@ -4652,9 +4638,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Update enabled custom columns to current flag settings
         '''
-        #read_lookup = self.parent.prefs.get('read_field_lookup', None)
         read_lookup = get_cc_mapping('read', 'field', None)
-        #reading_list_lookup = self.parent.prefs.get('reading_list_field_lookup', None)
         reading_list_lookup = get_cc_mapping('reading_list', 'field', None)
 
         if (read_lookup or reading_list_lookup):
@@ -5314,7 +5298,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         self._log_location()
         # Update collections custom column
-        #lookup = self.parent.prefs.get('collection_field_lookup', None)
         lookup = get_cc_mapping('collections', 'field', None)
         if lookup is not None and cid is not None:
             # Get the current value from the lookup field
@@ -5643,7 +5626,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location(details)
 
         # ~~~~~~ calibre ~~~~~~
-        #lookup = self.parent.prefs.get('collection_field_lookup', None)
         lookup = get_cc_mapping('collections', 'field', None)
         if lookup is not None and details['active_cids']:
 
@@ -6146,7 +6128,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                          ('reading_list', self.FLAGS_COL),
                          ('word_count', self.WORD_COUNT_COL)
                         ]:
-            #cfv = self.parent.prefs.get(cfn, None)
             cfv = get_cc_mapping(cfn, 'combobox', None)
             visible = not self.tv.isColumnHidden(col) and self.tv.columnWidth(col) > 0
             if cfv and visible:
