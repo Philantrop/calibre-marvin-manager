@@ -415,21 +415,7 @@ class ConfigWidget(QWidget, Logger):
             self._log_location("old_destination_name = new_destination_name, no changes")
             return
 
-        try:
-            new_destination_field = self.eligible_annotations_fields[new_destination_name]
-        except:
-            import traceback
-            self._log(traceback.format_exc())
-            self._log("unable to change to '{0}'".format(new_destination_name))
-            self._log("self.eligible_annotations_fields: {0}".format(self.eligible_annotations_fields))
-            self._log("cancelling change")
-
-            # Restore previous destination
-            self.annotations_field_comboBox.blockSignals(True)
-            old_index = self.annotations_field_comboBox.findText(old_destination_name)
-            self.annotations_field_comboBox.setCurrentIndex(old_index)
-            self.annotations_field_comboBox.blockSignals(False)
-            return
+        new_destination_field = self.eligible_annotations_fields[new_destination_name]
 
         if existing_annotations(self.parent, old_destination_field):
             command = self.launch_new_destination_dialog(old_destination_name, new_destination_name)
