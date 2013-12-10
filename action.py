@@ -278,8 +278,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.prefs.set(pm, pref_map[pm])
 
         # Clean up JSON file < v1.1.0
-        if self.interface_action_base_plugin.version < (1, 1, 0):
-            self._log_location("Updating prefs from %d.%d.%d to 1.1.0" %
+        prefs_version = self.prefs.get("plugin_version", "0.0.0")
+        if prefs_version < "1.1.0":
+            self._log_location("Updating prefs to %d.%d.%d" %
                 self.interface_action_base_plugin.version)
             for obsolete_setting in [
                 'annotations_field_comboBox', 'annotations_field_lookup',

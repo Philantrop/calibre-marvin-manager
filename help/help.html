@@ -164,17 +164,11 @@
 <! ~~~~~~~~~~~~~~~ Configuration Options ~~~~~~~~~~~~~~~>
 <div class="topic">
 <h3><a name="configuration" id="configuration"></a>2. <a href="#toc">Configuration</a></h3>
-<p>Open the context menu for the Marvin XD icon (right-click the icon or click the down arrow), then click <strong>Customize plugin</strong> to display the <strong>Customize Marvin XD</strong> dialog.</p>
-<p>&nbsp;</p>
-<img src="images/custom_columns.png" alt="" class="inline" />
-<p>The <strong>Custom columns</strong> assignments section connects  Marvin  details to custom columns in calibre. For example, by selecting a custom column in calibre for Collections, you can synchronize collection assignments between calibre and Marvin. You may  specify custom columns for <em>Annotations</em>, <em>Collections</em>, <em>Last read</em>, <em>Progress</em>, <em>Read</em>, <em>Reading list</em> and <em>Word count</em>, enabling you to synchronize those Marvin details to calibre.</p>
+<p>Open the context menu for the Marvin XD icon (right-click the icon or click the down arrow), then click <strong>Customize plugin</strong> to display the <strong>Customize Marvin XD</strong> dialog.<img src="images/config.png" alt="" class="inline" /></p>
+<p>The<strong> Custom columns assignments</strong> section connects  Marvin  details to custom columns in calibre. For example, by selecting a custom column in calibre for Collections, you can synchronize collection assignments between calibre and Marvin. You may  specify custom columns for <em>Annotations</em>, <em>Collections</em>, <em>Last read</em>, <em>Progress</em>, <em>Read</em>, <em>Reading list</em> and <em>Word count</em>, enabling you to synchronize those Marvin details to calibre.</p>
 <p>Clicking the combo box presents a list of existing custom columns eligible for use with the associated Marvin details.</p>
 <p>Clicking the Wizard button leads you through the steps to create a new custom column, or renames an existing custom column.</p>
-<p>The <em>Read</em> and <em>Reading list</em> flags are handled differently. The most recently updated environment is used as the sync master. For example, if you've set the <em>Read</em> flag in calibre, the <em>Read</em> flag will be set in Marvin when syncing. </p>
-<p style="clear:left;">&nbsp;</p>
-
-<img src="images/other_options.png" alt="" class="inline" />
-<p><strong>CSS:</strong> Customize the CSS applied to Annotations or Articles, Deep View and Vocabulary.</p>
+<p><strong>CSS:</strong> Click the <strong>Annotations</strong> button to customize the CSS applied to Annotations. Click the <strong>Articles, Vocabulary</strong> button to customize the CSS applied to Articles and Vocabulary.</p>
 <p><strong>General options:</strong> <strong>Automatically refresh custom column content</strong>: When checked,  enabled custom column content will be synchronized upon opening Marvin XD for all books installed in Marvin that are also in your calibre library.<br />
   <strong>Show reading progress as percentage: </strong>When checked<strong>,</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p> 
 <p><strong>Debug options: Enable debug logging for Marvin XD, </strong><strong>Enable debug logging for libiMobileDevice</strong>: If you are having a problem with the plugin, you may be asked to enable one or both of these checkboxes, then restart calibre in debug mode from a terminal window to generate a debug log. </p>
@@ -500,9 +494,10 @@
   </tr>
   <tr class="action">
     <td>Refresh  custom columns</td>
-    <td>Apply contents of Progress, Last read and Annotations columns to  custom columns (assigned in configuration dialog) for selected books.</td>
+    <td>Apply contents of Progress, Last read and Annotations columns to  custom columns (assigned in configuration dialog) for selected books. You may also enable automatic refresh of custom column content in the plugin's configuration dialog.</td>
     <td><ul>
       <li>Main window button</li>
+      <li>Configuration dialog</li>
     </ul></td>
   </tr>
   <tr class="action">
@@ -612,6 +607,7 @@
 <div class="topic">
 <h3><a name="support" id="support"></a>6. <a href="#toc">Support</a></h3>
 <p>For more information on  Marvin XD, visit <a href="http://www.mobileread.com/forums/showthread.php?t=221357">calibre's Plugins forum</a> at MobileRead Forums.</p>
+<p>To report an error or suggest an enhancement, visit <a href="https://github.com/GRiker/calibre-marvin-manager/issues?state=open">Marvin XD's GitHub issue tracker</a>.</p>
 <p>To support the ongoing development of Marvin XD:</p><form action="https://www.paypal.com/cgi-bin/webscr" method="post" target="_top">
 <input type="hidden" name="cmd" value="_s-xclick">
 <input type="hidden" name="hosted_button_id" value="U8C4PC3TYC9QA">
