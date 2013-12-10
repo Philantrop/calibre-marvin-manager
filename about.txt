@@ -6,14 +6,15 @@ A calibre plugin for managing Marvin, an iOS reader application.
 Version history:
 1.1.0 [10 December 2013]
  • Added support for multiple libraries
+ • Reconfigured main window to include busy status indicator instead of popups
  • Fixed pubdate problems under Windows for dates < 1970
  • Added auto-refresh option when launching
+ • New layout for configuration dialog
  • Updated Help file
  • Various UI improvements
  • Various bug fixes and performance improvements
  • Consolidated some diagnostic functions
  • Improved error handling
- • Reconfigured main window to include busy status indicator instead of popups
 1.0.9 [01 November 2013]
  • Various bug fixes and performance improvements
 1.0.8 [25 September 2013]
