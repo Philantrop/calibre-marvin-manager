@@ -6099,7 +6099,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         if errors:
             # Construct a compilation of the error details
-            self._log("collected errors: %s" % errors)
             details = ''
             for error in errors:
                 details += "{0}\n".format(error['details'])
