@@ -4159,7 +4159,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             self._log("TITLE/AUTHOR match")
             except:
                 # Book deleted since scan
-                pass
+                import traceback
+                self._log_location(traceback.format_exc())
+
+            # Confirm valid mi object
+            if getattr(mi, 'uuid', None) == 'dummy':
+                mi = None
             return cid, mi
 
         def _get_collections(cur, book_id):
@@ -5902,7 +5907,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         db = self.opts.gui.current_db
         mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
 
-        self._log_location(mi.title)
+        self._log_location("'{0}' cid:{1}".format(mi.title, cid))
         #self._log("mismatches:\n%s" % mismatches)
 
         command_name = "update_metadata"
