@@ -112,6 +112,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self.book_status_dialog = None
         self.blocking_busy = MyBlockingBusy(self.gui, "Updating Marvin Library…", size=50)
         self.connected_device = None
+        self.current_location = 'library'
         self.dropbox_processed = False
         self.ios = None
         self.installed_books = None
@@ -362,6 +363,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self.installed_books = None
 
         self._busy_panel_teardown()
+
+    # subclass override
+    def location_selected(self, loc):
+        self._log_location(loc)
+        self.current_location = loc
 
     def main_menu_button_clicked(self):
         '''
@@ -712,6 +718,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
         else:
             self.launch_library_scanner()
 
+            # Assure that Library is active view. Avoids problems with _delete_books
+            restore_to = None
+            if self.current_location != 'library':
+                restore_to = self.current_location
+                self.gui.location_selected('library')
+
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
             self._log_location("{0} books".format(len(self.book_status_dialog.installed_books)))
@@ -719,6 +731,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             # Keep a copy of installed_books in case user reopens w/o disconnect
             self.installed_books = self.book_status_dialog.installed_books
+
+            # Restore the Device view if active before MXD window launched
+            if restore_to:
+                self.gui.location_selected(restore_to)
 
             self.book_status_dialog = None
 

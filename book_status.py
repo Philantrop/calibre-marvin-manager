@@ -3352,9 +3352,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                 self.updated_match_quality[row] = {'book_id': book_id,
                                                                    'old': old,
                                                                    'new': new}
+                # Update the book count in the title bar
+                self.setWindowTitle(u'Marvin Library: %d books' % len(self.installed_books))
 
                 # Launch row flasher
-                self._flash_affected_rows()
+                #self._flash_affected_rows()
 
             else:
                 self._log("delete cancelled")
