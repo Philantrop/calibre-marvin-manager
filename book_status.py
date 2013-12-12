@@ -2374,6 +2374,21 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         self._log_location()
 
+        def _strftime(fmt, dt):
+            '''
+            Guarantee YYYY-MM-DD format for strftime results. Resolves problem when
+            year < 1000
+            '''
+            result = strftime(fmt, t=dt)
+            if not re.match("\d{4}-\d{2}-\d{2}", result):
+                ans = re.match("(?P<year>\d+)-(?P<month>\d+)-(?P<day>\d+)", result)
+                year = int(ans.group('year'))
+                month = int(ans.group('month'))
+                day = int(ans.group('day'))
+                result = "{year:04d}-{month:02d}-{day:02d}".format(
+                    year=year, month=month, day=day)
+            return result
+
         cached_books = self.parent.connected_device.cached_books
         target_epub = self.installed_books[book_id].path
 
@@ -2390,7 +2405,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         book_tag['filename'] = target_epub
 
         naive = book.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
-        book_tag['pubdate'] = strftime('%Y-%m-%d', t=naive)
+        book_tag['pubdate'] = _strftime('%Y-%m-%d', naive)
         book_tag['publisher'] = ''
         if book.publisher is not None:
             book_tag['publisher'] = escape(book.publisher)
@@ -2996,36 +3011,45 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             '''
             4: Marvin uuid matches calibre uuid (hard match): Green
             3: Marvin hash matches calibre hash (soft match): Yellow
-            2: Marvin hash duplicates: Orange
-            1: Calibre hash duplicates: Red
+            2: Calibre hash duplicates: Orange
+            1: Marvin hash duplicates: Red
             0: Marvin only, single copy: White
             '''
 
             if self.opts.prefs.get('development_mode', False):
-                self._log_location("%s uuid: %s matches: %s on_device: %s hash: %s" %
-                                   (book_data.title,
-                                    repr(book_data.uuid),
-                                    repr(book_data.matches),
-                                    repr(book_data.on_device),
-                                    repr(book_data.hash)))
-                self._log("metadata_mismatches: %s" % repr(book_data.metadata_mismatches))
+                self._log_location("'{0}'".format(book_data.title))
+                self._log("uuid: {0}".format(repr(book_data.uuid)))
+                self._log("matches: {0}".format(repr(book_data.matches)))
+                self._log("on_device: {0}".format(repr(book_data.on_device)))
+                self._log("hash: {0}".format(repr(book_data.hash)))
+                self._log("metadata_mismatches: {0}".format(
+                    '' if book_data.metadata_mismatches else '{}'))
+                for k, v in book_data.metadata_mismatches.items():
+                    self._log(" {0}: {1}".format(k, v))
+
             match_quality = self.WHITE
 
-            if (book_data.uuid > '' and
-                    [book_data.uuid] == book_data.matches and
-                    not book_data.metadata_mismatches):
+            if (book_data.uuid and
+                [book_data.uuid] == book_data.matches and
+                not book_data.metadata_mismatches):
                 # GREEN: Hard match - uuid match, metadata match
                 match_quality = self.GREEN
 
-            elif ((book_data.on_device == 'Main' and
-                   book_data.metadata_mismatches) or
-                  ([book_data.uuid] == book_data.matches)):
+            elif (book_data.on_device is not None and
+                  book_data.on_device.startswith('Main (') and
+                  book_data.uuid and book_data.uuid in book_data.matches):
+                # ORANGE: Duplicate of calibre copy
+                match_quality = self.ORANGE
+
+            elif (book_data.on_device == 'Main' and book_data.metadata_mismatches):
                 # YELLOW: Soft match - hash match,
                 match_quality = self.YELLOW
 
-            elif (book_data.uuid in book_data.matches):
-                # ORANGE: Duplicate of calibre copy
-                match_quality = self.ORANGE
+            elif (book_data.on_device is not None and
+                  book_data.uuid and
+                  [book_data.uuid] == book_data.matches):
+                # YELLOW: Soft match - hash match,
+                match_quality = self.YELLOW
 
             elif (book_data.hash in self.marvin_hash_map and
                   len(self.marvin_hash_map[book_data.hash]) > 1):
@@ -3033,7 +3057,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 match_quality = self.RED
 
             if self.opts.prefs.get('development_mode', False):
-                self._log("%s match_quality: %s" % (book_data.title, match_quality))
+                MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN']
+                self._log("match_quality: {0}".format(MATCH_COLORS[match_quality]))
+
             return match_quality
 
         def _generate_series(book_data):
