@@ -3028,6 +3028,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     self._log(" {0}: {1}".format(k, v))
 
             match_quality = self.WHITE
+            _main = _('Main')
 
             if (book_data.uuid and
                 [book_data.uuid] == book_data.matches and
@@ -3036,12 +3037,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 match_quality = self.GREEN
 
             elif (book_data.on_device is not None and
-                  book_data.on_device.startswith('Main (') and
+                  book_data.on_device.startswith("{0} (".format(_main)) and
                   book_data.uuid and book_data.uuid in book_data.matches):
                 # ORANGE: Duplicate of calibre copy
                 match_quality = self.ORANGE
 
-            elif (book_data.on_device == 'Main' and book_data.metadata_mismatches):
+            elif (book_data.on_device == _main and book_data.metadata_mismatches):
                 # YELLOW: Soft match - hash match,
                 match_quality = self.YELLOW
 
