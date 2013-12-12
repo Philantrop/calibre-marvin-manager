@@ -18,6 +18,7 @@ from PyQt4.Qt import (Qt, QApplication, QCursor, QIcon, QMenu, QTimer, QUrl,
                       pyqtSignal)
 
 from calibre.constants import DEBUG
+from calibre.customize.ui import device_plugins, disabled_device_plugins
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup
@@ -66,6 +67,42 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def backup_restore(self):
         self._log_location("not implemented")
+
+    def confirm_iosra_available(self):
+        '''
+        Confirm that iOSRA is installed and not disabled
+        '''
+        self._log_location()
+        IOSRA = 'iOS reader applications'
+        # Confirm that iOSRA is installed
+        installed = False
+        disabled = False
+        for dp in device_plugins(include_disabled=True):
+            if dp.name == IOSRA:
+                installed = True
+                for ddp in disabled_device_plugins():
+                    if ddp.name == IOSRA:
+                        disabled = True
+                break
+
+        title = msg = None
+        if not installed:
+            title = 'Marvin XD'
+            msg = ('<p>Marvin XD requires the ' +
+                   '<a href="http://www.mobileread.com/forums/showthread.php?t=215624">iOS reader applications</a> ' +
+                   'plugin to be installed.<br/><br/>' +
+                   'Install the plugin, configure it with Marvin ' +
+                   'as the preferred reader application, then restart calibre.</p>')
+        elif installed and disabled:
+            title = 'Marvin XD'
+            msg = ('<p>Marvin XD requires the ' +
+                   '<a href="http://www.mobileread.com/forums/showthread.php?t=215624">iOS reader applications</a> ' +
+                   'plugin to be enabled.<br/><br/>' +
+                   'Enable the plugin in <i>Preferences|Advanced|Plugins</i>, ' +
+                   'configure it with Marvin as the preferred reader application, then restart calibre.</p>')
+        if title and msg:
+            MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
+
 
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
@@ -640,6 +677,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self._log("Marvin not connected")
                 ac = self.create_menu_item(m, 'Marvin not connected')
                 ac.setEnabled(False)
+                self.confirm_iosra_available()
+
             m.addSeparator()
 
             # Add 'Customize plugin…'
