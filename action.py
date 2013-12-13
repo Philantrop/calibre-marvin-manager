@@ -68,42 +68,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def backup_restore(self):
         self._log_location("not implemented")
 
-    def confirm_iosra_available(self):
-        '''
-        Confirm that iOSRA is installed and not disabled
-        '''
-        self._log_location()
-        IOSRA = 'iOS reader applications'
-        # Confirm that iOSRA is installed
-        installed = False
-        disabled = False
-        for dp in device_plugins(include_disabled=True):
-            if dp.name == IOSRA:
-                installed = True
-                for ddp in disabled_device_plugins():
-                    if ddp.name == IOSRA:
-                        disabled = True
-                break
-
-        title = msg = None
-        if not installed:
-            title = 'Marvin XD'
-            msg = ('<p>Marvin XD requires the ' +
-                   '<a href="http://www.mobileread.com/forums/showthread.php?t=215624">iOS reader applications</a> ' +
-                   'plugin to be installed.<br/><br/>' +
-                   'Install the plugin, configure it with Marvin ' +
-                   'as the preferred reader application, then restart calibre.</p>')
-        elif installed and disabled:
-            title = 'Marvin XD'
-            msg = ('<p>Marvin XD requires the ' +
-                   '<a href="http://www.mobileread.com/forums/showthread.php?t=215624">iOS reader applications</a> ' +
-                   'plugin to be enabled.<br/><br/>' +
-                   'Enable the plugin in <i>Preferences|Advanced|Plugins</i>, ' +
-                   'configure it with Marvin as the preferred reader application, then restart calibre.</p>')
-        if title and msg:
-            MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
-
-
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
         if image:
@@ -140,6 +104,48 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.prefs.commit()
         else:
             self._log("unrecognized action")
+
+    def discover_iosra_status(self):
+        '''
+        Confirm that iOSRA is installed and not disabled
+        '''
+        IOSRA = 'iOS reader applications'
+        # Confirm that iOSRA is installed
+        installed = False
+        disabled = False
+        status = "Marvin not connected"
+        for dp in device_plugins(include_disabled=True):
+            if dp.name == IOSRA:
+                installed = True
+                for ddp in disabled_device_plugins():
+                    if ddp.name == IOSRA:
+                        disabled = True
+                break
+
+        msg = None
+        if not installed:
+            status = "iOSRA plugin not installed"
+            msg = ('<p>Marvin XD requires the iOS reader applications plugin to be installed.</p>' +
+                   '<p>Install the plugin, configure it with Marvin ' +
+                   'as the preferred reader application, then restart calibre.</p>' +
+                   '<p><a href="http://www.mobileread.com/forums/showthread.php?t=215624">' +
+                   'iOS reader applications support</a><br/>'
+                   '<a href="http://www.mobileread.com/forums/showthread.php?t=221357">' +
+                   'Marvin XD support</a></p>')
+        elif installed and disabled:
+            status = "iOSRA plugin disabled"
+            msg = ('<p>Marvin XD requires the iOS reader applications plugin to be enabled.</p>' +
+                   '<p>Enable the plugin in <i>Preferences|Advanced|Plugins</i>, ' +
+                   'configure it with Marvin as the preferred reader application, ' +
+                   'then restart calibre.</p>' +
+                   '<p><a href="http://www.mobileread.com/forums/showthread.php?t=215624">' +
+                   'iOS reader applications support</a><br/>'
+                   '<a href="http://www.mobileread.com/forums/showthread.php?t=221357">' +
+                   'Marvin XD support</a></p>')
+        if msg:
+            MessageBox(MessageBox.WARNING, status, msg, det_msg='', show_copy_button=False).exec_()
+
+        return status
 
     # subclass override
     def genesis(self):
@@ -674,10 +680,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 if dropbox_syncing_enabled and not self.dropbox_processed:
                     process_dropbox = True
             else:
-                self._log("Marvin not connected")
-                ac = self.create_menu_item(m, 'Marvin not connected')
+                iosra_status = self.discover_iosra_status()
+                self._log(iosra_status)
+                ac = self.create_menu_item(m, iosra_status)
                 ac.setEnabled(False)
-                self.confirm_iosra_available()
 
             m.addSeparator()
 
