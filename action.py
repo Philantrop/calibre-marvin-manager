@@ -48,7 +48,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     icon = PLUGIN_ICONS[0]
-    minimum_ios_driver_version = (1, 0, 5)
+    minimum_ios_driver_version = (1, 3, 1)
     name = 'Marvin XD'
     prefs = cfg.plugin_prefs
     verbose = prefs.get('debug_plugin', False)
