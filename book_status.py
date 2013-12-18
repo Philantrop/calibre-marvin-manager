@@ -962,7 +962,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         RED = 1
         WHITE = 0
 
-    large_covers_subpath = '/Library/Caches/com.appstafarian.marvin.covers.l'
     marvin_device_status_changed = pyqtSignal(str)
 
     def accept(self):
@@ -3528,7 +3527,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             row = cover_cur.fetchone()
 
         book_hash = row[b'Hash']
-        cover_path = '/'.join([self.large_covers_subpath, '%s.jpg' % book_hash])
+        large_covers_subpath = self.parent.connected_device._cover_subpath(size="large")
+        cover_path = '/'.join([large_covers_subpath, '%s.jpg' % book_hash])
         stats = self.ios.exists(cover_path)
         if stats:
             self._log("cover size: {:,} bytes".format(int(stats['st_size'])))

@@ -223,7 +223,8 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 row = cover_cur.fetchone()
 
             book_hash = row[b'Hash']
-            cover_path = '/'.join([self.parent.large_covers_subpath, '%s.jpg' % book_hash])
+            large_covers_subpath = self.connected_device._cover_subpath(size="large")
+            cover_path = '/'.join([large_covers_subpath, '%s.jpg' % book_hash])
             stats = self.parent.ios.exists(cover_path)
             if stats:
                 self._log("fetching large cover from cache")
