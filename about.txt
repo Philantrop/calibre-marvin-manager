@@ -1,9 +1,16 @@
 Marvin XD
 
 A calibre plugin for managing Marvin, an iOS reader application.
-© 2013 Gregory Riker
+© 2013-2014 Gregory Riker
 
 Version history:
+1.1.1 [01 January 2014]
+ • Revised annotations merging algorithm
+ • Requires minimum iOSRA version of 1.3.1
+ • Updated cover fetching to match Marvin changes in 2.6
+ • Revised warning dialog when iOSRA not installed
+ • Improved handling of publication dates earlier than 1000 AD
+ • Various UI improvements
 1.1.0 [10 December 2013]
  • Added support for multiple libraries
  • Reconfigured main window to include busy status indicator instead of popups
