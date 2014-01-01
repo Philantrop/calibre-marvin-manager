@@ -16,6 +16,7 @@ from time import sleep
 from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup
+from calibre.ebooks.metadata import title_sort
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.gui2 import Application
 from calibre.gui2.dialogs.message_box import MessageBox
@@ -108,7 +109,6 @@ class Book(Metadata):
         else:
             Metadata.__init__(self, title, authors=[author])
 
-    @property
     def title_sorter(self):
         return title_sort(self.title)
 

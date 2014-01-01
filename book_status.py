@@ -3099,7 +3099,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             '''
             # Title, Author sort by title_sort, author_sort
             if not book_data.title_sort:
-                book_data.title_sort = book_data.title_sort()
+                book_data.title_sort = book_data.title_sorter()
             title = SortableTableWidgetItem(
                 book_data.title,
                 book_data.title_sort.upper())
