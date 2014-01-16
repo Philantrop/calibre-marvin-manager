@@ -556,13 +556,15 @@ class MarkupTableModel(QAbstractTableModel):
 
         elif role == Qt.BackgroundRole and self.show_match_colors:
             match_quality = self.get_match_quality(row)
-            if match_quality == 4:
+            if match_quality == BookStatusDialog.GRAY:
+                return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, 0.90)))
+            if match_quality == BookStatusDialog.GREEN:
                 return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
-            elif match_quality == 3:
+            elif match_quality == BookStatusDialog.YELLOW:
                 return QVariant(QBrush(QColor.fromHsvF(self.YELLOW_HUE, self.SATURATION, self.HSVALUE)))
-            elif match_quality == 2:
+            elif match_quality == BookStatusDialog.ORANGE:
                 return QVariant(QBrush(QColor.fromHsvF(self.ORANGE_HUE, self.SATURATION, self.HSVALUE)))
-            elif match_quality == 1:
+            elif match_quality == BookStatusDialog.RED:
                 return QVariant(QBrush(QColor.fromHsvF(self.RED_HUE, self.SATURATION, self.HSVALUE)))
             else:
                 return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, self.HSVALUE)))
@@ -956,6 +958,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
     # Match quality color constants
     if True:
+        GRAY = 5
         GREEN = 4
         YELLOW = 3
         ORANGE = 2
@@ -3051,13 +3054,17 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 # YELLOW: Soft match - hash match,
                 match_quality = self.YELLOW
 
+            elif book_data.on_device is not None:
+                # GRAY: Book is in calibre, but unmatched in Marvin
+                match_quality = self.GRAY
+
             elif (book_data.hash in self.marvin_hash_map and
                   len(self.marvin_hash_map[book_data.hash]) > 1):
                 # RED: Marvin-only duplicate
                 match_quality = self.RED
 
             if self.opts.prefs.get('development_mode', False):
-                MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN']
+                MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN', 'GRAY']
                 self._log("match_quality: {0}".format(MATCH_COLORS[match_quality]))
 
             return match_quality
@@ -3637,6 +3644,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         else:
             self._log("hash_map already generated")
 
+        # Dump the hash_map
+        if self.opts.prefs.get('development_mode', False):
+            self._log("{0:^32} {1:^42}".format("HASH", "UUID"))
+            for hash in sorted(library_hash_map):
+                self._log("{0:<32} {1}".format(hash, library_hash_map[hash]))
+
         # Scan Marvin
         installed_books = self._get_installed_books()
 
@@ -4176,7 +4189,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     cid = self.library_uuid_map[uuid]['id']
                     mi = db.get_metadata(cid, index_is_id=True, get_cover=True, cover_as_data=True)
                     if self.opts.prefs.get('development_mode', False):
-                        self._log("UUID match")
+                        self._log("UUID match: %s" % uuid)
                 elif title in self.library_title_map:
                     _cid = self.library_title_map[title]['id']
                     _mi = db.get_metadata(_cid, index_is_id=True, get_cover=True, cover_as_data=True)
@@ -4418,9 +4431,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             '''
             Given a uuid, return the on_device status of the book
             '''
-            if self.opts.prefs.get('development_mode', False):
-                self._log_location()
-
             ans = None
             if cid:
                 db = self.opts.gui.current_db
@@ -4637,8 +4647,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if self.opts.prefs.get('development_mode', False):
                     self._log("%d cached books from Marvin:" % len(cached_books))
                     for book in installed_books:
-                        self._log("%s pubdate: %s" % (installed_books[book].title,
-                                                         repr(installed_books[book].pubdate)))
+                        self._log("%s %s" % (installed_books[book].title,
+                                             repr(installed_books[book].authors)))
             else:
                 self._log("Marvin database is damaged")
                 title = "Damaged database"
