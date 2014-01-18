@@ -3040,11 +3040,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 # ORANGE: Duplicate of calibre copy
                 match_quality = self.MATCH_COLORS.index('ORANGE')
 
-            elif (book_data.on_device is not None and
-                  book_data.uuid and book_data.uuid in book_data.matches):
-                # MAGENTA: Duplicates in calibre with different UUIDs, Marvin hash match
-                match_quality = self.MATCH_COLORS.index('MAGENTA')
-
             elif (book_data.on_device == _main and book_data.metadata_mismatches):
                 # YELLOW: Soft match - hash match,
                 match_quality = self.MATCH_COLORS.index('YELLOW')
@@ -3054,6 +3049,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                   [book_data.uuid] == book_data.matches):
                 # YELLOW: Soft match - hash match,
                 match_quality = self.MATCH_COLORS.index('YELLOW')
+
+            elif (book_data.on_device is not None and
+                  book_data.uuid and
+                  book_data.uuid in book_data.matches):
+                # MAGENTA: Duplicates in calibre with different UUIDs, Marvin hash match
+                match_quality = self.MATCH_COLORS.index('MAGENTA')
 
             elif book_data.on_device is not None:
                 # GRAY: Book is in calibre, but unmatched in Marvin
@@ -4954,10 +4955,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Scan for multiple UUIDs matching single hash
         '''
         self._log_location()
+
+        # Build a list of Marvin hashes
+        marvin_hashes = [v.hash for v in self.installed_books.values()]
+
         library_hash_map = self.library_scanner.hash_map
         duplicates = []
         for hash in sorted(library_hash_map):
-            if len(library_hash_map[hash]) > 1:
+            if len(library_hash_map[hash]) > 1 and hash in marvin_hashes:
                 titles = []
                 for uuid in library_hash_map[hash]:
                     titles.append("{0} ({1})".format(
