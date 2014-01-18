@@ -5061,12 +5061,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 else:
                     mtime = db.format_last_modified(cid, 'epub')
                     if cached_hash['mtime'] == time.mktime(mtime.timetuple()):
-                        #self._log("fetching cached_hash from db")
                         hash = cached_hash['hash']
                         uuid_map[uuid]['hash'] = hash
                     else:
                         # Book has been modified since we generated the hash
-                        #self._log("generating new cached_hash")
+                        if self.opts.prefs.get('development_mode', False):
+                            self._log("generating new hash for '{0}'".format(uuid_map[uuid]['title']))
                         hash = _get_hash(cid)
                         uuid_map[uuid]['hash'] = hash
 
