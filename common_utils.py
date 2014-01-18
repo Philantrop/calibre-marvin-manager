@@ -404,9 +404,9 @@ class ProgressBar(QDialog, Logger):
 class IndexLibrary(QThread):
     '''
     Build indexes of library:
-    {title: {'authors':…, 'id':…, 'uuid:'…}, …}
-    {uuid:  {'author's:…, 'id':…, 'title':…, 'path':…}, …}
-    {id:    {'uuid':…, 'author':…}, …}
+    title_map: {title: {'authors':…, 'id':…, 'uuid:'…}, …}
+    uuid_map:  {uuid:  {'author's:…, 'id':…, 'title':…, 'path':…}, …}
+    id_map:    {id:    {'uuid':…, 'author':…}, …}
     '''
 
     def __init__(self, parent):
@@ -435,6 +435,7 @@ class IndexLibrary(QThread):
         '''
         Generate a reverse dict of hash:[uuid] from self.uuid_map
         Allow for multiple uuids with same hash (dupes)
+        Hashes are added to uuid_map in book_status:_scan_library_books()
         '''
         hash_map = {}
         for uuid, v in self.uuid_map.items():

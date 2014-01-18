@@ -516,10 +516,11 @@ class MarkupTableModel(QAbstractTableModel):
 
     SATURATION = 0.40
     HSVALUE = 1.0
-    RED_HUE = 0.0
-    ORANGE_HUE = 0.08325
-    YELLOW_HUE = 0.1665
-    GREEN_HUE = 0.333
+    RED_HUE = 0.0           #   0/360
+    ORANGE_HUE = 0.08325    #  30/360
+    YELLOW_HUE = 0.1665     #  60/360
+    GREEN_HUE = 0.333       # 120/360
+    PINK_HUE = 0.875        # 315/360
     WHITE_HUE = 1.0
 
     # Match quality colors
@@ -556,15 +557,17 @@ class MarkupTableModel(QAbstractTableModel):
 
         elif role == Qt.BackgroundRole and self.show_match_colors:
             match_quality = self.get_match_quality(row)
-            if match_quality == BookStatusDialog.GRAY:
+            if match_quality == BookStatusDialog.MATCH_COLORS.index('GRAY'):
                 return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, 0.90)))
-            if match_quality == BookStatusDialog.GREEN:
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('PINK'):
+                return QVariant(QBrush(QColor.fromHsvF(self.PINK_HUE, self.SATURATION, self.HSVALUE)))
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('GREEN'):
                 return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
-            elif match_quality == BookStatusDialog.YELLOW:
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('YELLOW'):
                 return QVariant(QBrush(QColor.fromHsvF(self.YELLOW_HUE, self.SATURATION, self.HSVALUE)))
-            elif match_quality == BookStatusDialog.ORANGE:
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('ORANGE'):
                 return QVariant(QBrush(QColor.fromHsvF(self.ORANGE_HUE, self.SATURATION, self.HSVALUE)))
-            elif match_quality == BookStatusDialog.RED:
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('RED'):
                 return QVariant(QBrush(QColor.fromHsvF(self.RED_HUE, self.SATURATION, self.HSVALUE)))
             else:
                 return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, self.HSVALUE)))
@@ -856,9 +859,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom column content in calibre for the selected books.<br/>Assign custom column mappings in the <i>Customize plugin…</i> dialog.</p>"
     HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
-    MAX_BOOKS_BEFORE_SPINNER = 4
+    MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN', 'PINK', 'GRAY']
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
+    MAX_BOOKS_BEFORE_SPINNER = 4
     MAX_ELEMENT_DEPTH = 6
     UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
     UTF_8_BOM = r'\xef\xbb\xbf'
@@ -955,15 +959,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         GENERAL_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
         <command type=\'{0}\' timestamp=\'{1}\'>
         </command>'''
-
-    # Match quality color constants
-    if True:
-        GRAY = 5
-        GREEN = 4
-        YELLOW = 3
-        ORANGE = 2
-        RED = 1
-        WHITE = 0
 
     marvin_device_status_changed = pyqtSignal(str)
 
@@ -1368,6 +1363,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.refresh_custom_columns(all_books=True, report_results=False)
             self._busy_panel_teardown()
             self._clear_selected_rows()
+
+        # Scan calibre hashes for duplicates, inform user
+        self._scan_for_calibre_duplicates()
 
     def launch_collections_scanner(self):
         '''
@@ -3011,11 +3009,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _generate_match_quality(book_data):
             '''
-            4: Marvin uuid matches calibre uuid (hard match): Green
-            3: Marvin hash matches calibre hash (soft match): Yellow
-            2: Calibre hash duplicates: Orange
-            1: Marvin hash duplicates: Red
-            0: Marvin only, single copy: White
+            GRAY:   Book exists in Marvin and calibre, but no match identified
+            PINK:   Book has multiple UUIDs in calibre, one matched in Marvin
+            GREEN:  Marvin uuid matches calibre uuid (hard match)
+            YELLOW: Marvin hash matches calibre hash (soft match)
+            ORANGE: Calibre hash duplicates:
+            RED:    Marvin hash duplicates
+            WHITE:  Marvin only, single copy
             '''
 
             if self.opts.prefs.get('development_mode', False):
@@ -3029,43 +3029,47 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 for k, v in book_data.metadata_mismatches.items():
                     self._log(" {0}: {1}".format(k, v))
 
-            match_quality = self.WHITE
+            match_quality = self.MATCH_COLORS.index('WHITE')
             _main = _('Main')
 
             if (book_data.uuid and
                 [book_data.uuid] == book_data.matches and
                 not book_data.metadata_mismatches):
                 # GREEN: Hard match - uuid match, metadata match
-                match_quality = self.GREEN
+                match_quality = self.MATCH_COLORS.index('GREEN')
 
             elif (book_data.on_device is not None and
                   book_data.on_device.startswith("{0} (".format(_main)) and
                   book_data.uuid and book_data.uuid in book_data.matches):
                 # ORANGE: Duplicate of calibre copy
-                match_quality = self.ORANGE
+                match_quality = self.MATCH_COLORS.index('ORANGE')
+
+            elif (book_data.on_device is not None and
+                  book_data.uuid and book_data.uuid in book_data.matches):
+                # PINK: Duplicates in calibre with different UUIDs, Marvin hash match
+                match_quality = self.MATCH_COLORS.index('PINK')
 
             elif (book_data.on_device == _main and book_data.metadata_mismatches):
                 # YELLOW: Soft match - hash match,
-                match_quality = self.YELLOW
+                match_quality = self.MATCH_COLORS.index('YELLOW')
 
             elif (book_data.on_device is not None and
                   book_data.uuid and
                   [book_data.uuid] == book_data.matches):
                 # YELLOW: Soft match - hash match,
-                match_quality = self.YELLOW
+                match_quality = self.MATCH_COLORS.index('YELLOW')
 
             elif book_data.on_device is not None:
                 # GRAY: Book is in calibre, but unmatched in Marvin
-                match_quality = self.GRAY
+                match_quality = self.MATCH_COLORS.index('GRAY')
 
             elif (book_data.hash in self.marvin_hash_map and
                   len(self.marvin_hash_map[book_data.hash]) > 1):
                 # RED: Marvin-only duplicate
-                match_quality = self.RED
+                match_quality = self.MATCH_COLORS.index('RED')
 
             if self.opts.prefs.get('development_mode', False):
-                MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN', 'GRAY']
-                self._log("match_quality: {0}".format(MATCH_COLORS[match_quality]))
+                self._log("match_quality: {0}".format(self.MATCH_COLORS[match_quality]))
 
             return match_quality
 
@@ -3401,6 +3405,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             MessageBox(MessageBox.INFO, title, msg,
                        show_copy_button=False).exec_()
 
+    def _dump_hash_map(self, library_hash_map):
+        '''
+        '''
+        self._log_location()
+        self._log("{0:^32} {1:^32} {2:^42}".format("HASH", "TITLE", "UUID"))
+        for hash in sorted(library_hash_map):
+            uuid = library_hash_map[hash][0]
+            title = self.library_scanner.uuid_map[uuid]['title']
+            if len(title) > 30:
+                title = title[0:30] + '…'
+            self._log("{0:<32} {1:<32} {2}".format(hash, title[0:31], library_hash_map[hash]))
+
     def _fetch_annotations(self, update_gui=True, report_results=False):
         '''
         Retrieve formatted annotations
@@ -3646,9 +3662,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Dump the hash_map
         if self.opts.prefs.get('development_mode', False):
-            self._log("{0:^32} {1:^42}".format("HASH", "UUID"))
-            for hash in sorted(library_hash_map):
-                self._log("{0:<32} {1}".format(hash, library_hash_map[hash]))
+            self._dump_hash_map(library_hash_map)
 
         # Scan Marvin
         installed_books = self._get_installed_books()
@@ -4938,6 +4952,31 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         except:
             import traceback
             self._log(traceback.format_exc())
+
+    def _scan_for_calibre_duplicates(self):
+        '''
+        Scan for multiple UUIDs matching single hash
+        '''
+        self._log_location()
+        library_hash_map = self.library_scanner.hash_map
+        duplicates = []
+        for hash in sorted(library_hash_map):
+            if len(library_hash_map[hash]) > 1:
+                titles = []
+                for uuid in library_hash_map[hash]:
+                    titles.append("{0} ({1})".format(
+                        self.library_scanner.uuid_map[uuid]['title'],
+                        self.library_scanner.uuid_map[uuid]['id']))
+                duplicates.append(titles)
+        if duplicates:
+            details = ''
+            for duplicate_set in duplicates:
+                details += '- ' + ', '.join(duplicate_set) + '\n'
+            title = "Duplicate content detected in calibre library"
+            msg = ("<p>Duplicate content detected while scanning calibre library.<p>" +
+                   "<p>Click <b>Show details</b> for more information.</p>")
+            MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
+                       show_copy_button=True).exec_()
 
     def _scan_library_books(self, library_scanner):
         '''
