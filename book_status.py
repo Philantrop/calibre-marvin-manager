@@ -523,16 +523,6 @@ class MarkupTableModel(QAbstractTableModel):
     MAGENTA_HUE = 0.875        # 315/360
     WHITE_HUE = 1.0
 
-    """
-    # Match quality colors
-    if True:
-        GREEN = 4
-        YELLOW = 3
-        ORANGE = 2
-        RED = 1
-        WHITE = 0
-    """
-
     def __init__(self, parent=None, centered_columns=[], right_aligned_columns=[], *args):
         """
         datain: a list of lists
