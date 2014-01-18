@@ -84,10 +84,20 @@
         font-size:smaller;
     }
     tr.header {
-	background-color: #C8C8C8;
+	//background-color: #C8C8C8;
 	font-family: Tahoma, Geneva, sans-serif;
 	font-size: small;
 	text-align: left;
+    }
+    tr.gray {
+        background-color: #E5E5E5;
+        font-family:"Lucida Console", Monaco, monospace;
+        font-size:smaller;
+    }
+    tr.magenta {
+        background-color: #FF99E5;
+        font-family:"Lucida Console", Monaco, monospace;
+        font-size:smaller;
     }
     tr.green {
         background-color: #99FF99;
@@ -187,6 +197,16 @@
       <td>in calibre library</td>
       <td>Match status</td>
     </tr>
+    <tr class="gray">
+      <td>Gray</td>
+      <td class="checked">&#x2713;</td>
+      <td>Installed in calibre and Marvin, no match found.</td>
+    </tr>
+    <tr class="magenta">
+      <td>Magenta</td>
+      <td class="checked">multiple</td>
+      <td>Installed in calibre and Marvin, more than one copy in calibre.</td>
+    </tr>
     <tr class="green">
       <td>Green</td>
       <td class="checked">&#x2713;</td>
@@ -204,12 +224,12 @@
     </tr>
     <tr class="white">
       <td>White</td>
-      <td class="checked">&#x2715;</td>
+      <td class="checked">&nbsp;</td>
       <td>Installed in Marvin. The book is not in your calibre library.</td>
     </tr>
     <tr class="red">
       <td>Red</td>
-      <td class="checked">&#x2715;</td>
+      <td class="checked">&nbsp;</td>
       <td>More than one copy in Marvin. The book is not in your calibre library.</td>
     </tr>
   </table>

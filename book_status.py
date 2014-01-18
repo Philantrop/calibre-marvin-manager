@@ -520,9 +520,10 @@ class MarkupTableModel(QAbstractTableModel):
     ORANGE_HUE = 0.08325    #  30/360
     YELLOW_HUE = 0.1665     #  60/360
     GREEN_HUE = 0.333       # 120/360
-    PINK_HUE = 0.875        # 315/360
+    MAGENTA_HUE = 0.875        # 315/360
     WHITE_HUE = 1.0
 
+    """
     # Match quality colors
     if True:
         GREEN = 4
@@ -530,6 +531,7 @@ class MarkupTableModel(QAbstractTableModel):
         ORANGE = 2
         RED = 1
         WHITE = 0
+    """
 
     def __init__(self, parent=None, centered_columns=[], right_aligned_columns=[], *args):
         """
@@ -559,8 +561,8 @@ class MarkupTableModel(QAbstractTableModel):
             match_quality = self.get_match_quality(row)
             if match_quality == BookStatusDialog.MATCH_COLORS.index('GRAY'):
                 return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, 0.90)))
-            elif match_quality == BookStatusDialog.MATCH_COLORS.index('PINK'):
-                return QVariant(QBrush(QColor.fromHsvF(self.PINK_HUE, self.SATURATION, self.HSVALUE)))
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('MAGENTA'):
+                return QVariant(QBrush(QColor.fromHsvF(self.MAGENTA_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('GREEN'):
                 return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('YELLOW'):
@@ -624,13 +626,17 @@ class MarkupTableModel(QAbstractTableModel):
             else:
                 match_quality = self.get_match_quality(row)
                 tip = '<p>'
-                if match_quality == self.GREEN:
+                if match_quality == BookStatusDialog.MATCH_COLORS.index('GREEN'):
                     tip += 'Matched in calibre library'
-                elif match_quality == self.YELLOW:
+                elif match_quality == BookStatusDialog.MATCH_COLORS.index('YELLOW'):
                     tip += 'Matched in calibre library with differing metadata'
-                elif match_quality == self.ORANGE:
+                elif match_quality == BookStatusDialog.MATCH_COLORS.index('ORANGE'):
                     tip += 'Duplicate of matched book in calibre library'
-                elif match_quality == self.RED:
+                elif match_quality == BookStatusDialog.MATCH_COLORS.index('GRAY'):
+                    tip += 'Not matched in calibre library'
+                elif match_quality == BookStatusDialog.MATCH_COLORS.index('MAGENTA'):
+                    tip += 'Multiple copies in calibre library'
+                elif match_quality == BookStatusDialog.MATCH_COLORS.index('RED'):
                     tip += 'Duplicated in Marvin library'
                 else:
                     tip += 'Book in Marvin library only'
@@ -859,7 +865,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom column content in calibre for the selected books.<br/>Assign custom column mappings in the <i>Customize plugin…</i> dialog.</p>"
     HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
-    MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN', 'PINK', 'GRAY']
+    MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN', 'MAGENTA', 'GRAY']
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
     MAX_BOOKS_BEFORE_SPINNER = 4
@@ -1970,7 +1976,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             book_id = self._selected_book_id(row)
             cid = self._selected_cid(row)
             mismatches = self.installed_books[book_id].metadata_mismatches
-            enable_metadata_updates = self.tm.get_match_quality(row) >= self.YELLOW
+            enable_metadata_updates = self.tm.get_match_quality(row) >= self.MATCH_COLORS.index('YELLOW')
 
             dlg.initialize(self,
                            book_id,
@@ -3009,13 +3015,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _generate_match_quality(book_data):
             '''
-            GRAY:   Book exists in Marvin and calibre, but no match identified
-            PINK:   Book has multiple UUIDs in calibre, one matched in Marvin
-            GREEN:  Marvin uuid matches calibre uuid (hard match)
-            YELLOW: Marvin hash matches calibre hash (soft match)
-            ORANGE: Calibre hash duplicates:
-            RED:    Marvin hash duplicates
-            WHITE:  Marvin only, single copy
+            GRAY:      Book exists in Marvin and calibre, but no match identified
+            MAGENTA:   Book has multiple UUIDs in calibre, one matched in Marvin
+            GREEN:     Marvin uuid matches calibre uuid (hard match)
+            YELLOW:    Marvin hash matches calibre hash (soft match)
+            ORANGE:    Calibre hash duplicates:
+            RED:       Marvin hash duplicates
+            WHITE:     Marvin only, single copy
             '''
 
             if self.opts.prefs.get('development_mode', False):
@@ -3046,8 +3052,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             elif (book_data.on_device is not None and
                   book_data.uuid and book_data.uuid in book_data.matches):
-                # PINK: Duplicates in calibre with different UUIDs, Marvin hash match
-                match_quality = self.MATCH_COLORS.index('PINK')
+                # MAGENTA: Duplicates in calibre with different UUIDs, Marvin hash match
+                match_quality = self.MATCH_COLORS.index('MAGENTA')
 
             elif (book_data.on_device == _main and book_data.metadata_mismatches):
                 # YELLOW: Soft match - hash match,
@@ -3380,9 +3386,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             if row:
                                 # Is this book in library or Marvin only?
                                 if self.tm.get_calibre_id(row):
-                                    new = self.GREEN
+                                    new = self.MATCH_COLORS.index('GREEN')
                                 else:
-                                    new = self.WHITE
+                                    new = self.MATCH_COLORS.index('WHITE')
 
                                 old = self.tm.get_match_quality(row)
                                 self.tm.set_match_quality(row, new)
@@ -4974,6 +4980,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 details += '- ' + ', '.join(duplicate_set) + '\n'
             title = "Duplicate content detected in calibre library"
             msg = ("<p>Duplicate content detected while scanning calibre library.<p>" +
+                   "<p>Marvin books with multiple matching calibre books will be displayed " +
+                   "with a magenta background in the Marvin XD window.</p>" +
                    "<p>Click <b>Show details</b> for more information.</p>")
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
                        show_copy_button=True).exec_()
@@ -5559,7 +5567,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Update metadata match quality in the visible model
         old = self.tm.get_match_quality(model_row)
-        new = self.GREEN
+        new = self.MATCH_COLORS.index('GREEN')
         self.tm.set_match_quality(model_row, new)
         self.updated_match_quality[model_row] = {'book_id': book_id,
                                                  'old': old,
@@ -6116,10 +6124,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Update metadata match quality in the visible model
         old = self.tm.get_match_quality(model_row)
-        self.tm.set_match_quality(model_row, self.GREEN)
+        self.tm.set_match_quality(model_row, self.MATCH_COLORS.index('GREEN'))
         self.updated_match_quality[model_row] = {'book_id': book_id,
                                                  'old': old,
-                                                 'new': self.GREEN}
+                                                 'new': self.MATCH_COLORS.index('GREEN')}
         return None
 
     def _update_metadata(self, action):
@@ -6135,7 +6143,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         for row in selected_books:
             book_id = self._selected_book_id(row)
-            if self.tm.get_match_quality(row) == self.ORANGE:
+            if self.tm.get_match_quality(row) == self.MATCH_COLORS.index('ORANGE'):
                 title = "Duplicate book"
                 msg = ("<p>'{0}' is a duplicate.</p>".format(self.installed_books[book_id].title) +
                        "<p>Remove duplicates before updating metadata.</p>")
