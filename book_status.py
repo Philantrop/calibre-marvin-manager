@@ -4965,7 +4965,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if len(library_hash_map[hash]) > 1 and hash in marvin_hashes:
                 titles = []
                 for uuid in library_hash_map[hash]:
-                    titles.append("{0} ({1})".format(
+                    titles.append("'{0}' ({1})".format(
                         self.library_scanner.uuid_map[uuid]['title'],
                         self.library_scanner.uuid_map[uuid]['id']))
                 duplicates.append(titles)
@@ -4973,11 +4973,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             details = ''
             for duplicate_set in duplicates:
                 details += '- ' + ', '.join(duplicate_set) + '\n'
-            title = "Duplicate content detected in calibre library"
-            msg = ("<p>Duplicate content detected while scanning calibre library.<p>" +
-                   "<p>Marvin books with multiple matching calibre books will be displayed " +
-                   "with a magenta background in the Marvin XD window.</p>" +
-                   "<p>Click <b>Show details</b> for more information.</p>")
+            title = 'Duplicate content'
+            msg = ('<p>Duplicates were detected while scanning your calibre library.<p>' +
+                   '<p>Marvin books matching multiple calibre books will be displayed ' +
+                   'with a ' +
+                   '<span style="background-color:#FF99E5">magenta background</span> ' +
+                   'in the Marvin XD window.</p>' +
+                   '<p>Click <b>Show details</b> to display duplicates.</p>')
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
                        show_copy_button=True).exec_()
 
