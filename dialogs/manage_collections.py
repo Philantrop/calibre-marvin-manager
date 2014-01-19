@@ -28,7 +28,7 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor, Logger):
     .rename_button
     .delete_button
     '''
-    marvin_device_status_changed = pyqtSignal(str)
+    marvin_device_status_changed = pyqtSignal(dict)
 
     def __init__(self, parent, tag_to_match, data, key, connected_device):
         QDialog.__init__(self, parent.opts.gui)
@@ -106,10 +106,11 @@ class MyDeviceCategoryEditor(DeviceCategoryEditor, Logger):
         if item.text() != item.initial_text():
             self.to_rename[unicode(item.initial_text())] = unicode(item.text())
 
-    def marvin_status_changed(self, command):
+    def marvin_status_changed(self, cmd_dict):
         '''
         '''
-        self.marvin_device_status_changed.emit(command)
+        self.marvin_device_status_changed.emit(cmd_dict)
+        command = cmd_dict['cmd']
 
         self._log_location(command)
 

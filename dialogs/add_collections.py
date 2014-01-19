@@ -28,7 +28,7 @@ if True:
 class AddCollectionsDialog(QDialog, Ui_Dialog, Logger):
 
 
-    marvin_device_status_changed = pyqtSignal(str)
+    marvin_device_status_changed = pyqtSignal(dict)
 
     def __init__(self, parent, connected_device):
         QDialog.__init__(self, parent.opts.gui)
@@ -94,11 +94,12 @@ class AddCollectionsDialog(QDialog, Ui_Dialog, Logger):
         # Set focus away from edit control so we can see default text
         self.bb.setFocus()
 
-    def marvin_status_changed(self, command):
+    def marvin_status_changed(self, cmd_dict):
         '''
 
         '''
-        self.marvin_device_status_changed.emit(command)
+        self.marvin_device_status_changed.emit(cmd_dict)
+        command = cmd_dict['cmd']
 
         self._log_location(command)
 

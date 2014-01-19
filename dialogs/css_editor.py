@@ -80,7 +80,7 @@ SAMPLE_HTML = '''
 
 class CSSEditorDialog(SizePersistedDialog, Ui_Dialog):
 
-    marvin_device_status_changed = pyqtSignal(str)
+    marvin_device_status_changed = pyqtSignal(dict)
 
     def accept(self):
         self._log_location()
@@ -195,11 +195,12 @@ class CSSEditorDialog(SizePersistedDialog, Ui_Dialog):
             html = self.styled_soup.renderContents()
         return html
 
-    def marvin_status_changed(self, command):
+    def marvin_status_changed(self, cmd_dict):
         '''
 
         '''
-        self.marvin_device_status_changed.emit(command)
+        self.marvin_device_status_changed.emit(cmd_dict)
+        command = cmd_dict['cmd']
 
         self._log_location(command)
 

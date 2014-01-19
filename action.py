@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import atexit, os, sys, threading
+import atexit, cPickle as pickle, os, sys, threading
 
 from functools import partial
 from lxml import etree, html
@@ -59,7 +59,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
     action_add_menu = True
     action_menu_clone_qaction = True
 
-    marvin_device_status_changed = pyqtSignal(str)
+    marvin_device_status_changed = pyqtSignal(dict)
     plugin_device_connection_changed = pyqtSignal(object)
 
     def about_to_show_menu(self):
@@ -427,18 +427,22 @@ class MarvinManagerAction(InterfaceAction, Logger):
         else:
             self.show_help()
 
-    def marvin_status_changed(self, command):
+    def marvin_status_changed(self, cmd_dict):
         '''
         The Marvin driver emits a signal after completion of protocol commands.
         This method receives the notification. If the content on Marvin changed
         as a result of the operation, we need to invalidate our cache of Marvin's
         installed books.
         '''
-        self.marvin_device_status_changed.emit(command)
+        self.marvin_device_status_changed.emit(cmd_dict)
+        command = cmd_dict['cmd']
 
-        self._log_location(command)
+        self._log_location(cmd_dict)
         if command in ['delete_books', 'upload_books']:
             self.marvin_content_updated = True
+
+        if command == 'remove_book':
+            self.remove_path_from_hash_cache(cmd_dict['path'])
 
     def nuke_annotations(self):
         db = self.gui.current_db
@@ -724,6 +728,44 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if process_dropbox:
                 self.process_dropbox_sync_records()
                 self.dropbox_processed = True
+
+    def remove_path_from_hash_cache(self, path):
+        '''
+        '''
+        self._log_location(path)
+        rhc = '/'.join([BookStatusDialog.REMOTE_CACHE_FOLDER,
+            BookStatusDialog.HASH_CACHE_FS])
+
+        if self.ios.exists(rhc):
+            # Copy remote hash_cache to local file
+            lhc = os.path.join(self.connected_device.temp_dir,
+                BookStatusDialog.HASH_CACHE_FS)
+            with open(lhc, 'wb') as out:
+                self.ios.copy_from_idevice(str(rhc), out)
+
+            # Load hash_cache
+            with open(lhc, 'rb') as hcf:
+                hash_cache = pickle.load(hcf)
+
+            # Scan the cached hashes
+            key_found = False
+            for key in hash_cache:
+                if key == path:
+                    self._log("%s removed from hash_cache" % key)
+                    key_found = True
+                    hash_cache.pop(key)
+                    break
+            else:
+                self._log("%s not found in hash_cache" % path)
+
+            if key_found:
+                # Write the edited hash_cache locally
+                with open(lhc, 'wb') as hcf:
+                    pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
+
+                # Copy to iDevice
+                self.ios.remove(str(rhc))
+                self.ios.copy_to_idevice(lhc, str(rhc))
 
     def reset_marvin_library(self):
         self._log_location("not implemented")

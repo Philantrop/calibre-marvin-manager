@@ -34,7 +34,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
     BORDER_WIDTH = 4
     COVER_ICON_SIZE = 200
 
-    marvin_device_status_changed = pyqtSignal(str)
+    marvin_device_status_changed = pyqtSignal(dict)
 
     def accept(self):
         self._log_location()
@@ -159,11 +159,12 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
         # Restore position
         self.resize_dialog()
 
-    def marvin_status_changed(self, command):
+    def marvin_status_changed(self, cmd_dict):
         '''
 
         '''
-        self.marvin_device_status_changed.emit(command)
+        self.marvin_device_status_changed.emit(cmd_dict)
+        command = cmd_dict['cmd']
 
         self._log_location(command)
 

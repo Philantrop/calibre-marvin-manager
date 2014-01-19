@@ -860,6 +860,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     MATH_TIMES = u" \u00d7 "
     MAX_BOOKS_BEFORE_SPINNER = 4
     MAX_ELEMENT_DEPTH = 6
+    REMOTE_CACHE_FOLDER = '/'.join(['/Library', 'calibre.mm'])
     UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
     UTF_8_BOM = r'\xef\xbb\xbf'
     WATCHDOG_TIMEOUT = 10.0
@@ -956,7 +957,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         <command type=\'{0}\' timestamp=\'{1}\'>
         </command>'''
 
-    marvin_device_status_changed = pyqtSignal(str)
+    marvin_device_status_changed = pyqtSignal(dict)
 
     def accept(self):
         self._log_location()
@@ -1211,7 +1212,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.local_cache_folder = self.parent.connected_device.temp_dir
         self.local_hash_cache = None
         self.marvin_cancellation_required = False
-        self.remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
         self.remote_hash_cache = None
         self.show_match_colors = self.prefs.get('show_match_colors', False)
         self.updated_match_quality = None
@@ -1382,11 +1382,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location()
         self._log("ids: %s" % repr(self.library_collections.ids))
 
-    def marvin_status_changed(self, command):
+    def marvin_status_changed(self, cmd_dict):
         '''
 
         '''
-        self.marvin_device_status_changed.emit(command)
+        self.marvin_device_status_changed.emit(cmd_dict)
+        command = cmd_dict['cmd']
 
         self._log_location(command)
 
@@ -2848,7 +2849,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             return s
 
         _local_debug = False
-        #self._log_location(os.path.basename(zipfile))
+        if _local_debug:
+            self._log_location(os.path.basename(zipfile))
 
         # Find the OPF file in the zipped ePub, extract a list of text files
         try:
@@ -2888,9 +2890,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if base in text_hrefs:
                 m.update(zi.filename)
                 m.update(str(zi.file_size))
+                for component in zi.date_time:
+                    m.update(str(component))
                 if _local_debug:
                     self._log(" adding filename %s" % (zi.filename))
                     self._log(" adding file_size %s" % (zi.file_size))
+                    self._log(" adding date_time %s" % (repr(zi.date_time)))
 
         if _local_debug:
             self._log("computed hexdigest: %s" % m.hexdigest())
@@ -3823,16 +3828,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         hash_map = {}
         for book_id in installed_books:
             hash = installed_books[book_id].hash
-            #title = installed_books[book_id].title
-#             self._log("%s: %s" % (title, hash))
             if hash in hash_map:
                 hash_map[hash].append(book_id)
             else:
                 hash_map[hash] = [book_id]
-
-#         for hash in hash_map:
-#             self._log("%s: %s" % (hash, hash_map[hash]))
-
         return hash_map
 
     def _generate_reading_progress(self, book_data):
@@ -4861,7 +4860,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Existing hash cache?
         lhc = os.path.join(self.local_cache_folder, self.HASH_CACHE_FS)
-        rhc = '/'.join([self.remote_cache_folder, self.HASH_CACHE_FS])
+        rhc = '/'.join([self.REMOTE_CACHE_FOLDER, self.HASH_CACHE_FS])
 
         cache_exists = (self.ios.exists(rhc) and
                         not self.opts.prefs.get('hash_caching_disabled'))
@@ -4880,10 +4879,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         else:
             # Confirm path to remote folder is valid store point
-            folder_exists = self.ios.exists(self.remote_cache_folder)
+            folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
             if not folder_exists:
-                self._log("creating remote_cache_folder %s" % repr(self.remote_cache_folder))
-                self.ios.mkdir(self.remote_cache_folder)
+                self._log("creating remote_cache_folder %s" % repr(self.REMOTE_CACHE_FOLDER))
+                self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
 
             # Create a local cache
             with open(lhc, 'wb') as hcf:
@@ -5070,10 +5069,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         uuid_map[uuid]['hash'] = hash
                     else:
                         # Book has been modified since we generated the hash
-                        if self.opts.prefs.get('development_mode', False):
-                            self._log("generating new hash for '{0}'".format(uuid_map[uuid]['title']))
                         hash = _get_hash(cid)
                         uuid_map[uuid]['hash'] = hash
+                        if self.opts.prefs.get('development_mode', False):
+                            self._log("generating new hash for '{0}': {1}".format(
+                                uuid_map[uuid]['title'], hash))
 
                         # Update db
                         cached_dict = {'mtime': time.mktime(mtime.timetuple()), 'hash': hash}
