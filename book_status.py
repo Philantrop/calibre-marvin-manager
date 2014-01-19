@@ -360,7 +360,7 @@ class MyTableView(QTableView):
 
             # If match_quality < YELLOW, metadata updates disabled
             enable_metadata_updates = True
-            if len(selected_books) == 1 and self.parent.tm.get_match_quality(row) < self.parent.YELLOW:
+            if len(selected_books) == 1 and self.parent.tm.get_match_quality(row) < BookStatusDialog.MATCH_COLORS.index('YELLOW'):
                 enable_metadata_updates = False
 
             ac = menu.addAction("Export metadata from calibre to Marvin")
@@ -855,7 +855,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom column content in calibre for the selected books.<br/>Assign custom column mappings in the <i>Customize plugin…</i> dialog.</p>"
     HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
-    MATCH_COLORS = ['WHITE', 'RED', 'ORANGE', 'YELLOW', 'GREEN', 'MAGENTA', 'GRAY']
+    MATCH_COLORS = ['GRAY', 'WHITE', 'RED', 'ORANGE', 'MAGENTA', 'YELLOW', 'GREEN']
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
     MAX_BOOKS_BEFORE_SPINNER = 4
@@ -3005,13 +3005,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _generate_match_quality(book_data):
             '''
-            GRAY:      Book exists in Marvin and calibre, but no match identified
-            MAGENTA:   Book has multiple UUIDs in calibre, one matched in Marvin
             GREEN:     Marvin uuid matches calibre uuid (hard match)
             YELLOW:    Marvin hash matches calibre hash (soft match)
+            MAGENTA:   Book has multiple UUIDs in calibre, one matched in Marvin
             ORANGE:    Calibre hash duplicates:
             RED:       Marvin hash duplicates
             WHITE:     Marvin only, single copy
+            GRAY:      Book exists in Marvin and calibre, but no match identified
             '''
 
             if self.opts.prefs.get('development_mode', False):
