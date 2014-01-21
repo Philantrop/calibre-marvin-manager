@@ -3030,10 +3030,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 for k, v in book_data.metadata_mismatches.items():
                     self._log(" {0}: {1}".format(k, v))
 
-            #match_quality = self.MATCH_COLORS.index('WHITE')
             _main = _('Main')
 
             '''
+            match_quality = self.MATCH_COLORS.index('WHITE')
             if (book_data.uuid and
                 [book_data.uuid] == book_data.matches and
                 not book_data.metadata_mismatches):
@@ -3074,30 +3074,37 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             '''
 
             if book_data.on_device is not None:
+                '''
+                Book is in calibre library.
+                Resolve to GREEN | YELLOW | ORANGE | MAGENTA | GRAY
+                '''
                 match_quality = self.MATCH_COLORS.index('GRAY')
 
                 if book_data.on_device.startswith("{0} (".format(_main)):
-                    # ORANGE: Calibre detects multiple copies
+                    ''' ORANGE: Calibre detects multiple copies '''
                     match_quality = self.MATCH_COLORS.index('ORANGE')
                 elif book_data.uuid:
                     if (book_data.uuid in book_data.matches and
                         len(book_data.matches) > 1):
-                        # MAGENTA: Multiple calibre UUIDs resolving to hash
+                        ''' MAGENTA: Multiple calibre UUIDs resolving to hash '''
                         match_quality = self.MATCH_COLORS.index('MAGENTA')
                     elif ([book_data.uuid] == book_data.matches and
                         not book_data.metadata_mismatches):
-                        # GREEN: Hard UUID match, no metadata mismatches
+                        ''' GREEN: Hard UUID match, no metadata mismatches '''
                         match_quality = self.MATCH_COLORS.index('GREEN')
                     elif ([book_data.uuid] == book_data.matches and
                         book_data.metadata_mismatches):
-                        # YELLOW: Hard UUID match with metadata mismatches
+                        ''' YELLOW: Hard UUID match with metadata mismatches '''
                         match_quality = self.MATCH_COLORS.index('YELLOW')
                     elif (book_data.uuid not in book_data.matches and
                         book_data.metadata_mismatches):
-                        # YELLOW: Foreign UUID with metadata mismatches
+                        ''' YELLOW: Foreign UUID with metadata mismatches '''
                         match_quality = self.MATCH_COLORS.index('YELLOW')
             else:
-                # Book is not in calibre.
+                '''
+                Book is not in calibre library
+                Resolve to WHITE | RED
+                '''
                 match_quality = self.MATCH_COLORS.index('WHITE')
 
                 if (book_data.hash in self.marvin_hash_map and
