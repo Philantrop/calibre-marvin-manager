@@ -3030,9 +3030,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 for k, v in book_data.metadata_mismatches.items():
                     self._log(" {0}: {1}".format(k, v))
 
-            match_quality = self.MATCH_COLORS.index('WHITE')
+            #match_quality = self.MATCH_COLORS.index('WHITE')
             _main = _('Main')
 
+            '''
             if (book_data.uuid and
                 [book_data.uuid] == book_data.matches and
                 not book_data.metadata_mismatches):
@@ -3069,6 +3070,39 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                   len(self.marvin_hash_map[book_data.hash]) > 1):
                 # RED: Marvin-only duplicate
                 match_quality = self.MATCH_COLORS.index('RED')
+
+            '''
+
+            if book_data.on_device is not None:
+                match_quality = self.MATCH_COLORS.index('GRAY')
+
+                if book_data.on_device.startswith("{0} (".format(_main)):
+                    # ORANGE: Calibre detects multiple copies
+                    match_quality = self.MATCH_COLORS.index('ORANGE')
+                elif book_data.uuid:
+                    if (book_data.uuid in book_data.matches and
+                        len(book_data.matches) > 1):
+                        # MAGENTA: Multiple calibre UUIDs resolving to hash
+                        match_quality = self.MATCH_COLORS.index('MAGENTA')
+                    elif ([book_data.uuid] == book_data.matches and
+                        not book_data.metadata_mismatches):
+                        # GREEN: Hard UUID match, no metadata mismatches
+                        match_quality = self.MATCH_COLORS.index('GREEN')
+                    elif ([book_data.uuid] == book_data.matches and
+                        book_data.metadata_mismatches):
+                        # YELLOW: Hard UUID match with metadata mismatches
+                        match_quality = self.MATCH_COLORS.index('YELLOW')
+                    elif (book_data.uuid not in book_data.matches and
+                        book_data.metadata_mismatches):
+                        # YELLOW: Foreign UUID with metadata mismatches
+                        match_quality = self.MATCH_COLORS.index('YELLOW')
+            else:
+                # Book is not in calibre.
+                match_quality = self.MATCH_COLORS.index('WHITE')
+
+                if (book_data.hash in self.marvin_hash_map and
+                    len(self.marvin_hash_map[book_data.hash]) > 1):
+                    match_quality = self.MATCH_COLORS.index('RED')
 
             if self.opts.prefs.get('development_mode', False):
                 self._log("match_quality: {0}".format(self.MATCH_COLORS[match_quality]))
@@ -5080,8 +5114,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         db.add_custom_book_data(cid, 'epub_hash', json.dumps(cached_dict))
 
             except:
-                # Book deleted since scan
-                pass
+                # Book deleted since scan?
+
+                if self.opts.prefs.get('development_mode', False):
+                    import traceback
+                    self._log(traceback.format_exc())
 
             pb.increment()
 
