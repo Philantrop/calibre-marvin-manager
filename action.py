@@ -441,8 +441,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
         if command in ['delete_books', 'upload_books']:
             self.marvin_content_updated = True
 
-        if command == 'remove_book':
-            self.remove_path_from_hash_cache(cmd_dict['path'])
+        if command == 'remove_books':
+            self.remove_paths_from_hash_cache(cmd_dict['paths'])
 
     def nuke_annotations(self):
         db = self.gui.current_db
@@ -729,10 +729,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.process_dropbox_sync_records()
                 self.dropbox_processed = True
 
-    def remove_path_from_hash_cache(self, path):
+    def remove_paths_from_hash_cache(self, paths):
         '''
+        Remove cached hashes when iOSRA deletes books
         '''
-        self._log_location(path)
+        self._log_location()
         rhc = '/'.join([BookStatusDialog.REMOTE_CACHE_FOLDER,
             BookStatusDialog.HASH_CACHE_FS])
 
@@ -748,20 +749,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 hash_cache = pickle.load(hcf)
 
             # Scan the cached hashes
-            key_found = False
-            for key in hash_cache:
-                if key == path:
+            updated_hash_cache = {}
+            updated = False
+            for key, value in hash_cache.items():
+                if key in paths:
                     self._log("%s removed from hash_cache" % key)
-                    key_found = True
-                    hash_cache.pop(key)
-                    break
-            else:
-                self._log("%s not found in hash_cache" % path)
+                    updated = True
+                else:
+                    updated_hash_cache[key] = hash
 
-            if key_found:
+            if updated:
                 # Write the edited hash_cache locally
                 with open(lhc, 'wb') as hcf:
-                    pickle.dump(hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
+                    pickle.dump(updated_hash_cache, hcf, pickle.HIGHEST_PROTOCOL)
 
                 # Copy to iDevice
                 self.ios.remove(str(rhc))
