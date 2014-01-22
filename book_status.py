@@ -3021,7 +3021,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             if self.opts.prefs.get('development_mode', False):
                 self._log_location("'{0}'".format(book_data.title))
-                self._log("uuid: {0}".format(repr(book_data.uuid)))
+                self._log("uuid ({1}): {0}".format(repr(book_data.uuid),
+                    'local' if book_data.uuid in self.library_uuid_map else 'foreign'))
                 self._log("matches: {0}".format(repr(book_data.matches)))
                 self._log("on_device: {0}".format(repr(book_data.on_device)))
                 self._log("hash: {0}".format(repr(book_data.hash)))
@@ -3096,7 +3097,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         book_data.metadata_mismatches):
                         ''' YELLOW: Hard UUID match with metadata mismatches '''
                         match_quality = self.MATCH_COLORS.index('YELLOW')
-                    elif (book_data.uuid not in book_data.matches and
+                    elif (book_data.uuid not in self.library_uuid_map and
                         book_data.metadata_mismatches):
                         ''' YELLOW: Foreign UUID with metadata mismatches '''
                         match_quality = self.MATCH_COLORS.index('YELLOW')
