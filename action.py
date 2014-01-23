@@ -777,7 +777,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self._log("%s removed from hash_cache" % key)
                     updated = True
                 else:
-                    updated_hash_cache[key] = hash
+                    updated_hash_cache[key] = value
 
             if updated:
                 # Write the edited hash_cache locally

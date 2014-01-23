@@ -3546,7 +3546,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Try getting the hash from the cache
         if path in self.hash_cache:
-            #self._log("returning hash from cache")
+            #self._log("returning hash from cache: %s" % self.hash_cache[path])
             return self.hash_cache[path]
 
         # Get a local copy of the book, generate hash
@@ -3558,7 +3558,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.ios.copy_from_idevice(str(rbp), out)
         except:
             # We have an invalid filename, but we need to return a unique hash
-            self._log("ERROR: Unable to open %s for output" % repr(lbp))
+            #self._log("ERROR: Unable to open %s for output" % repr(lbp))
             import traceback
             self._log(traceback.format_exc())
             m = hashlib.md5()
@@ -3568,6 +3568,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         hash = self._compute_epub_hash(lbp)
 
         # Add it to the hash_cache
+        self._log("adding hash to cache: %s" % hash)
         self.hash_cache[path] = hash
 
         # Delete the local copy
@@ -4699,8 +4700,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if self.opts.prefs.get('development_mode', False):
                     self._log("%d cached books from Marvin:" % len(cached_books))
                     for book in installed_books:
-                        self._log("%s %s" % (installed_books[book].title,
-                                             repr(installed_books[book].authors)))
+                        self._log("%s %s %s" % (installed_books[book].title,
+                                             repr(installed_books[book].authors),
+                                             installed_books[book].hash))
+
             else:
                 self._log("Marvin database is damaged")
                 title = "Damaged database"
