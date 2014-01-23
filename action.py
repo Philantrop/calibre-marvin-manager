@@ -321,24 +321,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if not self.prefs.get(pm, None):
                 self.prefs.set(pm, pref_map[pm])
 
-        # Clean up JSON file < v1.1.0
-        prefs_version = self.prefs.get("plugin_version", "0.0.0")
-        if prefs_version < "1.1.0":
-            self._log_location("Updating prefs to %d.%d.%d" %
-                self.interface_action_base_plugin.version)
-            for obsolete_setting in [
-                'annotations_field_comboBox', 'annotations_field_lookup',
-                'collection_field_comboBox', 'collection_field_lookup',
-                'date_read_field_comboBox', 'date_read_field_lookup',
-                'progress_field_comboBox', 'progress_field_lookup',
-                'read_field_comboBox', 'read_field_lookup',
-                'reading_list_field_comboBox', 'reading_list_field_lookup',
-                'word_count_field_comboBox', 'word_count_field_lookup']:
-                if self.prefs.get(obsolete_setting, None) is not None:
-                    self._log("removing obsolete entry '{0}'".format(obsolete_setting))
-                    self.prefs.__delitem__(obsolete_setting)
-            self.prefs.set('plugin_version', "%d.%d.%d" % self.interface_action_base_plugin.version)
-
     # subclass override
     def initialization_complete(self):
         self.rebuild_menus()
@@ -579,7 +561,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 connected_fs = getattr(self.connected_device, 'connected_fs', None)
                 if connected_fs and self.ios.exists(connected_fs):
 
-                    # Wait for the driver to be silent to explore connected.xml
+                    # Wait for the driver to be silent before exploring connected.xml
                     while self.connected_device.get_busy_flag():
                         Application.processEvents()
                     self.connected_device.set_busy_flag(True)
@@ -587,13 +569,15 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     # connection.keys(): ['timestamp', 'marvin', 'device', 'system']
                     connection = etree.fromstring(self.ios.read(connected_fs))
                     #self._log(etree.tostring(connection, pretty_print=True))
-                    self._log_location("%s running iOS %s" % (connection.get('device'), connection.get('system')))
+                    self._log("%s running iOS %s" % (connection.get('device'), connection.get('system')))
 
                     self.has_password = False
                     chp = connection.find('has_password')
                     if chp is not None:
                         self.has_password = bool(chp.text == "true")
                     self._log("has_password: %s" % self.has_password)
+
+                    self.process_updates()
 
                     self.connected_device.set_busy_flag(False)
             else:
@@ -636,6 +620,43 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self.launch_library_scanner()
         foo = PullDropboxUpdates(self)
     """
+
+    def process_updates(self):
+        '''
+        Handle any version-related maintenance here
+        '''
+        def _log_update():
+            self._log_location("updating prefs from %s to %s" %
+                (prefs_version, "%d.%d.%d" % self.interface_action_base_plugin.version))
+
+        prefs_version = self.prefs.get("plugin_version", "0.0.0")
+        updated = False
+
+        # Clean up JSON file < v1.1.0
+        if prefs_version < "1.1.0":
+            _log_update()
+            for obsolete_setting in [
+                'annotations_field_comboBox', 'annotations_field_lookup',
+                'collection_field_comboBox', 'collection_field_lookup',
+                'date_read_field_comboBox', 'date_read_field_lookup',
+                'progress_field_comboBox', 'progress_field_lookup',
+                'read_field_comboBox', 'read_field_lookup',
+                'reading_list_field_comboBox', 'reading_list_field_lookup',
+                'word_count_field_comboBox', 'word_count_field_lookup']:
+                if self.prefs.get(obsolete_setting, None) is not None:
+                    self._log("removing obsolete entry '{0}'".format(obsolete_setting))
+                    self.prefs.__delitem__(obsolete_setting)
+            updated = True
+
+        # Delete obsolete cached hashes
+        if prefs_version < "1.2.0":
+            _log_update()
+            self.developer_utilities('Delete calibre hashes')
+            self.developer_utilities('Delete Marvin hashes')
+            updated = True
+
+        if updated:
+            self.prefs.set('plugin_version', "%d.%d.%d" % self.interface_action_base_plugin.version)
 
     def rebuild_menus(self):
         self._log_location()
