@@ -317,6 +317,12 @@ class ConfigWidget(QWidget, Logger):
         self.column2_layout.addWidget(self.cfg_runtime_options_gb)
         self.cfg_runtime_options_qvl = QVBoxLayout(self.cfg_runtime_options_gb)
 
+        # ++++++++ Temporary markers ++++++++
+        self.temporary_markers_checkbox = QCheckBox('Apply temporary markers to duplicate and updated books')
+        self.temporary_markers_checkbox.setObjectName('apply_temporary_markers')
+        self.temporary_markers_checkbox.setToolTip('Apply temporary markers to duplicate and updated books')
+        self.cfg_runtime_options_qvl.addWidget(self.temporary_markers_checkbox)
+
         # ++++++++ Auto refresh checkbox ++++++++
         self.auto_refresh_checkbox = QCheckBox('Automatically refresh custom column content')
         self.auto_refresh_checkbox.setObjectName('auto_refresh_at_startup')
@@ -372,6 +378,7 @@ class ConfigWidget(QWidget, Logger):
         """
 
         # Restore general settings
+        self.temporary_markers_checkbox.setChecked(self.prefs.get('apply_temporary_markers', True))
         self.auto_refresh_checkbox.setChecked(self.prefs.get('auto_refresh_at_startup', False))
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
 
@@ -858,6 +865,7 @@ class ConfigWidget(QWidget, Logger):
         '''
 
         # Save general settings
+        self.prefs.set('apply_temporary_markers', self.temporary_markers_checkbox.isChecked())
         self.prefs.set('auto_refresh_at_startup', self.auto_refresh_checkbox.isChecked())
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
 

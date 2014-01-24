@@ -1361,7 +1361,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._clear_selected_rows()
 
         # Scan calibre hashes for duplicates, inform user
-        self._scan_for_calibre_duplicates()
+        soloed_books = self._report_calibre_duplicates()
+
+        # Scan for content updates, inform user
+        self._report_content_updates(soloed_books=soloed_books)
 
     def launch_collections_scanner(self):
         '''
@@ -3033,47 +3036,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             _main = _('Main')
 
-            '''
-            match_quality = self.MATCH_COLORS.index('WHITE')
-            if (book_data.uuid and
-                [book_data.uuid] == book_data.matches and
-                not book_data.metadata_mismatches):
-                # GREEN: Hard match - uuid match, metadata match
-                match_quality = self.MATCH_COLORS.index('GREEN')
-
-            elif (book_data.on_device is not None and
-                  book_data.on_device.startswith("{0} (".format(_main)) and
-                  book_data.uuid and book_data.uuid in book_data.matches):
-                # ORANGE: Duplicate of calibre copy
-                match_quality = self.MATCH_COLORS.index('ORANGE')
-
-            elif (book_data.on_device == _main and book_data.metadata_mismatches):
-                # YELLOW: Soft match - hash match,
-                match_quality = self.MATCH_COLORS.index('YELLOW')
-
-            elif (book_data.on_device is not None and
-                  book_data.uuid and
-                  [book_data.uuid] == book_data.matches):
-                # YELLOW: Soft match - hash match,
-                match_quality = self.MATCH_COLORS.index('YELLOW')
-
-            elif (book_data.on_device is not None and
-                  book_data.uuid and
-                  book_data.uuid in book_data.matches):
-                # MAGENTA: Duplicates in calibre with different UUIDs, Marvin hash match
-                match_quality = self.MATCH_COLORS.index('MAGENTA')
-
-            elif book_data.on_device is not None:
-                # GRAY: Book is in calibre, but unmatched in Marvin
-                match_quality = self.MATCH_COLORS.index('GRAY')
-
-            elif (book_data.hash in self.marvin_hash_map and
-                  len(self.marvin_hash_map[book_data.hash]) > 1):
-                # RED: Marvin-only duplicate
-                match_quality = self.MATCH_COLORS.index('RED')
-
-            '''
-
             if book_data.on_device is not None:
                 '''
                 Book is in calibre library.
@@ -3194,7 +3156,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             highlights = _generate_highlights(book_data)
             last_opened = _generate_last_opened(book_data)
             locked = _generate_locked_status(book_data)
-            match_quality = _generate_match_quality(book_data)
+            book_data.match_quality = _generate_match_quality(book_data)
             progress = self._generate_reading_progress(book_data)
             title = _generate_title(book_data)
             series = _generate_series(book_data)
@@ -3219,7 +3181,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 vocabulary,
                 self.CHECKMARK if book_data.deep_view_prepared else '',
                 articles,
-                match_quality,
+                book_data.match_quality,
                 book_data.uuid,
                 book_data.cid,
                 book_data.mid,
@@ -4667,6 +4629,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             this_book.flags = _get_flags(cur, row)
                             this_book.hash = hashes[row[b'FileName']]['hash']
                             this_book.highlights = _get_highlights(cur, book_id)
+                            this_book.match_quality = None  # Added in _construct_table_data()
                             this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
                             this_book.mid = book_id
                             this_book.on_device = _get_on_device_status(this_book.cid)
@@ -4980,23 +4943,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         return hash_cache
 
-    def _save_column_widths(self):
-        '''
-        '''
-        self._log_location()
-        try:
-            widths = []
-            for (i, c) in enumerate(self.LIBRARY_HEADER):
-                widths.append(self.tv.columnWidth(i))
-            self.opts.prefs.set('marvin_library_column_widths', widths)
-            self.opts.prefs.commit()
-        except:
-            import traceback
-            self._log(traceback.format_exc())
-
-    def _scan_for_calibre_duplicates(self):
+    def _report_calibre_duplicates(self, soloed_books=set()):
         '''
         Scan for multiple UUIDs matching single hash
+        Displayed as MAGENTA in MXD
         '''
         self._log_location()
 
@@ -5012,20 +4962,74 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     titles.append("'{0}' ({1})".format(
                         self.library_scanner.uuid_map[uuid]['title'],
                         self.library_scanner.uuid_map[uuid]['id']))
+                    soloed_books.add(self.library_scanner.uuid_map[uuid]['id'])
                 duplicates.append(titles)
+
         if duplicates:
+            if soloed_books and self.prefs.get('apply_temporary_markers', True):
+                 self.parent.gui.library_view.model().db.set_marked_ids(soloed_books)
+
             details = ''
             for duplicate_set in duplicates:
                 details += '- ' + ', '.join(duplicate_set) + '\n'
+
             title = 'Duplicate content'
             msg = ('<p>Duplicates were detected while scanning your calibre library.<p>' +
                    '<p>Marvin books matching multiple calibre books will be displayed ' +
                    'with a ' +
                    '<span style="background-color:#FF99E5">magenta background</span> ' +
-                   'in the Marvin XD window.</p>' +
+                   'in the Marvin XD window, ' +
+                   'and marked with a temporary marker pin in the calibre Library window.</p>'
+                   '<p>Type <b><samp>marked:true</samp></b> in the calibre search box to isolate marked books.</p>' +
                    '<p>Click <b>Show details</b> to display duplicates.</p>')
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
                        show_copy_button=True).exec_()
+
+        return soloed_books
+
+    def _report_content_updates(self, soloed_books=set()):
+        '''
+        Report books identified as being installed in Marvin without hash matches
+        Displayed as GRAY in MXD
+        '''
+        self._log_location()
+        details = ''
+        for this_book in self.installed_books.values():
+            if this_book.match_quality == self.MATCH_COLORS.index('GRAY'):
+                soloed_books.add(this_book.cid)
+                details += "- {0}\n".format(this_book.title)
+
+
+        if details:
+            if soloed_books and self.prefs.get('apply_temporary_markers', True):
+                 self.parent.gui.library_view.model().db.set_marked_ids(soloed_books)
+
+            title = 'Updated content'
+            msg = ('<p>Updated content was detected while comparing your calibre library ' +
+                   'with your Marvin library.</p>' +
+                   '<p>Marvin books with outdated content will be displayed ' +
+                   'with a gray background in the Marvin XD window, ' +
+                   'and marked with a temporary marker pin in the calibre Library window.</p>' +
+                   '<p>Type <b><samp>marked:true</samp></b> in the calibre search box to isolate marked books.</p>' +
+                   '<p>Click <b>Show details</b> for a list of books with updated content.</p>')
+            MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
+                       show_copy_button=True).exec_()
+
+        return soloed_books
+
+    def _save_column_widths(self):
+        '''
+        '''
+        self._log_location()
+        try:
+            widths = []
+            for (i, c) in enumerate(self.LIBRARY_HEADER):
+                widths.append(self.tv.columnWidth(i))
+            self.opts.prefs.set('marvin_library_column_widths', widths)
+            self.opts.prefs.commit()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def _scan_library_books(self, library_scanner):
         '''
