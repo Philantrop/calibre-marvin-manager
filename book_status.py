@@ -4979,7 +4979,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    'with a ' +
                    '<span style="background-color:#FF99E5">magenta background</span> ' +
                    'in the Marvin XD window, ' +
-                   'and marked with a temporary marker pin in the calibre Library window.</p>'
+                   'and optionally marked with a temporary marker pin in the calibre Library window.</p>'
                    '<p>Type <b><samp>marked:true</samp></b> in the calibre search box to isolate marked books.</p>' +
                    '<p>Click <b>Show details</b> to display duplicates.</p>')
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
@@ -5009,7 +5009,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    'with your Marvin library.</p>' +
                    '<p>Marvin books with outdated content will be displayed ' +
                    'with a gray background in the Marvin XD window, ' +
-                   'and marked with a temporary marker pin in the calibre Library window.</p>' +
+                   'and optionally marked with a temporary marker pin in the calibre Library window.</p>' +
                    '<p>Type <b><samp>marked:true</samp></b> in the calibre search box to isolate marked books.</p>' +
                    '<p>Click <b>Show details</b> for a list of books with updated content.</p>')
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
