@@ -868,7 +868,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         '''
         self._log_location()
-        self.busy_window.stop()
-        self.busy_window.accept()
-        self.busy_window = None
-        Application.restoreOverrideCursor()
+        if self.busy_window is not None:
+            self.busy_window.stop()
+            self.busy_window.accept()
+            self.busy_window = None
+        try:
+            Application.restoreOverrideCursor()
+        except:
+            pass

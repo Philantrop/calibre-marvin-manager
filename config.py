@@ -317,11 +317,17 @@ class ConfigWidget(QWidget, Logger):
         self.column2_layout.addWidget(self.cfg_runtime_options_gb)
         self.cfg_runtime_options_qvl = QVBoxLayout(self.cfg_runtime_options_gb)
 
-        # ++++++++ Temporary markers ++++++++
-        self.temporary_markers_checkbox = QCheckBox('Apply temporary markers to duplicate and updated books')
-        self.temporary_markers_checkbox.setObjectName('apply_temporary_markers')
-        self.temporary_markers_checkbox.setToolTip('Apply temporary markers to duplicate and updated books')
-        self.cfg_runtime_options_qvl.addWidget(self.temporary_markers_checkbox)
+        # ++++++++ Temporary markers: Duplicates ++++++++
+        self.duplicate_markers_checkbox = QCheckBox('Apply temporary markers to duplicate books')
+        self.duplicate_markers_checkbox.setObjectName('apply_markers_to_duplicates')
+        self.duplicate_markers_checkbox.setToolTip('Books with identical content will be flagged with temporary markers')
+        self.cfg_runtime_options_qvl.addWidget(self.duplicate_markers_checkbox)
+
+        # ++++++++ Temporary markers: Updated ++++++++
+        self.updated_markers_checkbox = QCheckBox('Apply temporary markers to updated books')
+        self.updated_markers_checkbox.setObjectName('apply_markers_to_updated')
+        self.updated_markers_checkbox.setToolTip('Books with updated content will be flagged with temporary markers')
+        self.cfg_runtime_options_qvl.addWidget(self.updated_markers_checkbox)
 
         # ++++++++ Auto refresh checkbox ++++++++
         self.auto_refresh_checkbox = QCheckBox('Automatically refresh custom column content')
@@ -378,7 +384,8 @@ class ConfigWidget(QWidget, Logger):
         """
 
         # Restore general settings
-        self.temporary_markers_checkbox.setChecked(self.prefs.get('apply_temporary_markers', True))
+        self.duplicate_markers_checkbox.setChecked(self.prefs.get('apply_markers_to_duplicates', True))
+        self.updated_markers_checkbox.setChecked(self.prefs.get('apply_markers_to_updated', True))
         self.auto_refresh_checkbox.setChecked(self.prefs.get('auto_refresh_at_startup', False))
         self.reading_progress_checkbox.setChecked(self.prefs.get('show_progress_as_percentage', False))
 
@@ -865,7 +872,8 @@ class ConfigWidget(QWidget, Logger):
         '''
 
         # Save general settings
-        self.prefs.set('apply_temporary_markers', self.temporary_markers_checkbox.isChecked())
+        self.prefs.set('apply_markers_to_duplicates', self.duplicate_markers_checkbox.isChecked())
+        self.prefs.set('apply_markers_to_updated', self.updated_markers_checkbox.isChecked())
         self.prefs.set('auto_refresh_at_startup', self.auto_refresh_checkbox.isChecked())
         self.prefs.set('show_progress_as_percentage', self.reading_progress_checkbox.isChecked())
 
@@ -873,12 +881,15 @@ class ConfigWidget(QWidget, Logger):
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
         self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice_checkbox.isChecked())
 
+        #self.prefs.commit()
+
         # If restart needed, inform user
         if self.restart_required:
             do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
                                               parent=self.gui)
             if do_restart:
                 self.gui.quit(restart=True)
+
 
     def start_inventory(self):
         self._log_location()
