@@ -320,13 +320,13 @@ class ConfigWidget(QWidget, Logger):
         # ++++++++ Temporary markers: Duplicates ++++++++
         self.duplicate_markers_checkbox = QCheckBox('Apply temporary markers to duplicate books')
         self.duplicate_markers_checkbox.setObjectName('apply_markers_to_duplicates')
-        self.duplicate_markers_checkbox.setToolTip('Books with identical content will be flagged with temporary markers')
+        self.duplicate_markers_checkbox.setToolTip('Books with identical content will be flagged in the Library window')
         self.cfg_runtime_options_qvl.addWidget(self.duplicate_markers_checkbox)
 
         # ++++++++ Temporary markers: Updated ++++++++
         self.updated_markers_checkbox = QCheckBox('Apply temporary markers to updated books')
         self.updated_markers_checkbox.setObjectName('apply_markers_to_updated')
-        self.updated_markers_checkbox.setToolTip('Books with updated content will be flagged with temporary markers')
+        self.updated_markers_checkbox.setToolTip('Books with updated content will be flagged in the Library window')
         self.cfg_runtime_options_qvl.addWidget(self.updated_markers_checkbox)
 
         # ++++++++ Auto refresh checkbox ++++++++
@@ -881,15 +881,12 @@ class ConfigWidget(QWidget, Logger):
         self.prefs.set('debug_plugin', self.debug_plugin_checkbox.isChecked())
         self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice_checkbox.isChecked())
 
-        #self.prefs.commit()
-
         # If restart needed, inform user
         if self.restart_required:
             do_restart = show_restart_warning('Restart calibre for the changes to be applied.',
                                               parent=self.gui)
             if do_restart:
                 self.gui.quit(restart=True)
-
 
     def start_inventory(self):
         self._log_location()

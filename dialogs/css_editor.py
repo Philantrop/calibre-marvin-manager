@@ -78,7 +78,7 @@ SAMPLE_HTML = '''
     </html>
     '''
 
-class CSSEditorDialog(SizePersistedDialog, Ui_Dialog):
+class CSSEditorDialog(SizePersistedDialog, Ui_Dialog, Logger):
 
     marvin_device_status_changed = pyqtSignal(dict)
 

@@ -1214,6 +1214,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.marvin_cancellation_required = False
         self.remote_hash_cache = None
         self.show_match_colors = self.prefs.get('show_match_colors', False)
+        self.soloed_books = set()
         self.updated_match_quality = None
         self.verbose = parent.verbose
 
@@ -1361,7 +1362,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._clear_selected_rows()
 
         # Report duplicates, updated, set temporary markers according to prefs
-        self.parent.gui.library_view.model().db.set_marked_ids(set())
+        self.soloed_books = set()
+        self.parent.gui.library_view.model().db.set_marked_ids(self.soloed_books)
         self._report_calibre_duplicates()
         self._report_content_updates()
 
@@ -4949,7 +4951,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         apply_markers = self.prefs.get('apply_markers_to_duplicates', True)
         self._log_location("apply_markers: %s" % apply_markers)
-        soloed_books=set()
 
         # Build a list of Marvin hashes
         marvin_hashes = [v.hash for v in self.installed_books.values()]
@@ -4964,12 +4965,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         self.library_scanner.uuid_map[uuid]['title'],
                         self.library_scanner.uuid_map[uuid]['id']))
                     if apply_markers:
-                        soloed_books.add(self.library_scanner.uuid_map[uuid]['id'])
+                        self.soloed_books.add(self.library_scanner.uuid_map[uuid]['id'])
                 duplicates.append(titles)
 
         if duplicates:
-            if soloed_books:
-                 self.parent.gui.library_view.model().db.set_marked_ids(soloed_books)
+            if self.soloed_books:
+                 self.parent.gui.library_view.model().db.set_marked_ids(self.soloed_books)
 
             details = ''
             for duplicate_set in duplicates:
@@ -4977,12 +4978,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             title = 'Duplicate content'
             if apply_markers:
-                marker_msg = ('<p>Duplicates will be temporarily marked in the calibre ' +
+                marker_msg = ('<p>Duplicates will be temporarily marked in the ' +
                               'Library window. Temporary markers for duplicate content ' +
                               'may be disabled in the Marvin XD configuration dialog.</p>')
             else:
                 marker_msg = ('<p>Duplicate content may be temporarily marked in the ' +
-                              'calibre Library window by enabling the option in the ' +
+                              'Library window by enabling the option in the ' +
                               'Marvin XD configuration dialog.</p>' )
 
             msg = ('<p>Duplicates were detected while scanning your calibre library.<p>' +
@@ -5002,26 +5003,25 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         apply_markers = self.prefs.get('apply_markers_to_updated', True)
         self._log_location("apply_markers: %s" % apply_markers)
-        soloed_books=set()
         details = ''
         for this_book in self.installed_books.values():
             if this_book.match_quality == self.MATCH_COLORS.index('GRAY'):
                 if apply_markers:
-                    soloed_books.add(this_book.cid)
+                    self.soloed_books.add(this_book.cid)
                 details += "- {0}\n".format(this_book.title)
 
         if details:
-            if soloed_books:
-                 self.parent.gui.library_view.model().db.set_marked_ids(soloed_books)
+            if self.soloed_books:
+                 self.parent.gui.library_view.model().db.set_marked_ids(self.soloed_books)
 
             title = 'Updated content'
             if apply_markers:
-                marker_msg = ('<p>Updated content will be temporarily marked in the calibre ' +
+                marker_msg = ('<p>Updated content will be temporarily marked in the ' +
                               'Library window. Temporary markers for updated content ' +
                               'may be disabled in the Marvin XD configuration dialog.</p>')
             else:
                 marker_msg = ('<p>Updated content may be temporarily marked in the ' +
-                              'calibre Library window by enabling the option in the ' +
+                              'Library window by enabling the option in the ' +
                               'Marvin XD configuration dialog.</p>' )
             msg = ('<p>Updated content was detected while comparing your calibre library ' +
                    'with your Marvin library.</p>' +
