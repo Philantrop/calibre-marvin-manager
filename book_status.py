@@ -5016,17 +5016,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             title = 'Updated content'
             if apply_markers:
-                marker_msg = ('<p>Updated content will be temporarily marked in the ' +
+                marker_msg = ('<p>Books with updated content will be temporarily marked in the ' +
                               'Library window. Temporary markers for updated content ' +
                               'may be disabled in the Marvin XD configuration dialog.</p>')
             else:
-                marker_msg = ('<p>Updated content may be temporarily marked in the ' +
+                marker_msg = ('<p>Books with updated content may be temporarily marked in the ' +
                               'Library window by enabling the option in the ' +
                               'Marvin XD configuration dialog.</p>' )
             msg = ('<p>Updated content was detected while comparing your calibre library ' +
                    'with your Marvin library.</p>' +
-                   '<p>Marvin books with outdated content will be displayed ' +
-                   'with a gray background in the Marvin XD window.</p>' +
+                   '<p>Marvin books with outdated content will be displayed with a ' +
+                   '<span style="background-color:#E6E6E6">gray background</span> ' +
+                   'in the Marvin XD window.</p>' +
                    marker_msg +
                    '<p>Click <b>Show details</b> for a list of books with updated content.</p>')
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
