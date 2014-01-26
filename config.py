@@ -324,9 +324,9 @@ class ConfigWidget(QWidget, Logger):
         self.cfg_runtime_options_qvl.addWidget(self.duplicate_markers_checkbox)
 
         # ++++++++ Temporary markers: Updated ++++++++
-        self.updated_markers_checkbox = QCheckBox('Apply temporary markers to updated books')
+        self.updated_markers_checkbox = QCheckBox('Apply temporary markers to books with differing content')
         self.updated_markers_checkbox.setObjectName('apply_markers_to_updated')
-        self.updated_markers_checkbox.setToolTip('Books with updated content will be flagged in the Library window')
+        self.updated_markers_checkbox.setToolTip('Books with differing content will be flagged in the Library window')
         self.cfg_runtime_options_qvl.addWidget(self.updated_markers_checkbox)
 
         # ++++++++ Auto refresh checkbox ++++++++
