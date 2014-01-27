@@ -520,6 +520,7 @@ class MarkupTableModel(QAbstractTableModel):
     ORANGE_HUE = 0.08325    #  30/360
     YELLOW_HUE = 0.1665     #  60/360
     GREEN_HUE = 0.333       # 120/360
+    CYAN_HUE = 0.500        # 180/360
     MAGENTA_HUE = 0.875        # 315/360
     WHITE_HUE = 1.0
 
@@ -547,20 +548,27 @@ class MarkupTableModel(QAbstractTableModel):
         if not index.isValid():
             return QVariant()
 
+        elif role == Qt.ForegroundRole and self.show_match_colors:
+            match_quality = self.get_match_quality(row)
+            if match_quality == BookStatusDialog.MATCH_COLORS.index('DARK_GRAY'):
+                return QVariant(QBrush(Qt.white))
+
         elif role == Qt.BackgroundRole and self.show_match_colors:
             match_quality = self.get_match_quality(row)
-            if match_quality == BookStatusDialog.MATCH_COLORS.index('GRAY'):
-                return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, 0.90)))
-            elif match_quality == BookStatusDialog.MATCH_COLORS.index('MAGENTA'):
-                return QVariant(QBrush(QColor.fromHsvF(self.MAGENTA_HUE, self.SATURATION, self.HSVALUE)))
+            if match_quality == BookStatusDialog.MATCH_COLORS.index('LIGHT_GRAY'):
+                return QVariant(QBrush(QColor(0xD8, 0xD8,0xD8)))
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('DARK_GRAY'):
+                return QVariant(QBrush(QColor(0x98, 0x98,0x98)))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('GREEN'):
                 return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
-            elif match_quality == BookStatusDialog.MATCH_COLORS.index('YELLOW'):
-                return QVariant(QBrush(QColor.fromHsvF(self.YELLOW_HUE, self.SATURATION, self.HSVALUE)))
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('MAGENTA'):
+                return QVariant(QBrush(QColor.fromHsvF(self.MAGENTA_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('ORANGE'):
                 return QVariant(QBrush(QColor.fromHsvF(self.ORANGE_HUE, self.SATURATION, self.HSVALUE)))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('RED'):
                 return QVariant(QBrush(QColor.fromHsvF(self.RED_HUE, self.SATURATION, self.HSVALUE)))
+            elif match_quality == BookStatusDialog.MATCH_COLORS.index('YELLOW'):
+                return QVariant(QBrush(QColor.fromHsvF(self.YELLOW_HUE, self.SATURATION, self.HSVALUE)))
             else:
                 return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, self.HSVALUE)))
 
@@ -622,8 +630,10 @@ class MarkupTableModel(QAbstractTableModel):
                     tip += 'Matched in calibre library with differing metadata'
                 elif match_quality == BookStatusDialog.MATCH_COLORS.index('ORANGE'):
                     tip += 'Duplicate of matched book in calibre library'
-                elif match_quality == BookStatusDialog.MATCH_COLORS.index('GRAY'):
-                    tip += 'Not matched in calibre library'
+                elif match_quality == BookStatusDialog.MATCH_COLORS.index('LIGHT_GRAY'):
+                    tip += 'Book updated in calibre library'
+                elif match_quality == BookStatusDialog.MATCH_COLORS.index('DARK_GRAY'):
+                    tip += 'Book updated in Marvin library'
                 elif match_quality == BookStatusDialog.MATCH_COLORS.index('MAGENTA'):
                     tip += 'Multiple copies in calibre library'
                 elif match_quality == BookStatusDialog.MATCH_COLORS.index('RED'):
@@ -855,7 +865,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     DEFAULT_REFRESH_TOOLTIP = "<p>Refresh custom column content in calibre for the selected books.<br/>Assign custom column mappings in the <i>Customize plugin…</i> dialog.</p>"
     HASH_CACHE_FS = "content_hashes.db"
     HIGHLIGHT_COLORS = ['Pink', 'Yellow', 'Blue', 'Green', 'Purple']
-    MATCH_COLORS = ['GRAY', 'WHITE', 'RED', 'ORANGE', 'MAGENTA', 'YELLOW', 'GREEN']
+    MATCH_COLORS = ['DARK_GRAY', 'LIGHT_GRAY', 'WHITE', 'RED', 'ORANGE', 'MAGENTA', 'YELLOW', 'GREEN']
     MATH_TIMES_CIRCLED = u" \u2297 "
     MATH_TIMES = u" \u00d7 "
     MAX_BOOKS_BEFORE_SPINNER = 4
@@ -3014,13 +3024,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _generate_match_quality(book_data):
             '''
-            GREEN:     Marvin uuid matches calibre uuid (hard match)
-            YELLOW:    Marvin hash matches calibre hash (soft match)
-            MAGENTA:   Book has multiple UUIDs in calibre, one matched in Marvin
-            ORANGE:    Calibre hash duplicates:
-            RED:       Marvin hash duplicates
-            WHITE:     Marvin only, single copy
-            GRAY:      Book exists in Marvin and calibre, but no match identified
+            GREEN:          Marvin uuid matches calibre uuid (hard match)
+            YELLOW:         Marvin hash matches calibre hash (soft match)
+            MAGENTA:        Book has multiple UUIDs in calibre, one matched in Marvin
+            ORANGE:         Calibre hash duplicates:
+            RED:            Marvin hash duplicates
+            WHITE:          Marvin only, single copy
+            LIGHT_GRAY:     Book exists in Marvin and calibre, but no match identified
+            DARK_GRAY:      Book updated in Marvin (different or non-existent UUID)
             '''
 
             if self.opts.prefs.get('development_mode', False):
@@ -3040,9 +3051,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if book_data.on_device is not None:
                 '''
                 Book is in calibre library.
-                Resolve to GREEN | YELLOW | ORANGE | MAGENTA | GRAY
+                Resolve to GREEN | YELLOW | ORANGE | MAGENTA | LIGHT_GRAY
                 '''
-                match_quality = self.MATCH_COLORS.index('GRAY')
+                #match_quality = self.MATCH_COLORS.index('LIGHT_GRAY')
 
                 if book_data.on_device.startswith("{0} (".format(_main)):
                     ''' ORANGE: Calibre detects multiple copies '''
@@ -3064,6 +3075,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         book_data.metadata_mismatches):
                         ''' YELLOW: Foreign UUID with metadata mismatches '''
                         match_quality = self.MATCH_COLORS.index('YELLOW')
+                    elif book_data.uuid not in self.library_uuid_map:
+                        ''' DARK_GRAY: Book has been updated in Marvin '''
+                        match_quality = self.MATCH_COLORS.index('DARK_GRAY')
+                    else:
+                        ''' LIGHT_GRAY: Book has been updated in calibre '''
+                        match_quality = self.MATCH_COLORS.index('LIGHT_GRAY')
+                else:
+                    # No UUID, but calibre recognizes as a match
+                    ''' DARK_GRAY: Book has been updated in Marvin '''
+                    match_quality = self.MATCH_COLORS.index('DARK_GRAY')
             else:
                 '''
                 Book is not in calibre library
@@ -4999,38 +5020,54 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     def _report_content_updates(self):
         '''
         Report books identified as being installed in Marvin without hash matches
-        Displayed as GRAY in MXD
+        LIGHT_GRAY: Book has been updated in calibre. (UUIDs match, different hashes)
+        DARK_GRAY:  Book has been updated in Marvin. (UUIDs do not match, different hashes)
         '''
         apply_markers = self.prefs.get('apply_markers_to_updated', True)
         self._log_location("apply_markers: %s" % apply_markers)
-        details = ''
+        calibre_updates = ''
+        marvin_updates = ''
         for this_book in self.installed_books.values():
-            if this_book.match_quality == self.MATCH_COLORS.index('GRAY'):
+            if this_book.match_quality == self.MATCH_COLORS.index('LIGHT_GRAY'):
                 if apply_markers:
                     self.soloed_books.add(this_book.cid)
-                details += "- {0}\n".format(this_book.title)
+                calibre_updates += "- {0}\n".format(this_book.title)
+            if this_book.match_quality == self.MATCH_COLORS.index('DARK_GRAY'):
+                if apply_markers:
+                    self.soloed_books.add(this_book.cid)
+                marvin_updates += "- {0}\n".format(this_book.title)
 
-        if details:
+        if calibre_updates or marvin_updates:
             if self.soloed_books:
                  self.parent.gui.library_view.model().db.set_marked_ids(self.soloed_books)
 
-            title = 'Differing content'
+            title = 'Updated content'
             if apply_markers:
-                marker_msg = ('<p>Books with differing content will be temporarily marked in the ' +
-                              'Library window. Temporary markers for differing content ' +
+                marker_msg = ('<p>Books with updated content will be temporarily marked in the ' +
+                              'Library window. Temporary markers for updated content ' +
                               'may be disabled in the Marvin XD configuration dialog.</p>')
             else:
-                marker_msg = ('<p>Books with differing content may be temporarily marked in the ' +
+                marker_msg = ('<p>Books with updated content may be temporarily marked in the ' +
                               'Library window by enabling the option in the ' +
                               'Marvin XD configuration dialog.</p>' )
-            msg = ('<p>Differing content was detected while comparing your calibre ' +
+
+            msg = ('<p>Updated content was detected while comparing your calibre ' +
                    'library with your Marvin library.</p>' +
-                   '<p>Marvin books with content differing from the calibre version will ' +
-                   'be displayed with a ' +
-                   '<span style="background-color:#E6E6E6">gray background</span> ' +
+                   '<p>Books updated in calibre will be displayed with a ' +
+                   '<span style="background-color:#D9D9D9">light gray background</span> ' +
+                   'in the Marvin XD window.</p>' +
+                   '<p>Books updated in Marvin will be displayed with a ' +
+                   '<span style="color:#FFFFFF; background-color:#989898">' +
+                   'dark gray background</span> ' +
                    'in the Marvin XD window.</p>' +
                    marker_msg +
-                   '<p>Click <b>Show details</b> for a list of books with differing content.</p>')
+                   '<p>Click <b>Show details</b> for a list of books with updated content.</p>')
+
+            if calibre_updates:
+                details = 'Books updated in calibre:\n' + calibre_updates
+            if marvin_updates:
+                details += 'Books updated in Marvin:\n' + marvin_updates
+
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
                        show_copy_button=True).exec_()
 
