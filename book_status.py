@@ -5063,8 +5063,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    marker_msg +
                    '<p>Click <b>Show details</b> for a list of books with updated content.</p>')
 
+            details = ''
             if calibre_updates:
-                details = 'Books updated in calibre:\n' + calibre_updates
+                details += 'Books updated in calibre:\n' + calibre_updates
             if marvin_updates:
                 details += 'Books updated in Marvin:\n' + marvin_updates
 
