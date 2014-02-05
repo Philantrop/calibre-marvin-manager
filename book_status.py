@@ -2250,7 +2250,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     # Get the current Marvin flag values
                     flagbits = self.tm.get_flags(row).sort_key
 
-                    # Get the Marvin LastModified date for this book
+                    # Get the Marvin MetadataUpdated date for this book
                     book_id = self._selected_books()[row]['book_id']
                     c_last_modified = mi.last_modified.astimezone(tz.tzlocal())
                     m_last_modified = _get_marvin_last_modified(book_id)
@@ -2281,11 +2281,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                 self._clear_flags('clear_read_flag', update_local_db=False)
                     else:
                         if not read_lookup:
-                            self._log("No custom column mapped for Read flag")
+                            self._log("Read flag: No custom column mapped for Read flag")
                         elif not c_read and not m_read:
-                            self._log("No change: both flags already cleared")
+                            self._log("Read flag: No change, both flags already cleared")
                         elif c_read and m_read:
-                            self._log("No change: both flags already set")
+                            self._log("Read flag: No change, both flags already set")
 
                     # ~~~~~~~~~ Process Reading list flag ~~~~~~~~~
                     c_reading_list = False
@@ -2302,22 +2302,22 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         if c_last_modified > m_last_modified:
                             self._log("Using calibre as sync master. Reading list flag: %s" % c_reading_list)
                             if c_reading_list:
-                                self._set_flags('set_read_flag', update_local_db=False)
+                                self._set_flags('set_reading_list_flag', update_local_db=False)
                             else:
-                                self._clear_flags('clear_read_flag', update_local_db=False)
+                                self._clear_flags('clear_reading_list_flag', update_local_db=False)
                         else:
                             self._log("Using Marvin as sync master. Reading list flag: %s" % m_reading_list)
                             if m_reading_list:
-                                self._set_flags('set_read_flag', update_local_db=False)
+                                self._set_flags('set_reading_list_flag', update_local_db=False)
                             else:
-                                self._clear_flags('clear_read_flag', update_local_db=False)
+                                self._clear_flags('clear_reading_list_flag', update_local_db=False)
                     else:
                         if not reading_list_lookup:
-                            self._log("No custom column mapped for Reading list flag")
+                            self._log("Reading list flag: No custom column mapped for Reading list flag")
                         elif not c_reading_list and not m_reading_list:
-                            self._log("No change: both flags already cleared")
+                            self._log("Reading list flag: No change, both flags already cleared")
                         elif c_reading_list and m_reading_list:
-                            self._log("No change: both flags already set")
+                            self._log("Reading list flag: No change, both flags already set")
 
             if update_gui:
                 updateCalibreGUIView()
