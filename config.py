@@ -423,10 +423,15 @@ class ConfigWidget(QWidget, Logger):
         self._log("old_destination_name: %s" % old_destination_name)
 
         new_destination_name = unicode(qs_new_destination_name)
-        self._log("new_destination_name: %s" % new_destination_name)
+        self._log("new_destination_name: %s" % repr(new_destination_name))
 
         if old_destination_name == new_destination_name:
             self._log_location("old_destination_name = new_destination_name, no changes")
+            return
+
+        if new_destination_name == '':
+            self._log_location("annotations storage disabled")
+            set_cc_mapping('annotations', field=None, combobox=new_destination_name)
             return
 
         new_destination_field = self.eligible_annotations_fields[new_destination_name]

@@ -2200,10 +2200,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _get_marvin_last_modified(book_id):
             '''
-            Get LastModified timestamp for book_id
+            Get MetadataUpdated timestamp for book_id,
             '''
-            UPDATE_FIELD = b'LastModified'
-            #UPDATE_FIELD = b'DateOpened'
+            UPDATE_FIELD = b'MetadataUpdated'
             arg2 = ''
 
             con = sqlite3.connect(self.parent.connected_device.local_db_path)
