@@ -420,14 +420,21 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
     def _populate_rating(self):
 
         def _construct_stars(rating):
+            '''
+            Marvin ratings colors:
+            Yellow: 242,220,109 F2DC6D
+            Gray: 240,240,240 E0E0E0
+            '''
+            EMPTY_STAR = u'\u2606'
             FULL_STAR = u'\u2605'
-            EMPTY_STAR = '<span style="color:#ccc">\u2606</span>'
+            EMPTY = '<span style="color:#CCC">{0}</span>'
+            FULL = '<span style="color:#000">{0}</span>'
             ans = ''
             empty = 5 - rating
             for x in range(rating):
-                ans += FULL_STAR
+                ans += FULL.format(FULL_STAR)
             for x in range(empty):
-                ans += EMPTY_STAR
+                ans += EMPTY.format(EMPTY_STAR)
             return ans
 
         if self.installed_book.rating is not None:
