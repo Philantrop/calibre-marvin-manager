@@ -5613,6 +5613,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 publisher = mismatches[key]['Marvin']
                 db.set_publisher(cid, publisher, allow_case_change=True)
 
+            if key == 'rating':
+                rating = mismatches[key]['Marvin']
+                db.set_rating(cid, rating * 2)
+
             if key == 'series':
                 series = mismatches[key]['Marvin']
                 db.set_series(cid, series, allow_case_change=True)
