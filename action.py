@@ -156,6 +156,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self.blocking_busy = MyBlockingBusy(self.gui, "Updating Marvin Library…", size=50)
         self.connected_device = None
         self.current_location = 'library'
+        self.dialog_active = False
         self.dropbox_processed = False
         self.ios = None
         self.installed_books = None
@@ -400,12 +401,14 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location()
         if self.connected_device:
-            if not self.book_status_dialog:
+            if not self.dialog_active:
+                self.dialog_active = True
                 try:
                     self.show_installed_books()
                 except AbortRequestException, e:
                     self._log(e)
                     self.book_status_dialog = None
+                self.dialog_active = False
         else:
             self.show_help()
 

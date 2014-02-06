@@ -4434,7 +4434,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     elif mi.rating/2 != row[b'Rating']:
                         mismatched = True
                     if mismatched:
-                        mismatches['rating'] = {'calibre': 0 if mi.rating is None else int(mi.rating/2),
+                        mismatches['rating'] = {'calibre': 0 if not mi.rating else int(mi.rating/2),
                                                 'Marvin': row[b'Rating']}
 
                 # ~~~~~~~~ series, series_index ~~~~~~~~
