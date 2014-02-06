@@ -4656,10 +4656,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             this_book.pin = row[b'Pin']
                             this_book.progress = row[b'Progress']
                             this_book.pubdate = _get_pubdate(row)
-                            if 'Rating' in row.keys():
-                                # Rating added in 2.6.65
+                            if 'Rating' in row.keys():      # Rating added in 2.6.65
                                 this_book.rating = row[b'Rating']
-                            this_book.rating = row[b'Rating']
                             this_book.series = row[b'CalibreSeries']
                             this_book.series_index = row[b'CalibreSeriesIndex']
                             this_book.tags = _get_marvin_genres(book_id)

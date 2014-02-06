@@ -98,7 +98,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
         self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
             self.marvin_status_changed)
 
-        self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
+        #self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
         self.mismatches = installed_book.metadata_mismatches
 
         self._populate_title()
@@ -430,7 +430,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 ans += EMPTY_STAR
             return ans
 
-        if hasattr(self.installed_book, 'rating'):
+        if self.installed_book.rating is not None:
             if 'rating' in self.mismatches:
                 calibre_stars = _construct_stars(self.mismatches['rating']['calibre'])
                 self.calibre_rating.setText(self.YELLOW_BG.format(calibre_stars))
