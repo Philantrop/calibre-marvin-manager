@@ -186,6 +186,16 @@
          </widget>
         </item>
         <item>
+         <widget class="QLabel" name="calibre_rating">
+          <property name="text">
+           <string>rating</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
+         </widget>
+        </item>
+        <item>
          <widget class="QLabel" name="calibre_publisher">
           <property name="font">
            <font>
@@ -464,6 +474,16 @@
          <widget class="Line" name="line_4">
           <property name="orientation">
            <enum>Qt::Horizontal</enum>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="marvin_rating">
+          <property name="text">
+           <string>rating</string>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
           </property>
          </widget>
         </item>

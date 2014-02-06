@@ -97,7 +97,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
         self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
             self.marvin_status_changed)
 
-        #self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
+        self._log("mismatches:\n%s" % repr(installed_book.metadata_mismatches))
         self.mismatches = installed_book.metadata_mismatches
 
         self._populate_title()
@@ -110,6 +110,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
         self._populate_subjects()
         self._populate_publisher()
         self._populate_pubdate()
+        self._populate_rating()
         self._populate_description()
 
         # ~~~~~~~~ Export to Marvin button ~~~~~~~~
@@ -414,6 +415,37 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 publisher = "<b>Publisher:</b> {0}".format(self.installed_book.publisher)
             self.calibre_publisher.setText(publisher)
             self.marvin_publisher.setText(publisher)
+
+    def _populate_rating(self):
+
+        def _construct_stars(rating):
+            FULL_STAR = u'\u2605'
+            EMPTY_STAR = u'\u2606'
+            ans = ''
+            empty = 5 - rating
+            for x in range(rating):
+                ans += FULL_STAR
+            for x in range(empty):
+                ans += EMPTY_STAR
+            return ans
+
+        self._log_location()
+        if hasattr(self.installed_book, 'rating'):
+            if 'rating' in self.mismatches:
+                self._log("Showing ratings mismatch")
+                calibre_stars = _construct_stars(self.mismatches['rating']['calibre'])
+                self.calibre_rating.setText(self.YELLOW_BG.format(calibre_stars))
+                marvin_stars = _construct_stars(self.mismatches['rating']['Marvin'])
+                self.marvin_rating.setText(self.YELLOW_BG.format(marvin_stars))
+            else:
+                self._log("Showing matching ratings")
+                self.calibre_rating.setText(_construct_stars(self.installed_book.rating))
+                self.marvin_rating.setText(_construct_stars(self.installed_book.rating))
+        else:
+            # Hide rating display
+            self._log("hiding Ratings display")
+            self.calibre_rating.setVisible(False)
+            self.marvin_rating.setVisible(False)
 
     def _populate_series(self):
         if 'series' in self.mismatches:
