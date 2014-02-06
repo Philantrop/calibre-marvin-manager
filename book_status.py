@@ -2419,6 +2419,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         book_tag['publisher'] = ''
         if book.publisher is not None:
             book_tag['publisher'] = escape(book.publisher)
+        book_tag['rating'] = 0
+        if book.rating is not None:
+            book_tag['rating'] = book.rating/2
         book_tag['series'] = ''
         if book.series:
             book_tag['series'] = escape(book.series)
@@ -4418,6 +4421,22 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         mismatches['publisher'] = {'calibre': mi.publisher,
                                                    'Marvin': row[b'Publisher']}
 
+                # ~~~~~~~~ rating ~~~~~~~~
+                # 'Rating' field added 2.6.65
+                if 'Rating' in row.keys():
+                    mismatched = False
+                    if mi.rating is None and not row[b'Rating']:
+                        mismatched = False
+                    elif mi.rating is None and row[b'Rating']:
+                        mismatched = True
+                    elif mi.rating is not None and not row[b'Rating']:
+                        mismatched = True
+                    elif mi.rating/2 != row[b'Rating']:
+                        mismatched = True
+                    if mismatched:
+                        mismatches['rating'] = {'calibre': 0 if mi.rating is None else int(mi.rating/2),
+                                                'Marvin': row[b'Rating']}
+
                 # ~~~~~~~~ series, series_index ~~~~~~~~
                 # We only care about series_index if series is assigned
                 if bool(mi.series) or bool(row[b'CalibreSeries']):
@@ -4593,30 +4612,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     # Get the books
                     cur = con.cursor()
                     cur.execute('''SELECT
-                                    Author,
-                                    AuthorSort,
-                                    Books.ID as id_,
-                                    CalibreCoverHash,
-                                    CalibreSeries,
-                                    CalibreSeriesIndex,
-                                    CalibreTitleSort,
-                                    CoverFile,
-                                    DateAdded,
-                                    DateOpened,
-                                    DatePublished,
-                                    DeepViewPrepared,
-                                    Description,
-                                    FileName,
-                                    IsRead,
-                                    NewFlag,
-                                    Pin,
-                                    Progress,
-                                    Publisher,
-                                    ReadingList,
-                                    Title,
-                                    UUID,
-                                    WordCount
-                                  FROM Books
+                                    *,
+                                    Books.ID as id_
+                                   FROM Books
                                 ''')
 
                     rows = cur.fetchall()
