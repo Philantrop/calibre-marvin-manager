@@ -68,6 +68,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
             .cover_hash
             .pubdate
             .publisher
+            .rating
             .series
             .series_index
             .title
@@ -420,7 +421,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
 
         def _construct_stars(rating):
             FULL_STAR = u'\u2605'
-            EMPTY_STAR = u'\u2606'
+            EMPTY_STAR = '<span style="color:#ccc">\u2606</span>'
             ans = ''
             empty = 5 - rating
             for x in range(rating):
@@ -429,21 +430,16 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 ans += EMPTY_STAR
             return ans
 
-        self._log_location()
         if hasattr(self.installed_book, 'rating'):
             if 'rating' in self.mismatches:
-                self._log("Showing ratings mismatch")
                 calibre_stars = _construct_stars(self.mismatches['rating']['calibre'])
                 self.calibre_rating.setText(self.YELLOW_BG.format(calibre_stars))
                 marvin_stars = _construct_stars(self.mismatches['rating']['Marvin'])
                 self.marvin_rating.setText(self.YELLOW_BG.format(marvin_stars))
             else:
-                self._log("Showing matching ratings")
                 self.calibre_rating.setText(_construct_stars(self.installed_book.rating))
                 self.marvin_rating.setText(_construct_stars(self.installed_book.rating))
         else:
-            # Hide rating display
-            self._log("hiding Ratings display")
             self.calibre_rating.setVisible(False)
             self.marvin_rating.setVisible(False)
 
