@@ -1556,7 +1556,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if dlg.result() == dlg.Accepted:
                 raw = str(dlg.new_collection_le.text())
                 raw = re.sub(',\S', ', ', raw)
-                added_collections = raw.split(', ')
+                ac = raw.split(', ')
+                added_collections = [x.strip() for x in ac]
 
                 # Save the selection
                 self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
