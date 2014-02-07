@@ -16,7 +16,8 @@ from calibre.devices.usbms.driver import debug_print
 from calibre.utils.magick.draw import add_borders_to_image, thumbnail
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
-from calibre_plugins.marvin_manager.common_utils import Logger, SizePersistedDialog
+from calibre_plugins.marvin_manager.common_utils import (Logger, SizePersistedDialog,
+    EMPTY_STAR, FULL_STAR)
 
 from PyQt4.Qt import (Qt, QBrush, QColor, QDialogButtonBox, QIcon, QImage,
                       QPainter, QPalette, QPixmap, QPushButton, QSize, QSizePolicy,
@@ -425,8 +426,6 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
             Yellow: 242,220,109 F2DC6D
             Gray: 240,240,240 E0E0E0
             '''
-            EMPTY_STAR = u'\u2606'
-            FULL_STAR = u'\u2605'
             EMPTY = '<span style="color:#CCC">{0}</span>'
             FULL = '<span style="color:#000">{0}</span>'
             ans = ''

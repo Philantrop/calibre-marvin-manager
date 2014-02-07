@@ -52,7 +52,8 @@ from calibre_plugins.marvin_manager.annotations import merge_annotations
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
     Logger, MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
-    get_cc_mapping, get_icon, updateCalibreGUIView)
+    get_cc_mapping, get_icon, updateCalibreGUIView,
+    FULL_STAR)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'dialogs')
 
@@ -351,6 +352,19 @@ class MyTableView(QTableView):
             if (not progress_field) or (not calibre_cids) or (not progress):
                 ac.setEnabled(False)
 
+        elif col == self.parent.RATING_COL:
+            ac = menu.addAction('Remove rating')
+            ac.setIcon(QIcon(I('exec.png')))
+            ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_rating", 0))
+
+            for x in range(1,6):
+                ans = ''
+                for y in range(x):
+                    ans += FULL_STAR
+                ac = menu.addAction(ans)
+                ac.setIcon(QIcon(I('exec.png')))
+                ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_rating", x))
+
         elif col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
             ac = menu.addAction("View metadata")
             ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path, 'icons', 'update_metadata.png')))
@@ -593,6 +607,9 @@ class MarkupTableModel(QAbstractTableModel):
         elif role == Qt.DisplayRole and col == self.parent.SERIES_COL:
             return self.arraydata[row][self.parent.SERIES_COL].text()
 
+        elif role == Qt.DisplayRole and col == self.parent.RATING_COL:
+            return self.arraydata[row][self.parent.RATING_COL].text()
+
         elif role == Qt.DisplayRole and col == self.parent.WORD_COUNT_COL:
             return self.arraydata[row][self.parent.WORD_COUNT_COL].text()
 
@@ -660,14 +677,6 @@ class MarkupTableModel(QAbstractTableModel):
                     else:
                         return tip + '<br/>Right-click for more options</p>'
 
-                elif col in [self.parent.VOCABULARY_COL]:
-                    has_content = bool(self.arraydata[row][col])
-                    if has_content:
-                        return tip + "<br/>>Double-click to view Vocabulary words<br/>Right-click for more options</p>"
-                    else:
-                        return tip + '<br/>Right-click for options</p>'
-
-
                 elif col in [self.parent.DEEP_VIEW_COL]:
                     has_content = bool(self.arraydata[row][col])
                     if has_content:
@@ -681,6 +690,16 @@ class MarkupTableModel(QAbstractTableModel):
                 elif col == self.parent.LOCKED_COL:
                     return ("<p>Double-click to toggle locked status" +
                             "<br/>Right-click for more options</p>")
+
+                elif col in [self.parent.RATING_COL]:
+                    return tip + "<br/>Right-click to set rating</p>"
+
+                elif col in [self.parent.VOCABULARY_COL]:
+                    has_content = bool(self.arraydata[row][col])
+                    if has_content:
+                        return tip + "<br/>Double-click to view Vocabulary words<br/>Right-click for more options</p>"
+                    else:
+                        return tip + '<br/>Right-click for options</p>'
 
                 elif col in [self.parent.WORD_COUNT_COL]:
                     return (tip + "<br/>Double-click to generate word count" +
@@ -767,20 +786,25 @@ class MarkupTableModel(QAbstractTableModel):
     def get_annotations(self, row):
         return self.arraydata[row][self.parent.ANNOTATIONS_COL]
 
+
     def get_articles(self, row):
         return self.arraydata[row][self.parent.ARTICLES_COL]
+
 
     def get_author(self, row):
         return self.arraydata[row][self.parent.AUTHOR_COL]
 
+
     def get_book_id(self, row):
         return self.arraydata[row][self.parent.BOOK_ID_COL]
+
 
     def get_calibre_id(self, row):
         return self.arraydata[row][self.parent.CALIBRE_ID_COL]
 
     def set_calibre_id(self, row, value):
         self.arraydata[row][self.parent.CALIBRE_ID_COL] = value
+
 
     def get_collections(self, row):
         return self.arraydata[row][self.parent.COLLECTIONS_COL]
@@ -789,12 +813,14 @@ class MarkupTableModel(QAbstractTableModel):
         self.arraydata[row][self.parent.COLLECTIONS_COL] = value
         self.parent.repaint()
 
+
     def get_deep_view(self, row):
         return self.arraydata[row][self.parent.DEEP_VIEW_COL]
 
     def set_deep_view(self, row, value):
         self.arraydata[row][self.parent.DEEP_VIEW_COL] = value
         self.parent.repaint()
+
 
     def get_flags(self, row):
         return self.arraydata[row][self.parent.FLAGS_COL]
@@ -803,8 +829,10 @@ class MarkupTableModel(QAbstractTableModel):
         self.arraydata[row][self.parent.FLAGS_COL] = value
         #self.parent.repaint()
 
+
     def get_last_opened(self, row):
         return self.arraydata[row][self.parent.LAST_OPENED_COL]
+
 
     def get_locked(self, row):
         return self.arraydata[row][self.parent.LOCKED_COL]
@@ -813,6 +841,7 @@ class MarkupTableModel(QAbstractTableModel):
         self.arraydata[row][self.parent.LOCKED_COL] = value
         #self.parent.repaint()
 
+
     def get_match_quality(self, row):
         return self.arraydata[row][self.parent.MATCHED_COL]
 
@@ -820,8 +849,10 @@ class MarkupTableModel(QAbstractTableModel):
         self.arraydata[row][self.parent.MATCHED_COL] = value
         self.parent.repaint()
 
+
     def get_path(self, row):
         return self.arraydata[row][self.parent.PATH_COL]
+
 
     def get_progress(self, row):
         return self.arraydata[row][self.parent.PROGRESS_COL]
@@ -830,20 +861,33 @@ class MarkupTableModel(QAbstractTableModel):
         self.arraydata[row][self.parent.PROGRESS_COL] = value
         #self.parent.repaint()
 
+
+    def get_rating(self, row):
+        return self.arraydata[row][self.parent.RATING_COL]
+
+    def set_rating(self, row, value):
+        self.arraydata[row][self.parent.RATING_COL] = value
+
+
     def get_series(self, row):
         return self.arraydata[row][self.parent.SERIES_COL]
+
 
     def get_subjects(self, row):
         return self.arraydata[row][self.parent.SUBJECTS_COL]
 
+
     def get_title(self, row):
         return self.arraydata[row][self.parent.TITLE_COL]
+
 
     def get_uuid(self, row):
         return self.arraydata[row][self.parent.UUID_COL]
 
+
     def get_vocabulary(self, row):
         return self.arraydata[row][self.parent.VOCABULARY_COL]
+
 
     def get_word_count(self, row):
         return self.arraydata[row][self.parent.WORD_COUNT_COL]
@@ -888,10 +932,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         READING_FLAG = 2
         READ_FLAG = 1
 
-    # Column assignments. When changing order here, also change in _construct_table_data
+    # Column assignments. When changing order here, also change in:
+    # _construct_table_data
+    # USER_CONTROLLED_COLUMNS
     if True:
         LIBRARY_HEADER = [
-                          'Title', 'Author', 'Series',
+                          'Title', 'Author', 'Series', 'Rating',
                           'Word count', 'Date added', 'Progress', 'Last read',
                           'Subjects', 'Collections', MATH_TIMES, 'Flags',
                           'Ann', 'Voc', 'DV', 'Art',
@@ -910,6 +956,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         MATCHED_COL = LIBRARY_HEADER.index('Match Quality')
         PATH_COL = LIBRARY_HEADER.index('path')
         PROGRESS_COL = LIBRARY_HEADER.index('Progress')
+        RATING_COL = LIBRARY_HEADER.index('Rating')
         TITLE_COL = LIBRARY_HEADER.index('Title')
         SERIES_COL = LIBRARY_HEADER.index('Series')
         SUBJECTS_COL = LIBRARY_HEADER.index('Subjects')
@@ -942,6 +989,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         USER_CONTROLLED_COLUMNS = [
             (AUTHOR_COL, 'Author'),
             (SERIES_COL, 'Series'),
+            (RATING_COL, 'Rating'),
             (WORD_COUNT_COL, 'Word count'),
             (DATE_ADDED_COL, 'Date added'),
             (PROGRESS_COL, 'Progress'),
@@ -1044,10 +1092,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.RejectRole:
             self.close()
 
-    def dispatch_context_menu_event(self, action, row):
+    def dispatch_context_menu_event(self, action, arg2):
         '''
         '''
-        self._log_location("%s row: %s" % (repr(action), row))
+        self._log_location("%s arg2: %s" % (repr(action), arg2))
 
         if action == 'apply_date_read':
             self._apply_date_read()
@@ -1074,20 +1122,22 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.show_manage_collections_dialog()
         elif action in ['set_locked', 'set_unlocked']:
             self._update_locked_status(action)
+        elif action == 'set_rating':
+            self._set_rating(arg2)
 
         elif action in ['show_deep_view_articles',
                         'show_deep_view_alphabetically', 'show_deep_view_by_importance',
                         'show_deep_view_by_appearance', 'show_deep_view_by_annotations',
                         'show_vocabulary']:
-            self.show_html_dialog(action, row)
+            self.show_html_dialog(action, arg2)
         elif action == 'show_collections':
-            self.show_view_collections_dialog(row)
+            self.show_view_collections_dialog(arg2)
         elif action == 'show_global_vocabulary':
-            self.show_html_dialog('show_global_vocabulary', row)
+            self.show_html_dialog('show_global_vocabulary', arg2)
         elif action == 'show_highlights':
-            self.show_annotations(row)
+            self.show_annotations(arg2)
         elif action == 'show_metadata':
-            self.show_view_metadata_dialog(row)
+            self.show_view_metadata_dialog(arg2)
         elif action == 'synchronize_flags':
             self._synchronize_flags()
         else:
@@ -3103,6 +3153,19 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             return match_quality
 
+        def _generate_rating(book_data):
+            '''
+            '''
+            self._log_location()
+
+            ans = ''
+            empty = 5 - book_data.rating
+            for x in range(book_data.rating):
+                ans += FULL_STAR
+            sort_value = book_data.rating if book_data.rating is not None else 0
+
+            return SortableTableWidgetItem(ans, sort_value)
+
         def _generate_series(book_data):
             '''
             Generate a sort key based on series index
@@ -3182,6 +3245,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             locked = _generate_locked_status(book_data)
             book_data.match_quality = _generate_match_quality(book_data)
             progress = self._generate_reading_progress(book_data)
+            rating = _generate_rating(book_data)
             title = _generate_title(book_data)
             series = _generate_series(book_data)
             subjects = _generate_subjects(book_data)
@@ -3193,6 +3257,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 title,
                 author,
                 series,
+                rating,
                 word_count,
                 date_added,
                 progress,
@@ -5402,6 +5467,97 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         Application.processEvents()
 
+    def _set_rating(self, rating, silent=False, update_gui=True):
+        '''
+        Apply passed rating to selected books.
+        '''
+        self._log_location(rating)
+
+        # Apply rating to calibre
+        db = self.opts.gui.current_db
+        selected_books = self._selected_books()
+        updated = False
+        for row in selected_books:
+            cid = selected_books[row]['cid']
+            if cid is not None:
+                db.set_rating(cid, rating * 2)
+                updated = True
+        if updated and update_gui:
+            updateCalibreGUIView()
+
+        # Update Marvin
+        total_books = len(selected_books)
+        if total_books:
+            # Build a command shell
+            command_name = 'update_metadata_items'
+            command_element = 'updatemetadataitems'
+            update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+                command_element, time.mktime(time.localtime())))
+
+            # Save the selection
+            self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
+
+            for i, row in enumerate(sorted(selected_books.keys())):
+                if self.busy_cancel_requested:
+                    break
+
+                # Highlight the row we're working on
+                self.tv.selectRow(row)
+
+                if not silent:
+                    if total_books > 1:
+                        msg = "Updating ratings: {0} of {1}".format(i+1, total_books)
+                    else:
+                        msg = "Updating rating"
+                    self._busy_status_msg(msg=msg)
+
+                # Update the model
+                ans = ''
+                for x in range(rating):
+                    ans += FULL_STAR
+                rating_item = SortableTableWidgetItem(ans, rating)
+                self.tm.set_rating(row, rating_item)
+
+                # Update self.installed_books
+                book_id = selected_books[row]['book_id']
+                self.installed_books[book_id].rating = rating
+
+                # How do we update match quality??
+
+                # Add the book to the command file
+                book_tag = Tag(update_soup, 'book')
+                book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
+                book_tag['filename'] = self.installed_books[book_id].path
+                book_tag['title'] = self.installed_books[book_id].title
+                book_tag['uuid'] = self.installed_books[book_id].uuid
+                book_tag['rating'] = rating
+                update_soup.manifest.insert(0, book_tag)
+
+            results = self._issue_command(command_name, update_soup, update_local_db=False)
+            if results['code']:
+                if not silent:
+                    self._busy_status_teardown()
+                self._show_command_error(command_name, results)
+                return
+
+            # Update local_db for all changes
+            self._localize_marvin_database()
+
+            if not silent:
+                self._busy_status_teardown()
+
+            # Restore selection
+            if self.saved_selection_region:
+                for rect in self.saved_selection_region.rects():
+                    self.tv.setSelection(rect, QItemSelectionModel.Select)
+                self.saved_selection_region = None
+        else:
+            self._log("No selected books")
+            title = "Rating"
+            msg = ("<p>Select one or more books to apply rating to.</p>")
+            MessageBox(MessageBox.INFO, title, msg,
+                       show_copy_button=False).exec_()
+
     def _show_command_error(self, command, results):
         '''
         Display contents of a non-successful result
@@ -5669,6 +5825,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if results['code']:
                     #return self._show_command_error(command_name, results)
                     return results
+
+        updateCalibreGUIView()
 
         self._clear_selected_rows()
 

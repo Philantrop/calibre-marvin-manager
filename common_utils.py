@@ -61,6 +61,11 @@ plugin_tmpdir = 'calibre_annotations_plugin'
 
 plugin_icon_resources = {}
 
+'''     Constants       '''
+EMPTY_STAR = u'\u2606'
+FULL_STAR = u'\u2605'
+
+
 '''     Base classes    '''
 
 class Logger():
