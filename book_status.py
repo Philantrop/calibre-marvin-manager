@@ -354,7 +354,10 @@ class MyTableView(QTableView):
 
         elif col == self.parent.RATING_COL:
             ac = menu.addAction('Remove rating')
-            ac.setIcon(QIcon(I('exec.png')))
+            #ac.setIcon(QIcon(I('exec.png')))
+            ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                          'icons',
+                                          'clear_all.png')))
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_rating", 0))
 
             for x in range(1,6):
@@ -362,7 +365,11 @@ class MyTableView(QTableView):
                 for y in range(x):
                     ans += FULL_STAR
                 ac = menu.addAction(ans)
-                ac.setIcon(QIcon(I('exec.png')))
+                #ac.setIcon(QIcon(I('exec.png')))
+                ac.setIcon(QIcon(os.path.join(self.parent.opts.resources_path,
+                                              'icons',
+                                              'sync_collections.png')))
+
                 ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "set_rating", x))
 
         elif col in [self.parent.TITLE_COL, self.parent.AUTHOR_COL]:
@@ -5522,7 +5529,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 book_id = selected_books[row]['book_id']
                 self.installed_books[book_id].rating = rating
 
-                # How do we update match quality??
+                # Update metadata_mismatch
+                book_id = self._selected_book_id(row)
+                if 'rating' in self.installed_books[book_id].metadata_mismatches:
+                    del self.installed_books[book_id].metadata_mismatches['rating']
+                    if (not self.installed_books[book_id].metadata_mismatches and
+                        self.tm.get_match_quality(row) == self.MATCH_COLORS.index('YELLOW')):
+                        self._log("updating match quality from YELLOW to GREEN")
+                        self.tm.set_match_quality(row, self.MATCH_COLORS.index('GREEN'))
 
                 # Add the book to the command file
                 book_tag = Tag(update_soup, 'book')
