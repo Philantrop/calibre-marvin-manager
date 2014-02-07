@@ -1498,7 +1498,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             dlg.exec_()
             if dlg.result() == dlg.Accepted:
                 raw = str(dlg.new_collection_le.text())
-                raw = raw.replace(',', ', ')
+                raw = re.sub(',\S', ', ', raw)
                 added_collections = raw.split(', ')
 
                 # Save the selection
