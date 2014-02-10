@@ -32,8 +32,9 @@ if True:
 
 class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
     BORDER_COLOR = "#FDFF99"
-    BORDER_WIDTH = 6
+    BORDER_WIDTH = 4
     COVER_ICON_SIZE = 200
+    MISMATCH_COLOR = QColor(0xFD, 0xFF, 0x99)
 
     marvin_device_status_changed = pyqtSignal(dict)
 
@@ -238,20 +239,20 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 m_image.loadFromData(cover_bytes)
 
                 if with_border:
+                    # Construct a QPixmap with oversized yellow background
                     m_image = m_image.scaledToHeight(
-                        self.COVER_ICON_SIZE - self.BORDER_WIDTH * 2,
+                        self.COVER_ICON_SIZE - self.BORDER_WIDTH * 6,
                         Qt.SmoothTransformation)
 
-                    # Construct a QPixmap with yellow background
                     self.m_pixmap = QPixmap(
-                        QSize(m_image.width() + self.BORDER_WIDTH * 2,
-                              m_image.height() + self.BORDER_WIDTH * 2))
+                        QSize(m_image.width() + self.BORDER_WIDTH * 6,
+                              m_image.height() + self.BORDER_WIDTH * 6))
 
                     m_painter = QPainter(self.m_pixmap)
                     m_painter.setRenderHints(m_painter.Antialiasing)
 
-                    m_painter.fillRect(self.m_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
-                    m_painter.drawImage(self.BORDER_WIDTH, self.BORDER_WIDTH, m_image)
+                    m_painter.fillRect(self.m_pixmap.rect(), self.MISMATCH_COLOR)
+                    m_painter.drawImage(self.BORDER_WIDTH * 3, self.BORDER_WIDTH * 3, m_image)
                 else:
                     m_image = m_image.scaledToHeight(
                         self.COVER_ICON_SIZE,
@@ -345,7 +346,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                           c_image.height() + self.BORDER_WIDTH * 2))
                 c_painter = QPainter(self.c_pixmap)
                 c_painter.setRenderHints(c_painter.Antialiasing)
-                c_painter.fillRect(self.c_pixmap.rect(), QColor(0xFD, 0xFF, 0x99))
+                c_painter.fillRect(self.c_pixmap.rect(),self.MISMATCH_COLOR)
                 c_painter.drawImage(self.BORDER_WIDTH, self.BORDER_WIDTH, c_image)
                 self.calibre_cover.setPixmap(self.c_pixmap)
                 _fetch_marvin_cover(with_border=True)
