@@ -32,7 +32,7 @@ if True:
 
 class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
     BORDER_COLOR = "#FDFF99"
-    BORDER_WIDTH = 4
+    BORDER_WIDTH = 6
     COVER_ICON_SIZE = 200
 
     marvin_device_status_changed = pyqtSignal(dict)
