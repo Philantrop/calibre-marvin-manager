@@ -3164,8 +3164,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         def _generate_rating(book_data):
             '''
             '''
-            self._log_location()
-
             ans = ''
             empty = 5 - book_data.rating
             for x in range(book_data.rating):
@@ -4137,12 +4135,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
         self._log("cached_db: %s" % cached_db)
 
-        # Create annotations table as needed (#153)
+        # Create a blank annotations table (#153)
         self.opts.db.create_annotations_table(cached_db)
 
         # Fetch the annotations (#158)
         con = sqlite3.connect(local_db_path)
-
         with con:
             con.row_factory = sqlite3.Row
             cur = con.cursor()
@@ -6317,11 +6314,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 device_view_row = None
 
         '''
-        We need to tweak the in-memory versions of the Marvin library as if they had
+        Tweak the in-memory versions of the Marvin library as if they had
         been loaded initially.
         mismatch keys:
             authors, author_sort, comments, cover_hash, pubdate, publisher,
-            series, series_index, tags, title, title_sort, uuid
+            rating, series, series_index, tags, title, title_sort, uuid
         visible/relevant memory_view properties (order of appearance):
             in_library, title, title_sort, authors, author_sort, device_collections
         '''
@@ -6359,6 +6356,17 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if key == 'publisher':
                 publisher = mismatches[key]['calibre']
                 cached_books[path]['publisher'] = publisher
+
+            if key == 'rating':
+                rating = mismatches[key]['calibre']
+                self.installed_books[book_id].rating = rating
+
+                # Update the model
+                ans = ''
+                for x in range(rating):
+                    ans += FULL_STAR
+                rating_item = SortableTableWidgetItem(ans, rating)
+                self.tm.set_rating(model_row, rating_item)
 
             if key == 'series':
                 series = mismatches[key]['calibre']
