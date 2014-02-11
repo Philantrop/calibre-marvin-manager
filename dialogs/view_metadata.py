@@ -32,7 +32,7 @@ if True:
 
 class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
     BORDER_COLOR = "#FDFF99"
-    BORDER_WIDTH = 4
+    BORDER_WIDTH = 5
     COVER_ICON_SIZE = 200
     MISMATCH_COLOR = QColor(0xFD, 0xFF, 0x99)
 
@@ -209,11 +209,11 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
         '''
         Display calibre cover for both unless mismatch
         '''
-        def _fetch_marvin_cover(with_border=False):
+        def _fetch_marvin_cover(border_width=0):
             '''
             Retrieve LargeCoverJpg from cache
             '''
-            self._log_location()
+            #self._log_location('border_width: {0}'.format(border_width))
             con = sqlite3.connect(self.marvin_db_path)
             with con:
                 con.row_factory = sqlite3.Row
@@ -238,21 +238,23 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 m_image = QImage()
                 m_image.loadFromData(cover_bytes)
 
-                if with_border:
+                if border_width:
                     # Construct a QPixmap with oversized yellow background
                     m_image = m_image.scaledToHeight(
-                        self.COVER_ICON_SIZE - self.BORDER_WIDTH * 6,
+                        self.COVER_ICON_SIZE - border_width * 2,
                         Qt.SmoothTransformation)
 
                     self.m_pixmap = QPixmap(
-                        QSize(m_image.width() + self.BORDER_WIDTH * 6,
-                              m_image.height() + self.BORDER_WIDTH * 6))
+                        QSize(m_image.width() + border_width * 2,
+                              m_image.height() + border_width * 2))
 
                     m_painter = QPainter(self.m_pixmap)
                     m_painter.setRenderHints(m_painter.Antialiasing)
 
                     m_painter.fillRect(self.m_pixmap.rect(), self.MISMATCH_COLOR)
-                    m_painter.drawImage(self.BORDER_WIDTH * 3, self.BORDER_WIDTH * 3, m_image)
+                    m_painter.drawImage(border_width,
+                                        border_width,
+                                        m_image)
                 else:
                     m_image = m_image.scaledToHeight(
                         self.COVER_ICON_SIZE,
@@ -333,6 +335,7 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 cdata = db.cover(self.cid, index_is_id=True)
                 if cdata is None:
                     c_image.load(I('book.png'))
+                    self.calibre_cover.setScaledContents(True)
                 else:
                     c_image.loadFromData(cdata)
 
@@ -349,7 +352,13 @@ class MetadataComparisonDialog(SizePersistedDialog, Ui_Dialog, Logger):
                 c_painter.fillRect(self.c_pixmap.rect(),self.MISMATCH_COLOR)
                 c_painter.drawImage(self.BORDER_WIDTH, self.BORDER_WIDTH, c_image)
                 self.calibre_cover.setPixmap(self.c_pixmap)
-                _fetch_marvin_cover(with_border=True)
+
+                # Render Marvin cover with small border if different covers,
+                # large cover if no cover hash (loaded via OPDS)
+                border_width = self.BORDER_WIDTH
+                if self.mismatches['cover_hash']['Marvin'] is None:
+                    border_width = self.BORDER_WIDTH * 3
+                _fetch_marvin_cover(border_width=border_width)
         else:
             _fetch_marvin_cover()
 
