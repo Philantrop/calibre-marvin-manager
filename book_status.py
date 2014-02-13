@@ -3249,11 +3249,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             '''
             '''
             ans = ''
-            empty = 5 - book_data.rating
-            for x in range(book_data.rating):
+            rating = book_data.rating if book_data.rating is not None else 0
+            for x in range(rating):
                 ans += FULL_STAR
-            sort_value = book_data.rating if book_data.rating is not None else 0
-
+            sort_value = rating
             return SortableTableWidgetItem(ans, sort_value)
 
         def _generate_series(book_data):
