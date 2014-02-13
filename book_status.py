@@ -6169,8 +6169,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         if results['code']:
                             return self._show_command_error(command_type, results)
 
-    def _update_locked_status(self, action):
+    def _update_locked_status(self, action, update_gui=True):
         '''
+        Update Marvin locked status
+        Update calibre custom column if mapped cc
         '''
         self._log_location(action)
 
@@ -6186,6 +6188,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             #new_image_name = "unlock_enabled.png"
             command_type = "UnlockBooks"
 
+        lookup = get_cc_mapping('locked', 'field')
+
         # Build the command shell
         command_name = "command"
         update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
@@ -6200,6 +6204,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         for row in selected_books:
             # Update the spreadsheet
             book_id = selected_books[row]['book_id']
+            cid = self.installed_books[book_id].cid
             self.tm.set_locked(row, new_locked_widget)
 
             # Update self.installed_books
@@ -6213,6 +6218,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             book_tag['uuid'] = self.installed_books[book_id].uuid
             manifest_tag.insert(0, book_tag)
 
+            # Update calibre Locked column
+            if cid and lookup:
+                db = self.opts.gui.current_db
+                mi = db.get_metadata(cid, index_is_id=True)
+
+                # Set Locked status
+                um = mi.metadata_for_field(lookup)
+                um['#value#'] = True if new_pin_value else None
+                mi.set_user_metadata(lookup, um)
+                db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                commit=True, force_changes=True)
+
         show_spinner = bool(len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER)
         if show_spinner:
             self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
@@ -6220,6 +6237,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         if show_spinner:
             self._busy_status_teardown()
+
+        if update_gui:
+            updateCalibreGUIView()
 
         if results['code']:
             return self._show_command_error('update_locked_status', results)

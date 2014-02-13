@@ -57,6 +57,12 @@ class ConfigWidget(QWidget, Logger):
             'display': {},
             'is_multiple': False
         },
+        'Locked': {
+            'label': 'mm_locked',
+            'datatype': 'bool',
+            'display': {},
+            'is_multiple': False
+        },
         'Progress': {
             'label': 'mm_progress',
             'datatype': 'float',
@@ -175,6 +181,23 @@ class ConfigWidget(QWidget, Logger):
         self.cfg_collections_wizard.setToolTip("Create a custom column to store Last read date")
         self.cfg_collections_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Last read'))
         self.cfg_custom_fields_qgl.addWidget(self.cfg_collections_wizard, current_row, 2)
+        current_row += 1
+
+        # ++++++++ Locked ++++++++
+        self.cfg_locked_label = QLabel("Locked")
+        self.cfg_locked_label.setAlignment(Qt.AlignLeft)
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_locked_label, current_row, 0)
+
+        self.locked_field_comboBox = QComboBox(self.cfg_custom_fields_gb)
+        self.locked_field_comboBox.setObjectName('locked_field_comboBox')
+        self.locked_field_comboBox.setToolTip('Select a custom column to store Locked status')
+        self.cfg_custom_fields_qgl.addWidget(self.locked_field_comboBox, current_row, 1)
+
+        self.cfg_locked_wizard = QToolButton()
+        self.cfg_locked_wizard.setIcon(QIcon(I('wizard.png')))
+        self.cfg_locked_wizard.setToolTip("Create a custom column to store Locked status")
+        self.cfg_locked_wizard.clicked.connect(partial(self.launch_cc_wizard, 'Locked'))
+        self.cfg_custom_fields_qgl.addWidget(self.cfg_locked_wizard, current_row, 2)
         current_row += 1
 
         # ++++++++ Progress ++++++++
@@ -369,6 +392,7 @@ class ConfigWidget(QWidget, Logger):
         self.populate_annotations()
         self.populate_collections()
         self.populate_date_read()
+        self.populate_locked()
         self.populate_progress()
         self.populate_read()
         self.populate_reading_list()
@@ -627,6 +651,15 @@ class ConfigWidget(QWidget, Logger):
                     # Save manually in case user cancels
                     set_cc_mapping('date_read', combobox=destination, field=label)
 
+                elif source == 'Locked':
+                    _update_combo_box("locked_field_comboBox", destination, previous)
+
+                    # Add/update the new destination so save_settings() can find it
+                    self.eligible_locked_fields[destination] = label
+
+                    # Save manually in case user cancels
+                    set_cc_mapping('locked', combobox=destination, field=label)
+
                 elif source == "Progress":
                     _update_combo_box("progress_field_comboBox", destination, previous)
 
@@ -721,6 +754,19 @@ class ConfigWidget(QWidget, Logger):
         if existing:
             ci = self.date_read_field_comboBox.findText(existing)
             self.date_read_field_comboBox.setCurrentIndex(ci)
+
+    def populate_locked(self):
+        datatype = self.WIZARD_PROFILES['Locked']['datatype']
+        self.eligible_locked_fields = self.get_eligible_custom_fields([datatype])
+        self.locked_field_comboBox.addItems([''])
+        ecf = sorted(self.eligible_locked_fields.keys(), key=lambda s: s.lower())
+        self.locked_field_comboBox.addItems(ecf)
+
+        # Retrieve stored value
+        existing = get_cc_mapping('locked', 'combobox')
+        if existing:
+            ci = self.locked_field_comboBox.findText(existing)
+            self.locked_field_comboBox.setCurrentIndex(ci)
 
     def populate_progress(self):
         #self.eligible_progress_fields = self.get_eligible_custom_fields(['float'])
@@ -821,49 +867,56 @@ class ConfigWidget(QWidget, Logger):
     def save_settings(self):
         self._log_location()
 
-        # Annotations
+        # Annotations field
         cf = unicode(self.annotations_field_comboBox.currentText())
         field = None
         if cf:
             field = self.eligible_annotations_fields[cf]
         set_cc_mapping('annotations', combobox=cf, field=field)
 
-        # Collections
+        # Collections field
         cf = unicode(self.collection_field_comboBox.currentText())
         field = None
         if cf:
             field = self.eligible_collection_fields[cf]
         set_cc_mapping('collections', combobox=cf, field=field)
 
-        # Save Date read field
+        # Date read field
         cf = unicode(self.date_read_field_comboBox.currentText())
         field = None
         if cf:
             field = self.eligible_date_read_fields[cf]
         set_cc_mapping('date_read', combobox=cf, field=field)
 
-        # Save Progress field
+        # Locked field
+        cf = unicode(self.locked_field_comboBox.currentText())
+        field = None
+        if cf:
+            field = self.eligible_locked_fields[cf]
+        set_cc_mapping('locked', combobox=cf, field=field)
+
+        # Progress field
         cf = unicode(self.progress_field_comboBox.currentText())
         field = None
         if cf:
             field = self.eligible_progress_fields[cf]
         set_cc_mapping('progress', combobox=cf, field=field)
 
-        # Save Read field
+        # Read field
         cf = unicode(self.read_field_comboBox.currentText())
         field = None
         if cf:
             field = self.eligible_read_fields[cf]
         set_cc_mapping('read', combobox=cf, field=field)
 
-        # Save Reading list field
+        # Reading list field
         cf = unicode(self.reading_list_field_comboBox.currentText())
         field = None
         if cf:
             field = self.eligible_reading_list_fields[cf]
         set_cc_mapping('reading_list', combobox=cf, field=field)
 
-        # Save Word count field
+        # Word count field
         cf = unicode(self.word_count_field_comboBox.currentText())
         field = None
         if cf:
