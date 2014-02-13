@@ -1475,7 +1475,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
 
         enabled = []
-        for cfn in ['annotations', 'date_read', 'progress', 'read',
+        for cfn in ['annotations', 'date_read', 'locked', 'progress', 'read',
             'reading_list','word_count']:
             cfv = get_cc_mapping(cfn, 'combobox', None)
             if cfv:
@@ -1503,10 +1503,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self._fetch_annotations(update_gui=False)
                 self._apply_date_read(update_gui=False)
                 self._apply_flags(update_gui=False)
+                self._apply_locked(update_gui=False)
                 self._apply_progress(update_gui=False)
                 self._apply_word_count(update_gui=False)
 
-            # _apply_flags may have updated Marvin mainDb
+            # _apply_flags, apply_locked may have updated Marvin mainDb
             self._localize_marvin_database()
 
             updateCalibreGUIView()
@@ -2379,6 +2380,89 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             if update_gui:
                 updateCalibreGUIView()
+
+    def _apply_locked(self, update_gui=True):
+        '''
+        If cc exists for Locked, examine both calibre and Marvin.
+        If locked in either location, set both to locked
+        This is an optimized version of _update_locked_status()
+        '''
+        lookup = get_cc_mapping('locked', 'field')
+        if lookup:
+            self._log_location()
+
+            # Build the Marvin command shell
+            command_name = "command"
+            command_type = "LockBooks"
+            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+                command_type, time.mktime(time.localtime())))
+            manifest_tag = Tag(update_soup, 'manifest')
+            update_soup.command.insert(0, manifest_tag)
+
+            selected_books = self._selected_books()
+            c_updated = False
+            m_updated = False
+            for row in selected_books:
+                book_id = selected_books[row]['book_id']
+                cid = selected_books[row]['cid']
+                if cid is not None:
+                    # Get the current value from the lookup field
+                    db = self.opts.gui.current_db
+                    mi = db.get_metadata(cid, index_is_id=True)
+                    um = mi.metadata_for_field(lookup)
+
+                    c_locked = bool(um['#value#'])    # [True|False|None]
+                    m_locked = self.tm.get_locked(row).sort_key
+
+                    # If either is set (but not both) do updates
+                    if c_locked ^ m_locked:
+                        #self._update_locked_status('set_locked', update_gui=True)
+
+                        if c_locked:
+                            self._log("Setting Marvin Locked status for {0}".format(
+                                self.installed_books[book_id].title))
+                            # Set Marvin locked status
+                            new_pin_value = 1
+                            new_image_name = "lock_enabled.png"
+                            new_locked_widget = SortableImageWidgetItem(
+                                os.path.join(self.parent.opts.resources_path,
+                                             'icons', new_image_name),
+                                new_pin_value)
+                            self.tm.set_locked(row, new_locked_widget)
+
+                            # Update self.installed_books
+                            self.installed_books[book_id].pin = new_pin_value
+
+                            # Add the book to the manifest
+                            book_tag = Tag(update_soup, 'book')
+                            book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
+                            book_tag['filename'] = self.installed_books[book_id].path
+                            book_tag['title'] = self.installed_books[book_id].title
+                            book_tag['uuid'] = self.installed_books[book_id].uuid
+                            manifest_tag.insert(0, book_tag)
+                            m_updated = True
+
+                        elif m_locked:
+                            # Set calibre Locked status
+                            self._log("Setting calibre Locked status for {0}".format(
+                                self.installed_books[book_id].title))
+                            db = self.opts.gui.current_db
+                            mi = db.get_metadata(cid, index_is_id=True)
+                            um = mi.metadata_for_field(lookup)
+                            um['#value#'] = True
+                            mi.set_user_metadata(lookup, um)
+                            db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                            commit=True, force_changes=True)
+                            c_updated = True
+
+            if c_updated and update_gui:
+                updateCalibreGUIView()
+
+            if m_updated:
+                results = self._issue_command(command_name, update_soup,
+                                              update_local_db=True)
+                if results['code']:
+                    return self._show_command_error('apply_locked', results)
 
     def _apply_progress(self, update_gui=True):
         '''
@@ -6521,6 +6605,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         for cfn, col in [
                          ('annotations', self.ANNOTATIONS_COL),
                          ('date_read', self.LAST_OPENED_COL),
+                         ('locked', self.LOCKED_COL),
                          ('progress', self.PROGRESS_COL),
                          ('read', self.FLAGS_COL),
                          ('reading_list', self.FLAGS_COL),
