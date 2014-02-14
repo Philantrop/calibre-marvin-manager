@@ -95,7 +95,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self._log("cached epub hashes deleted")
                 # Invalidate the library hash map, as library contents may change before reconnection
                 if hasattr(self, 'library_scanner'):
-                    self.library_scanner.hash_map = None
+                    if hasattr(self.library_scanner, 'hash_map'):
+                        self.library_scanner.hash_map = None
             elif action == 'Nuke annotations':
                 self.nuke_annotations()
             elif action == 'Reset column widths':

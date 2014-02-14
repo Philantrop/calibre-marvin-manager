@@ -4182,16 +4182,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
         local_db_path = getattr(self.parent.connected_device, "local_db_path")
-        #self._log("local_db_path: %s" % local_db_path)
 
         template = "{0}_books"
         books_db = template.format(re.sub('\W', '_', self.ios.device_name))
-        #self._log("books_db: %s" % books_db)
 
         # Create the books table as needed (#272)
         self.opts.db.create_books_table(books_db)
 
-        # Populate a BookStuct
+        # Add the book to the books_db
         b_mi = BookStruct()
         b_mi.active = True
         b_mi.author = ', '.join(self.installed_books[book_id].author)
@@ -4200,8 +4198,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         b_mi.title = self.installed_books[book_id].title
         b_mi.title_sort = self.installed_books[book_id].title_sort
         b_mi.uuid = self.installed_books[book_id].uuid
-
-        # Add to books_db (#330)
         self.opts.db.add_to_books_db(books_db, b_mi)
 
         # Get the toc_entries (#344)
