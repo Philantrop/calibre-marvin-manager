@@ -479,6 +479,14 @@ class MyTableView(QTableView):
 
         action = menu.exec_(self.mapToGlobal(pos))
 
+    def keyPressEvent(self, event):
+        '''
+        If user uses up/down keys, update Refresh button in MXD window
+        '''
+        super(MyTableView, self).keyPressEvent(event)
+        if event.key() in [Qt.Key_Up, Qt.Key_Down]:
+            self.parent._update_refresh_button()
+
     def toggle_column_visibility(self, col):
         '''
         Toggle visible state of col, resize to contents
@@ -1210,6 +1218,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         else:
             self._log("no double-click handler for %s" % self.LIBRARY_HEADER[column])
 
+    def dispatch_single_click(self, index):
+        '''
+        '''
+        row = index.row()
+        self._log_location(row)
+        self._update_refresh_button()
+
     def esc(self, *args):
         '''
         Clear any active selections, filter
@@ -1414,6 +1429,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
 
         # ~~~~~~~~ Connect signals ~~~~~~~~
+        self.connect(self.tv, SIGNAL("clicked(QModelIndex)"), self.dispatch_single_click)
         self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.dispatch_double_click)
         self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
 
@@ -4179,7 +4195,119 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
     def _get_formatted_annotations(self, book_id):
         '''
+        Fetch and format Book notes, Bookmark notes, Annotations for book_id
         '''
+        def _get_active_annotations(book_id, books_db, local_db_path):
+            '''
+            '''
+            self._log_location(book_id)
+            # ~~~~~~~~~~ Emulating get_active_annotations() ~~~~~~~~~~
+            template = "{0}_annotations"
+            cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
+            self._log("cached_db: %s" % cached_db)
+
+            # Create a blank annotations table (#153)
+            self.opts.db.create_annotations_table(cached_db)
+
+            # Fetch the annotations (#158)
+            con = sqlite3.connect(local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute('''
+                               SELECT * FROM Highlights
+                               WHERE BookId = '{0}'
+                               ORDER BY NoteDateTime
+                            '''.format(book_id))
+                rows = cur.fetchall()
+                for row in rows:
+                    # Sanitize text, note to unicode
+                    highlight_text = re.sub('\xa0', ' ', row[b'Text'])
+                    highlight_text = UnicodeDammit(highlight_text).unicode
+                    highlight_text = highlight_text.rstrip('\n').split('\n')
+                    while highlight_text.count(''):
+                        highlight_text.remove('')
+                    highlight_text = [line.strip() for line in highlight_text]
+
+                    note_text = None
+                    if row[b'Note']:
+                        ntu = UnicodeDammit(row[b'Note']).unicode
+                        note_text = ntu.rstrip('\n')
+
+                    # Populate an AnnotationStruct
+                    a_mi = AnnotationStruct()
+                    a_mi.annotation_id = row[b'UUID']
+                    a_mi.book_id = book_id
+                    a_mi.highlight_color = self.HIGHLIGHT_COLORS[row[b'Colour']]
+                    a_mi.highlight_text = '\n'.join(highlight_text)
+                    a_mi.last_modification = row[b'NoteDateTime']
+
+                    section = str(int(row[b'Section']) - 1)
+                    try:
+                        a_mi.location = self.tocs[book_id][section]
+                    except:
+                        a_mi.location = "Section %s" % row[b'Section']
+
+                    a_mi.note_text = note_text
+
+                    # If empty highlight_text and empty note_text, not a useful annotation
+                    if not highlight_text and not note_text:
+                        continue
+
+                    # Generate location_sort
+                    interior = self._generate_interior_location_sort(row[b'StartXPath'])
+                    if not interior:
+                        self._log("Marvin: unable to parse xpath:")
+                        self._log(row[b'StartXPath'])
+                        self._log(a_mi)
+                        continue
+
+                    a_mi.location_sort = "%04d.%s.%04d" % (
+                        int(row[b'Section']),
+                        interior,
+                        int(row[b'StartOffset']))
+
+                    # Add annotation
+                    self.opts.db.add_to_annotations_db(cached_db, a_mi)
+
+                    # Update last_annotation in books_db
+                    self.opts.db.update_book_last_annotation(books_db, row[b'NoteDateTime'], book_id)
+
+                # Update the timestamp
+                self.opts.db.update_timestamp(cached_db)
+                self.opts.db.commit()
+
+        def _get_book_notes(book_id, books_db, local_db_path):
+            '''
+            Retrieve Book notes
+            '''
+            self._log_location(book_id)
+            template = "{0}_book_notes"
+            cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
+            self._log("cached_db: %s" % cached_db)
+
+            # Create a blank book notes table (#153)
+            self.opts.db.create_book_notes_table(cached_db)
+
+            # Fetch the book notes
+            con = sqlite3.connect(local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute('''
+                               SELECT
+                                Note
+                               FROM Books
+                               WHERE ID = '{0}'
+                            '''.format(book_id))
+                row = cur.fetchone()
+            self._log("Note: %s" % row[b'Note'])
+
+        def _get_bookmark_notes(book_id, books_db, local_db_path):
+            '''
+            '''
+            self._log_location(book_id)
+
         # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
         local_db_path = getattr(self.parent.connected_device, "local_db_path")
 
@@ -4209,86 +4337,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.opts.db.update_timestamp(books_db)
         self.opts.db.commit()
 
-        # ~~~~~~~~~~ Emulating get_active_annotations() ~~~~~~~~~~
-        template = "{0}_annotations"
-        cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
-        self._log("cached_db: %s" % cached_db)
-
-        # Create a blank annotations table (#153)
-        self.opts.db.create_annotations_table(cached_db)
-
-        # Fetch the annotations (#158)
-        con = sqlite3.connect(local_db_path)
-        with con:
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
-            cur.execute('''
-                           SELECT * FROM Highlights
-                           WHERE BookId = '{0}'
-                           ORDER BY NoteDateTime
-                        '''.format(book_id))
-            rows = cur.fetchall()
-            for row in rows:
-                # Sanitize text, note to unicode
-                highlight_text = re.sub('\xa0', ' ', row[b'Text'])
-                highlight_text = UnicodeDammit(highlight_text).unicode
-                highlight_text = highlight_text.rstrip('\n').split('\n')
-                while highlight_text.count(''):
-                    highlight_text.remove('')
-                highlight_text = [line.strip() for line in highlight_text]
-
-                note_text = None
-                if row[b'Note']:
-                    ntu = UnicodeDammit(row[b'Note']).unicode
-                    note_text = ntu.rstrip('\n')
-
-                # Populate an AnnotationStruct
-                a_mi = AnnotationStruct()
-                a_mi.annotation_id = row[b'UUID']
-                a_mi.book_id = book_id
-                a_mi.highlight_color = self.HIGHLIGHT_COLORS[row[b'Colour']]
-                a_mi.highlight_text = '\n'.join(highlight_text)
-                a_mi.last_modification = row[b'NoteDateTime']
-
-                section = str(int(row[b'Section']) - 1)
-                try:
-                    a_mi.location = self.tocs[book_id][section]
-                except:
-                    a_mi.location = "Section %s" % row[b'Section']
-
-                a_mi.note_text = note_text
-
-                # If empty highlight_text and empty note_text, not a useful annotation
-                if not highlight_text and not note_text:
-                    continue
-
-                # Generate location_sort
-                interior = self._generate_interior_location_sort(row[b'StartXPath'])
-                if not interior:
-                    self._log("Marvin: unable to parse xpath:")
-                    self._log(row[b'StartXPath'])
-                    self._log(a_mi)
-                    continue
-
-                a_mi.location_sort = "%04d.%s.%04d" % (
-                    int(row[b'Section']),
-                    interior,
-                    int(row[b'StartOffset']))
-
-                # Add annotation
-                self.opts.db.add_to_annotations_db(cached_db, a_mi)
-
-                # Update last_annotation in books_db
-                self.opts.db.update_book_last_annotation(books_db, row[b'NoteDateTime'], book_id)
-
-            # Update the timestamp
-            self.opts.db.update_timestamp(cached_db)
-            self.opts.db.commit()
+        _get_book_notes(book_id, books_db, local_db_path)
+        _get_bookmark_notes(book_id, books_db, local_db_path)
+        _get_active_annotations(book_id, books_db, local_db_path)
 
         book_mi = BookStruct()
         book_mi.book_id = book_id
         book_mi.reader_app = 'Marvin'
         book_mi.title = self.installed_books[book_id].title
+
+        # Temporary reconstruction of cached_db
+        template = "{0}_annotations"
+        cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
         formatted_annotations = self.opts.db.annotations_to_html(cached_db, book_mi)
 
         return formatted_annotations
@@ -4430,6 +4490,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         def _get_highlights(cur, book_id):
             '''
             Return highlight text/notes associated with book_id
+            ['<p>highlight<br/>note</p>',…]
             '''
             hl_cur = con.cursor()
             hl_cur.execute('''SELECT
@@ -6610,6 +6671,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             visible = not self.tv.isColumnHidden(col) and self.tv.columnWidth(col) > 0
             if cfv and visible:
                 enabled.append(cfv)
+
+        # Locked is only enabled if the current selection includes a book
+        # both in calibre with a match_quality of YELLOW or higher.
+        cfv = get_cc_mapping('locked', 'combobox', None)
+        if cfv in enabled:
+            selected_books = self._selected_books()
+            for row in selected_books:
+                match_quality = self.tm.get_match_quality(row)
+                if match_quality >= self.MATCH_COLORS.index('YELLOW'):
+                    break
+            else:
+                enabled.pop(enabled.index(cfv))
 
         if False and enabled:
             button_title = 'Refresh %s' % ', '.join(sorted(enabled, key=sort_key))

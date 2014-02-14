@@ -301,26 +301,6 @@ class AnnotationsDB(Logger):
                 highlight_color TEXT
                 );'''.format(cached_db))
 
-    def create_books_table(self, cached_db):
-        """
-
-        """
-        self.conn.executescript('''
-            DROP TABLE IF EXISTS "{0}";
-            CREATE TABLE "{0}"
-                (
-                 book_id TEXT UNIQUE,
-                 title TEXT,
-                 title_sort TEXT,
-                 author TEXT,
-                 author_sort TEXT,
-                 genre TEXT,
-                 uuid TEXT,
-                 path TEXT,
-                 active INTEGER NOT NULL,
-                 last_annotation DATETIME
-                );'''.format(cached_db))
-
     def create_annotations_transient_table(self, transient_table):
         '''
         Used to temporarily store annotations when moving or re-rendering
@@ -340,6 +320,39 @@ class AnnotationsDB(Logger):
                 location_sort TEXT,
                 reader TEXT
                 );'''.format(transient_table))
+
+    def create_book_notes_table(self, cached_db):
+        """
+
+        """
+
+        self.conn.executescript('''
+            DROP TABLE IF EXISTS "{0}";
+            CREATE TABLE "{0}"
+                (
+                book_id TEXT,
+                note_text TEXT
+                );'''.format(cached_db))
+
+    def create_books_table(self, cached_db):
+        """
+
+        """
+        self.conn.executescript('''
+            DROP TABLE IF EXISTS "{0}";
+            CREATE TABLE "{0}"
+                (
+                 book_id TEXT UNIQUE,
+                 title TEXT,
+                 title_sort TEXT,
+                 author TEXT,
+                 author_sort TEXT,
+                 genre TEXT,
+                 uuid TEXT,
+                 path TEXT,
+                 active INTEGER NOT NULL,
+                 last_annotation DATETIME
+                );'''.format(cached_db))
 
     def create_timestamp_table(self):
         #c = self.conn.cursor()
