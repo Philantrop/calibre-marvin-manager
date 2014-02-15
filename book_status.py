@@ -4210,7 +4210,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             'div.bookmark {'
             'background-image: -webkit-gradient(linear,left top, left bottom,'
             'color-stop(0%,#bb3a34),color-stop(100%, #e74841));'
-            'height:1.75em;'
+            'height:2.0em;'
             'position:absolute;'
             'top:relative;'
             'right:1em;'
@@ -4246,16 +4246,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 '<div>'
                 '<div class="bookmark"></div>'
                 '<table cellpadding="0" width="100%" '
-                'style="background-color:silver;'
+                'style="background-color:#C8C8C8;'
                 'color:black;'
-                'font-size:75%;'
+                'font-size:90%;'
                 'font-weight:bold;'
                 'margin-bottom:6px;'
                 'position:relative;'
                 'top:1px;">'
                 '<tbody><tr><td class="location" style="text-align:left">{0}'
                 '</td></tr></tbody></table>'
-                '<p class="note" style="margin:0;text-indent:0.5em;font-style:italic">{1}</p>'
+                '<p class="note" style="margin:0 0 6 0;text-indent:0.5em;font-style:italic">{1}</p>'
                 '</div>'
                 )
             bookmarks = {}
@@ -4271,14 +4271,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 bookmarks[loc_sort] = {'note': row[b'note_text'], 'location': location}
 
             soup = BeautifulSoup(DIV_TEMPLATE.format('bookmark_notes'))
-            #BOOKMARK_TAG = Tag(soup, "div", [("class", "bookmark")])
             for bookmark in sorted(bookmarks.keys(), reverse=True):
                 soup.div.insert(0, BOOKMARK_TEMPLATE.format(
                     bookmarks[bookmark]['location'],
                     bookmarks[bookmark]['note']))
-                #soup.div.insert(0, BOOKMARK_TAG)
-
-            #self._log(soup.prettify())
             return soup
 
         def _get_active_annotations(book_id, annotations_table):
