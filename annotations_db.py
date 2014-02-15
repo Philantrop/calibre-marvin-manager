@@ -63,7 +63,7 @@ class AnnotationsDB(Logger):
               annotation['highlight_color'])
              )
 
-    def add_to_book_notes_db(self, book_note_db, note):
+    def add_to_book_notes_db(self, book_notes_db, note):
         '''
         note is a dict containing the book_id and note_text to be stored
         '''
@@ -71,7 +71,7 @@ class AnnotationsDB(Logger):
             INSERT OR REPLACE INTO {0}
              (book_id,
               note_text)
-            VALUES(?, ?)'''.format(book_note_db),
+            VALUES(?, ?)'''.format(book_notes_db),
              (note['book_id'],
               note['note_text'])
             )
@@ -442,6 +442,30 @@ class AnnotationsDB(Logger):
                                   WHERE book_id = '{1}'""".format(annotations_db, book_id))
 
         return annotations
+
+    def get_book_notes(self, book_notes_table, book_id):
+        """
+        Get Book notes from book_notes_db for book_id
+        """
+        book_notes = self.get("""SELECT
+                                  note_text
+                                 FROM {0}
+                                 WHERE book_id = '{1}'""".format(book_notes_table, book_id))
+        return book_notes
+
+    def get_bookmark_notes(self, bookmark_notes_table, book_id):
+        """
+        Get Bookmark notes from bookmark_notes_db for book_id
+        """
+        bookmark_notes = self.get("""SELECT
+                                      highlight_color,
+                                      location,
+                                      note_text,
+                                      section_number
+                                     FROM {0}
+                                     WHERE book_id = '{1}'""".format(bookmark_notes_table, book_id))
+        return bookmark_notes
+
 
     def get_books(self, books_db):
         """

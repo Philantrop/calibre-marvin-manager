@@ -4195,6 +4195,92 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Fetch and format Book notes, Bookmark notes, Annotations for book_id
         '''
+        HTML_TEMPLATE = (
+            '<?xml version=\'1.0\' encoding=\'utf-8\'?>'
+            '<html xmlns="http://www.w3.org/1999/xhtml">'
+            '<head>'
+            '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>'
+            '<title>Annotations</title>'
+            '<style>foo</style>'
+            '</head>'
+            '<body></body>'
+            '</html>'
+            )
+        STYLE_TEMPLATE = (
+            'div.bookmark {'
+            'background-image: -webkit-gradient(linear,left top, left bottom,'
+            'color-stop(0%,#bb3a34),color-stop(100%, #e74841));'
+            'height:1.75em;'
+            'position:absolute;'
+            'top:relative;'
+            'right:1em;'
+            'width:1.25em;'
+            'z-index:1;'
+            '}'
+            'div.bookmark:after {'
+            "content:'';"
+            'display:block;'
+            'border:0.625em solid transparent;'
+            'border-bottom-color:white;'
+            'position:absolute;'
+            'bottom:0;'
+            '}'
+            )
+
+        DIV_TEMPLATE = '''<div class="{0}" style="margin:0"></div>'''
+
+        def _build_book_notes(book_id, book_notes_table):
+            '''
+            '''
+            soup = BeautifulSoup(DIV_TEMPLATE.format('book_notes'))
+            book_notes = self.opts.db.get_book_notes(book_notes_table, book_id)
+            for row in book_notes:
+                self._log("book_notes: %s" % row[b'note_text'])
+            return soup
+
+        def _build_bookmark_notes(book_id, bookmark_notes_table):
+            '''
+            Build a div with bookmark notes
+            '''
+            BOOKMARK_TEMPLATE = (
+                '<div>'
+                '<div class="bookmark"></div>'
+                '<table cellpadding="0" width="100%" '
+                'style="background-color:silver;'
+                'color:black;'
+                'font-size:75%;'
+                'font-weight:bold;'
+                'margin-bottom:6px;'
+                'position:relative;'
+                'top:1px;">'
+                '<tbody><tr><td class="location" style="text-align:left">{0}'
+                '</td></tr></tbody></table>'
+                '<p class="note" style="margin:0;text-indent:0.5em;font-style:italic">{1}</p>'
+                '</div>'
+                )
+            bookmarks = {}
+            bookmark_notes = self.opts.db.get_bookmark_notes(bookmark_notes_table, book_id)
+            for row in bookmark_notes:
+                section = int(row[b'section_number'])
+                loc = int(float(row[b'location']) * 1000)
+                loc_sort = "{0:04d}.{1:04d}".format(section, loc)
+                try:
+                    location = self.tocs[book_id][str(section - 1)]
+                except:
+                    location = "Section %d" % section
+                bookmarks[loc_sort] = {'note': row[b'note_text'], 'location': location}
+
+            soup = BeautifulSoup(DIV_TEMPLATE.format('bookmark_notes'))
+            #BOOKMARK_TAG = Tag(soup, "div", [("class", "bookmark")])
+            for bookmark in sorted(bookmarks.keys(), reverse=True):
+                soup.div.insert(0, BOOKMARK_TEMPLATE.format(
+                    bookmarks[bookmark]['location'],
+                    bookmarks[bookmark]['note']))
+                #soup.div.insert(0, BOOKMARK_TAG)
+
+            #self._log(soup.prettify())
+            return soup
+
         def _get_active_annotations(book_id, annotations_table):
             '''
             '''
@@ -4377,15 +4463,27 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         annotations_table = template.format(re.sub('\W', '_', self.ios.device_name))
         _get_active_annotations(book_id, annotations_table)
 
-        # Build the formatted HTML
+        # Build the formatted user annotations div
         book_mi = BookStruct()
         book_mi.book_id = book_id
         book_mi.reader_app = 'Marvin'
         book_mi.title = self.installed_books[book_id].title
+        annotations_div = self.opts.db.annotations_to_html(annotations_table, book_mi)
 
-        formatted_annotations = self.opts.db.annotations_to_html(annotations_table, book_mi)
+        # Add Bookmark notes
+        bookmarks_div = _build_bookmark_notes(book_id, bookmark_notes_table)
 
-        return formatted_annotations
+        # Add Book notes
+        book_div = _build_book_notes(book_id, book_notes_table)
+
+        # Cook da soup
+        soup = BeautifulSoup(HTML_TEMPLATE)
+        style_tag = Tag(soup, 'style')
+        style_tag.insert(0, STYLE_TEMPLATE)
+        soup.head.style.replaceWith(style_tag)
+        soup.body.insert(0, bookmarks_div)
+        soup.body.insert(1, annotations_div)
+        return soup
 
     def _get_marvin_collections(self, book_id):
         return sorted(self.installed_books[book_id].device_collections, key=sort_key)
