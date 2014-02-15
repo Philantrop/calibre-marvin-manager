@@ -63,6 +63,39 @@ class AnnotationsDB(Logger):
               annotation['highlight_color'])
              )
 
+    def add_to_book_notes_db(self, book_note_db, note):
+        '''
+        note is a dict containing the book_id and note_text to be stored
+        '''
+        self.conn.execute('''
+            INSERT OR REPLACE INTO {0}
+             (book_id,
+              note_text)
+            VALUES(?, ?)'''.format(book_note_db),
+             (note['book_id'],
+              note['note_text'])
+            )
+
+    def add_to_bookmark_notes_db(self, bookmark_note_db, note):
+        '''
+        note is a dict containing:
+        book_id, highlight_color, location, note_text, section_number
+        '''
+        self.conn.execute('''
+            INSERT OR REPLACE INTO {0}
+             (book_id,
+              highlight_color,
+              location,
+              note_text,
+              section_number)
+            VALUES(?, ?, ?, ?, ?)'''.format(bookmark_note_db),
+             (note['book_id'],
+              note['highlight_color'],
+              note['location'],
+              note['note_text'],
+              note['section_number'])
+            )
+
     def add_to_books_db(self, books_db, book):
         '''
         book is a dict containing the metadata describing the book:
@@ -323,6 +356,17 @@ class AnnotationsDB(Logger):
 
     def create_book_notes_table(self, cached_db):
         """
+        """
+        self.conn.executescript('''
+            DROP TABLE IF EXISTS "{0}";
+            CREATE TABLE "{0}"
+                (
+                book_id TEXT,
+                note_text TEXT
+                );'''.format(cached_db))
+
+    def create_bookmark_notes_table(self, cached_db):
+        """
 
         """
 
@@ -331,6 +375,9 @@ class AnnotationsDB(Logger):
             CREATE TABLE "{0}"
                 (
                 book_id TEXT,
+                section_number TEXT,
+                location TEXT,
+                highlight_color TEXT,
                 note_text TEXT
                 );'''.format(cached_db))
 

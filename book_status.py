@@ -3146,13 +3146,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         def _generate_highlights(book_data):
             '''
             '''
-            if len(book_data.highlights):
-                highlights = SortableTableWidgetItem(
-                    "{0}".format(len(book_data.highlights)),
-                    len(book_data.highlights))
-            else:
-                highlights = SortableTableWidgetItem('', 0)
-            return highlights
+            displayed = ''
+            sort_value = book_data.highlights
+            if book_data.highlights:
+                displayed = '{0}'.format(sort_value)
+            return SortableTableWidgetItem(displayed, sort_value)
 
         def _generate_last_opened(book_data):
             '''
@@ -4197,17 +4195,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Fetch and format Book notes, Bookmark notes, Annotations for book_id
         '''
-        def _get_active_annotations(book_id, books_db, local_db_path):
+        def _get_active_annotations(book_id, annotations_table, books_db, local_db_path):
             '''
             '''
             self._log_location(book_id)
             # ~~~~~~~~~~ Emulating get_active_annotations() ~~~~~~~~~~
-            template = "{0}_annotations"
-            cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
-            self._log("cached_db: %s" % cached_db)
 
             # Create a blank annotations table (#153)
-            self.opts.db.create_annotations_table(cached_db)
+            self.opts.db.create_annotations_table(annotations_table)
 
             # Fetch the annotations (#158)
             con = sqlite3.connect(local_db_path)
@@ -4268,28 +4263,25 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         int(row[b'StartOffset']))
 
                     # Add annotation
-                    self.opts.db.add_to_annotations_db(cached_db, a_mi)
+                    self.opts.db.add_to_annotations_db(annotations_table, a_mi)
 
                     # Update last_annotation in books_db
                     self.opts.db.update_book_last_annotation(books_db, row[b'NoteDateTime'], book_id)
 
                 # Update the timestamp
-                self.opts.db.update_timestamp(cached_db)
+                self.opts.db.update_timestamp(annotations_table)
                 self.opts.db.commit()
 
-        def _get_book_notes(book_id, books_db, local_db_path):
+        def _get_book_notes(book_id, book_notes_table, books_db, local_db_path):
             '''
             Retrieve Book notes
             '''
             self._log_location(book_id)
-            template = "{0}_book_notes"
-            cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
-            self._log("cached_db: %s" % cached_db)
 
-            # Create a blank book notes table (#153)
-            self.opts.db.create_book_notes_table(cached_db)
+            # Initialize a blank book notes table (#153)
+            self.opts.db.create_book_notes_table(book_notes_table)
 
-            # Fetch the book notes
+            # Fetch the book note from Marvin
             con = sqlite3.connect(local_db_path)
             with con:
                 con.row_factory = sqlite3.Row
@@ -4300,13 +4292,46 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                FROM Books
                                WHERE ID = '{0}'
                             '''.format(book_id))
-                row = cur.fetchone()
-            self._log("Note: %s" % row[b'Note'])
+                book_note = cur.fetchone()[b'Note']
 
-        def _get_bookmark_notes(book_id, books_db, local_db_path):
+            # Store the book note to our db
+            if book_note:
+                self.opts.db.add_to_book_notes_db(book_notes_table,
+                    {'book_id': book_id, 'note_text': book_note})
+
+        def _get_bookmark_notes(book_id, bookmark_notes_table, books_db, local_db_path):
             '''
+            Retrieve Bookmark notes
             '''
             self._log_location(book_id)
+
+            # Initialize a blank bookmark notes table
+            self.opts.db.create_bookmark_notes_table(bookmark_notes_table)
+
+            # Fetch the bookmark notes from Marvin
+            con = sqlite3.connect(local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute('''
+                               SELECT
+                                Colour,
+                                Location,
+                                SectionNumber,
+                                Text
+                               FROM Bookmarks
+                               WHERE BookID = '{0}'
+                            '''.format(book_id))
+                bmn_rows = cur.fetchall()
+                for row in bmn_rows:
+                    if row[b'Text']:
+                        bookmark_note = {
+                            'book_id': book_id,
+                            'highlight_color': row[b'Colour'],
+                            'location': row[b'Location'],
+                            'note_text': row[b'Text'],
+                            'section_number': row[b'SectionNumber']}
+                        self.opts.db.add_to_bookmark_notes_db(bookmark_notes_table, bookmark_note)
 
         # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
         local_db_path = getattr(self.parent.connected_device, "local_db_path")
@@ -4337,19 +4362,27 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.opts.db.update_timestamp(books_db)
         self.opts.db.commit()
 
-        _get_book_notes(book_id, books_db, local_db_path)
-        _get_bookmark_notes(book_id, books_db, local_db_path)
-        _get_active_annotations(book_id, books_db, local_db_path)
+        # Populate book_notes_table
+        template = "{0}_book_notes"
+        book_notes_table = template.format(re.sub('\W', '_', self.ios.device_name))
+        _get_book_notes(book_id, book_notes_table, books_db, local_db_path)
+
+        # Populate bookmark_notes table
+        template = "{0}_bookmark_notes"
+        bookmark_notes_table = template.format(re.sub('\W', '_', self.ios.device_name))
+        _get_bookmark_notes(book_id, bookmark_notes_table, books_db, local_db_path)
+
+        # Populate annotations_table
+        template = "{0}_annotations"
+        annotations_table = template.format(re.sub('\W', '_', self.ios.device_name))
+        _get_active_annotations(book_id, annotations_table, books_db, local_db_path)
 
         book_mi = BookStruct()
         book_mi.book_id = book_id
         book_mi.reader_app = 'Marvin'
         book_mi.title = self.installed_books[book_id].title
 
-        # Temporary reconstruction of cached_db
-        template = "{0}_annotations"
-        cached_db = template.format(re.sub('\W', '_', self.ios.device_name))
-        formatted_annotations = self.opts.db.annotations_to_html(cached_db, book_mi)
+        formatted_annotations = self.opts.db.annotations_to_html(annotations_table, book_mi)
 
         return formatted_annotations
 
@@ -4489,9 +4522,36 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _get_highlights(cur, book_id):
             '''
-            Return highlight text/notes associated with book_id
-            ['<p>highlight<br/>note</p>',…]
+            Return count of Book note, Bookmarks notes, annotations
             '''
+            highlights = 0
+
+            # Evaluate Book note
+            bn_cur = con.cursor()
+            bn_cur.execute('''SELECT
+                               Note
+                              FROM Books
+                              WHERE ID = '{0}'
+                           '''.format(book_id))
+            if bn_cur.fetchone()[b'Note']:
+                highlights += 1
+            bn_cur.close()
+
+            # Count Bookmark notes
+            bmn_cur = con.cursor()
+            bmn_cur.execute('''SELECT
+                                Text
+                               FROM Bookmarks
+                               WHERE BookID = '{0}'
+                            '''.format(book_id))
+            bmn_rows = bmn_cur.fetchall()
+            if len(bmn_rows):
+                for row in bmn_rows:
+                    if row[b'Text']:
+                        highlights += 1
+            bmn_cur.close()
+
+            # Count highlights/annotations
             hl_cur = con.cursor()
             hl_cur.execute('''SELECT
                                 Note,
@@ -4500,19 +4560,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                               WHERE BookID = '{0}'
                            '''.format(book_id))
             hl_rows = hl_cur.fetchall()
-            highlight_list = []
-            if len(hl_rows):
-                for row in hl_rows:
-                    raw_text = row[b'Text']
-                    text = "<p>{0}".format(raw_text)
-                    if row[b'Note']:
-                        raw_note = row[b'Note']
-                        text += "<br/>&nbsp;<em>{0}</em></p>".format(raw_note)
-                    else:
-                        text += "</p>"
-                    highlight_list.append(text)
+            highlights += len(hl_rows)
             hl_cur.close()
-            return highlight_list
+
+            return highlights
 
         def _get_marvin_genres(book_id):
             # Return sorted genre(s) for this book
