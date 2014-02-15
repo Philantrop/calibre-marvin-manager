@@ -115,9 +115,16 @@ class Annotations(Annotation, Logger):
             friendly_timestamp = d.strftime(default_timestamp)
         return friendly_timestamp
 
-    def to_HTML(self, header=''):
+    def create_soup(self):
+        '''
+        Create a template <div> for user annotations
+        '''
+        return BeautifulSoup(ANNOTATIONS_HEADER)
+
+    def to_HTML(self, soup):
         '''
         Generate HTML with user-specified CSS, element order
+        Add to passed soup
         '''
         # Retrieve CSS prefs
         from calibre_plugins.marvin_manager.appearance import default_elements
@@ -153,7 +160,7 @@ class Annotations(Annotation, Logger):
                 comments_body += re.sub(r'>\s+<', r'><', ts_css)
 
         if self.annotations:
-            soup = BeautifulSoup(ANNOTATIONS_HEADER)
+            #soup = BeautifulSoup(ANNOTATIONS_HEADER)
             dtc = 0
 
             # Add the annotations
@@ -221,8 +228,8 @@ class Annotations(Annotation, Logger):
                     soup.div.insert(dtc, plugin_prefs.get('HORIZONTAL_RULE', '<hr width="80%" />'))
                     dtc += 1
 
-        else:
-            soup = BeautifulSoup(ANNOTATIONS_HEADER)
+#         else:
+#             soup = BeautifulSoup(ANNOTATIONS_HEADER)
         return unicode(soup.renderContents())
 
 

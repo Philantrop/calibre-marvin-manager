@@ -209,8 +209,7 @@ class AnnotationsDB(Logger):
             ann['genre'] = book_mi['genre']
             this_annotation = Annotation(ann)
             stored_annotations.annotations.append(this_annotation)
-
-        soup = stored_annotations.to_HTML()
+        soup = stored_annotations.to_HTML(stored_annotations.create_soup())
         return soup
 
     def annotations_to_text(self, annotations_db, book_mi):
@@ -629,7 +628,7 @@ class AnnotationsDB(Logger):
             ann = _row_to_dict(ann)
             this_annotation = Annotation(ann)
             rerendered_annotations.annotations.append(this_annotation)
-        soup = rerendered_annotations.to_HTML()
+        soup = rerendered_annotations.to_HTML(stored_annotations.create_soup())
         return soup
 
     def set_user_version(self, db_version):

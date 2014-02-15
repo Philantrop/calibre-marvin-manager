@@ -4195,7 +4195,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Fetch and format Book notes, Bookmark notes, Annotations for book_id
         '''
-        def _get_active_annotations(book_id, annotations_table, books_db, local_db_path):
+        def _get_active_annotations(book_id, annotations_table):
             '''
             '''
             self._log_location(book_id)
@@ -4272,7 +4272,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.opts.db.update_timestamp(annotations_table)
                 self.opts.db.commit()
 
-        def _get_book_notes(book_id, book_notes_table, books_db, local_db_path):
+        def _get_book_notes(book_id, book_notes_table):
             '''
             Retrieve Book notes
             '''
@@ -4299,7 +4299,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.opts.db.add_to_book_notes_db(book_notes_table,
                     {'book_id': book_id, 'note_text': book_note})
 
-        def _get_bookmark_notes(book_id, bookmark_notes_table, books_db, local_db_path):
+        def _get_bookmark_notes(book_id, bookmark_notes_table):
             '''
             Retrieve Bookmark notes
             '''
@@ -4365,18 +4365,19 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Populate book_notes_table
         template = "{0}_book_notes"
         book_notes_table = template.format(re.sub('\W', '_', self.ios.device_name))
-        _get_book_notes(book_id, book_notes_table, books_db, local_db_path)
+        _get_book_notes(book_id, book_notes_table)
 
         # Populate bookmark_notes table
         template = "{0}_bookmark_notes"
         bookmark_notes_table = template.format(re.sub('\W', '_', self.ios.device_name))
-        _get_bookmark_notes(book_id, bookmark_notes_table, books_db, local_db_path)
+        _get_bookmark_notes(book_id, bookmark_notes_table)
 
         # Populate annotations_table
         template = "{0}_annotations"
         annotations_table = template.format(re.sub('\W', '_', self.ios.device_name))
-        _get_active_annotations(book_id, annotations_table, books_db, local_db_path)
+        _get_active_annotations(book_id, annotations_table)
 
+        # Build the formatted HTML
         book_mi = BookStruct()
         book_mi.book_id = book_id
         book_mi.reader_app = 'Marvin'
