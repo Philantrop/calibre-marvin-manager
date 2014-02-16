@@ -4477,26 +4477,26 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         book_mi.book_id = book_id
         book_mi.reader_app = 'Marvin'
         book_mi.title = self.installed_books[book_id].title
-        annotations_div = self.opts.db.annotations_to_html(annotations_table, book_mi)
+        annotations_soup = self.opts.db.annotations_to_html(annotations_table, book_mi)
 
         # Build Bookmark notes
-        bookmark_notes_div = _build_bookmark_notes(book_id, bookmark_notes_table)
+        bookmark_notes_soup = _build_bookmark_notes(book_id, bookmark_notes_table)
 
         # Build Book notes
-        book_notes_div = _build_book_notes(book_id, book_notes_table)
+        book_notes_soup = _build_book_notes(book_id, book_notes_table)
 
         # Assemble the soup
         soup = BeautifulSoup(HTML_TEMPLATE)
-        if bookmark_notes_div or book_notes_div:
+        if bookmark_notes_soup or book_notes_soup:
             style_tag = Tag(soup, 'style')
             style_tag.insert(0, STYLE_TEMPLATE)
             soup.head.style.replaceWith(style_tag)
-        soup.body.insert(0, annotations_div)
-        if bookmark_notes_div is not None:
-            soup.body.insert(0, bookmark_notes_div)
-        if book_notes_div is not None:
-            soup.body.insert(0, book_notes_div)
-        return soup.renderContents()
+        soup.body.insert(0, annotations_soup)
+        if bookmark_notes_soup is not None:
+            soup.body.insert(0, bookmark_notes_soup)
+        if book_notes_soup is not None:
+            soup.body.insert(0, book_notes_soup)
+        return unicode(soup.renderContents())
 
     def _get_marvin_collections(self, book_id):
         return sorted(self.installed_books[book_id].device_collections, key=sort_key)

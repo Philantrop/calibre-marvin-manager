@@ -228,9 +228,8 @@ class Annotations(Annotation, Logger):
                     soup.div.insert(dtc, plugin_prefs.get('HORIZONTAL_RULE', '<hr width="80%" />'))
                     dtc += 1
 
-#         else:
-#             soup = BeautifulSoup(ANNOTATIONS_HEADER)
-        return unicode(soup.renderContents())
+        #return unicode(soup.renderContents())
+        return soup
 
 
 def merge_annotations(parent, cid, old_soup, new_soup):

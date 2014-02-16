@@ -651,7 +651,7 @@ class AnnotationsDB(Logger):
             ann = _row_to_dict(ann)
             this_annotation = Annotation(ann)
             rerendered_annotations.annotations.append(this_annotation)
-        soup = rerendered_annotations.to_HTML(stored_annotations.create_soup())
+        soup = rerendered_annotations.to_HTML(rerendered_annotations.create_soup())
         return soup
 
     def set_user_version(self, db_version):
