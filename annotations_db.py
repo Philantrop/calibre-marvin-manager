@@ -466,7 +466,6 @@ class AnnotationsDB(Logger):
                                      WHERE book_id = '{1}'""".format(bookmark_notes_table, book_id))
         return bookmark_notes
 
-
     def get_books(self, books_db):
         """
         Get books from books_db

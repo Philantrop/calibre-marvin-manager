@@ -1604,17 +1604,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     def show_annotations(self, row):
         '''
         '''
-        HTML_TEMPLATE = (
-            '<?xml version=\'1.0\' encoding=\'utf-8\'?>' +
-            '<html xmlns="http://www.w3.org/1999/xhtml">' +
-            '<head>' +
-            '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>' +
-            '<title>Annotations</title>' +
-            '</head>' +
-            '<body>{0}</body>' +
-            '</html>'
-            )
-
         book_id = self._selected_book_id(row)
         title = self.installed_books[book_id].title
         self._log_location(title)
@@ -1626,7 +1615,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             return
 
         header = None
-        group_box_title = 'Annotations'
+        group_box_title = 'Notes and Annotations'
         annotations = self._get_formatted_annotations(book_id)
 
         footer = None
@@ -1641,7 +1630,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             'footer': footer,
             'group_box_title': group_box_title,
             'header': header,
-            'html_content': HTML_TEMPLATE.format(annotations),
+            'html_content': annotations,
             'title': title,
             'toolTip': '<p>Annotations appearance may be fine-tuned in the <b>Customize plugin…</b> dialog</p>',
             'refresh': refresh
@@ -4195,86 +4184,104 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         Fetch and format Book notes, Bookmark notes, Annotations for book_id
         '''
-        HTML_TEMPLATE = (
-            '<?xml version=\'1.0\' encoding=\'utf-8\'?>'
-            '<html xmlns="http://www.w3.org/1999/xhtml">'
-            '<head>'
-            '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>'
-            '<title>Annotations</title>'
-            '<style>foo</style>'
-            '</head>'
-            '<body></body>'
-            '</html>'
-            )
-        STYLE_TEMPLATE = (
-            'div.bookmark {'
-            'background-image: -webkit-gradient(linear,left top, left bottom,'
-            'color-stop(0%,#bb3a34),color-stop(100%, #e74841));'
-            'height:2.0em;'
-            'position:absolute;'
-            'top:relative;'
-            'right:1em;'
-            'width:1.25em;'
-            'z-index:1;'
-            '}'
-            'div.bookmark:after {'
-            "content:'';"
-            'display:block;'
-            'border:0.625em solid transparent;'
-            'border-bottom-color:white;'
-            'position:absolute;'
-            'bottom:0;'
-            '}'
-            )
-
-        DIV_TEMPLATE = '''<div class="{0}" style="margin:0"></div>'''
+        # Templates
+        if True:
+            DIV_TEMPLATE = '''<div class="{0}"></div>'''
+            HTML_TEMPLATE = (
+                '<?xml version=\'1.0\' encoding=\'utf-8\'?>'
+                '<html xmlns="http://www.w3.org/1999/xhtml">'
+                '<head>'
+                '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>'
+                '<title>Annotations</title>'
+                '<style>foo</style>'
+                '</head>'
+                '<body></body>'
+                '</html>'
+                )
+            STYLE_TEMPLATE = (
+                'div.bookmark {'
+                'background-image: -webkit-gradient(linear,left top, left bottom,'
+                ' color-stop(0%,#bb3a34),color-stop(100%, #e74841));'
+                'height:2.0em;'
+                'position:absolute;'
+                'top:relative;'
+                'right:1em;'
+                'width:1.25em;'
+                'z-index:1;'
+                '}'
+                'div.bookmark:after {'
+                "content:'';"
+                'display:block;'
+                'border:0.625em solid transparent;'
+                'border-bottom-color:white;'
+                'position:absolute;'
+                'bottom:0;'
+                '}'
+                'div.book_note {'
+                'background-image: -webkit-gradient('
+                ' radial, center center, 0, center center, 200,'
+                ' color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));'
+                'padding:0.75em;'
+                'margin:0.5em 0;'
+                '-webkit-border-radius:10px;'
+                '}'
+                )
 
         def _build_book_notes(book_id, book_notes_table):
             '''
             '''
-            soup = BeautifulSoup(DIV_TEMPLATE.format('book_notes'))
             book_notes = self.opts.db.get_book_notes(book_notes_table, book_id)
-            for row in book_notes:
-                self._log("book_notes: %s" % row[b'note_text'])
+            soup = None
+            if book_notes:
+                soup = BeautifulSoup(DIV_TEMPLATE.format('book_note'))
+                for row in book_notes:
+                    p_tag = Tag(soup, 'p', [('style', "margin:0")])
+                    i_tag = Tag(soup, 'i')
+                    p_tag.insert(0, i_tag)
+                    i_tag.insert(0, row[b'note_text'])
+                    soup.div.insert(0, p_tag)
             return soup
 
         def _build_bookmark_notes(book_id, bookmark_notes_table):
             '''
             Build a div with bookmark notes
             '''
-            BOOKMARK_TEMPLATE = (
-                '<div>'
-                '<div class="bookmark"></div>'
-                '<table cellpadding="0" width="100%" '
-                'style="background-color:#C8C8C8;'
-                'color:black;'
-                'font-size:90%;'
-                'font-weight:bold;'
-                'margin-bottom:6px;'
-                'position:relative;'
-                'top:1px;">'
-                '<tbody><tr><td class="location" style="text-align:left">{0}'
-                '</td></tr></tbody></table>'
-                '<p class="note" style="margin:0 0 6 0;text-indent:0.5em;font-style:italic">{1}</p>'
-                '</div>'
-                )
+            if True:
+                BOOKMARK_TEMPLATE = (
+                    '<div>'
+                    '<div class="bookmark"></div>'
+                    '<table cellpadding="0" width="100%" '
+                    'style="background-color:#C8C8C8;'
+                    'color:black;'
+                    'font-size:90%;'
+                    'font-weight:bold;'
+                    'margin-bottom:6px;'
+                    'position:relative;'
+                    'top:1px;">'
+                    '<tbody><tr><td class="location" style="text-align:left">{0}'
+                    '</td></tr></tbody></table>'
+                    '<p class="note" style="margin:0 0 6 0;text-indent:0.5em;font-style:italic">{1}</p>'
+                    '</div>'
+                    )
             bookmarks = {}
             bookmark_notes = self.opts.db.get_bookmark_notes(bookmark_notes_table, book_id)
-            for row in bookmark_notes:
-                section = int(row[b'section_number'])
-                loc = int(float(row[b'location']) * 1000)
-                loc_sort = "{0:04d}.{1:04d}".format(section, loc)
-                try:
-                    location = self.tocs[book_id][str(section - 1)]
-                except:
-                    location = "Section %d" % section
-                bookmarks[loc_sort] = {'note': row[b'note_text'], 'location': location}
+            soup = None
+            if bookmark_notes:
+                for row in bookmark_notes:
+                    section = int(row[b'section_number'])
+                    loc = int(float(row[b'location']) * 1000)
+                    loc_sort = "{0:04d}.{1:04d}".format(section, loc)
+                    try:
+                        location = self.tocs[book_id][str(section - 1)]
+                    except:
+                        location = "Section %d" % section
+                    bookmarks[loc_sort] = {'note': row[b'note_text'], 'location': location}
 
-            soup = BeautifulSoup(DIV_TEMPLATE.format('bookmark_notes'))
-            for bookmark in sorted(bookmarks.keys(), reverse=True):
-                soup.div.insert(0, BOOKMARK_TEMPLATE.format(
-                    bookmarks[bookmark]['location'],
-                    bookmarks[bookmark]['note']))
+                soup = BeautifulSoup(DIV_TEMPLATE.format('bookmark_notes'))
+                for bookmark in sorted(bookmarks.keys(), reverse=True):
+                    soup.div.insert(0, BOOKMARK_TEMPLATE.format(
+                        bookmarks[bookmark]['location'],
+                        bookmarks[bookmark]['note']))
             return soup
 
         def _get_active_annotations(book_id, annotations_table):
@@ -4364,17 +4371,23 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.opts.db.create_book_notes_table(book_notes_table)
 
             # Fetch the book note from Marvin
+            book_note = None
             con = sqlite3.connect(local_db_path)
             with con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
-                cur.execute('''
-                               SELECT
-                                Note
-                               FROM Books
-                               WHERE ID = '{0}'
-                            '''.format(book_id))
-                book_note = cur.fetchone()[b'Note']
+                cur.execute('''SELECT * FROM BOOKS''')
+                row = cur.fetchone()
+
+                # Books:Note added 2.6.665
+                if 'Note' in row.keys():
+                    cur.execute('''
+                                   SELECT
+                                    Note
+                                   FROM Books
+                                   WHERE ID = '{0}'
+                                '''.format(book_id))
+                    book_note = cur.fetchone()[b'Note']
 
             # Store the book note to our db
             if book_note:
@@ -4466,20 +4479,24 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         book_mi.title = self.installed_books[book_id].title
         annotations_div = self.opts.db.annotations_to_html(annotations_table, book_mi)
 
-        # Add Bookmark notes
-        bookmarks_div = _build_bookmark_notes(book_id, bookmark_notes_table)
+        # Build Bookmark notes
+        bookmark_notes_div = _build_bookmark_notes(book_id, bookmark_notes_table)
 
-        # Add Book notes
-        book_div = _build_book_notes(book_id, book_notes_table)
+        # Build Book notes
+        book_notes_div = _build_book_notes(book_id, book_notes_table)
 
-        # Cook da soup
+        # Assemble the soup
         soup = BeautifulSoup(HTML_TEMPLATE)
-        style_tag = Tag(soup, 'style')
-        style_tag.insert(0, STYLE_TEMPLATE)
-        soup.head.style.replaceWith(style_tag)
-        soup.body.insert(0, bookmarks_div)
-        soup.body.insert(1, annotations_div)
-        return soup
+        if bookmark_notes_div or book_notes_div:
+            style_tag = Tag(soup, 'style')
+            style_tag.insert(0, STYLE_TEMPLATE)
+            soup.head.style.replaceWith(style_tag)
+        soup.body.insert(0, annotations_div)
+        if bookmark_notes_div is not None:
+            soup.body.insert(0, bookmark_notes_div)
+        if book_notes_div is not None:
+            soup.body.insert(0, book_notes_div)
+        return soup.renderContents()
 
     def _get_marvin_collections(self, book_id):
         return sorted(self.installed_books[book_id].device_collections, key=sort_key)
@@ -4622,28 +4639,34 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             highlights = 0
 
             # Evaluate Book note
-            bn_cur = con.cursor()
-            bn_cur.execute('''SELECT
-                               Note
-                              FROM Books
-                              WHERE ID = '{0}'
-                           '''.format(book_id))
-            if bn_cur.fetchone()[b'Note']:
-                highlights += 1
+            try:
+                bn_cur = con.cursor()
+                bn_cur.execute('''SELECT
+                                   Note
+                                  FROM Books
+                                  WHERE ID = '{0}'
+                               '''.format(book_id))
+                if bn_cur.fetchone()[b'Note']:
+                    highlights += 1
+            except:
+                pass
             bn_cur.close()
 
             # Count Bookmark notes
-            bmn_cur = con.cursor()
-            bmn_cur.execute('''SELECT
-                                Text
-                               FROM Bookmarks
-                               WHERE BookID = '{0}'
-                            '''.format(book_id))
-            bmn_rows = bmn_cur.fetchall()
-            if len(bmn_rows):
-                for row in bmn_rows:
-                    if row[b'Text']:
-                        highlights += 1
+            try:
+                bmn_cur = con.cursor()
+                bmn_cur.execute('''SELECT
+                                    Text
+                                   FROM Bookmarks
+                                   WHERE BookID = '{0}'
+                                '''.format(book_id))
+                bmn_rows = bmn_cur.fetchall()
+                if len(bmn_rows):
+                    for row in bmn_rows:
+                        if row[b'Text']:
+                            highlights += 1
+            except:
+                pass
             bmn_cur.close()
 
             # Count highlights/annotations
