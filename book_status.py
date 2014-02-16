@@ -4193,7 +4193,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 '<head>'
                 '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>'
                 '<title>Annotations</title>'
-                '<style>foo</style>'
+                '<style></style>'
                 '</head>'
                 '<body></body>'
                 '</html>'
