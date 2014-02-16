@@ -303,7 +303,8 @@ def merge_annotations(parent, cid, old_soup, new_soup):
             parent.opts.db.capture_content(ouas, cid, TRANSIENT_DB)
 
             # Regurgitate old_soup with current CSS
-            regurgitated_soup = BeautifulSoup(parent.opts.db.rerender_to_html(TRANSIENT_DB, cid))
+            rerendered_annotations = parent.opts.db.rerender_to_html(TRANSIENT_DB, cid)
+            regurgitated_soup = BeautifulSoup(rerendered_annotations)
 
         # Add device annotation timestamps and hashes
         duas = new_soup.findAll('div', 'annotation')

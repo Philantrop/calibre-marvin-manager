@@ -652,7 +652,7 @@ class AnnotationsDB(Logger):
             this_annotation = Annotation(ann)
             rerendered_annotations.annotations.append(this_annotation)
         soup = rerendered_annotations.to_HTML(rerendered_annotations.create_soup())
-        return soup
+        return unicode(soup)
 
     def set_user_version(self, db_version):
         self.conn.execute('''PRAGMA user_version={0}'''.format(db_version))
