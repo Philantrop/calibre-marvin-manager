@@ -1,6 +1,7 @@
-div.bookmark {
+div.bookmark_blue {
     background-image: -webkit-gradient(linear,left top, left bottom,
-     color-stop(0%,#bb3a34),color-stop(100%, #e74841));
+    color-stop(0%,#0097CC),
+    color-stop(100%, #009ED6));
     height:2.0em;
     position:absolute;
     top:relative;
@@ -8,8 +9,31 @@ div.bookmark {
     width:1.25em;
     z-index:1;
     }
-
-div.bookmark:after {
+div.bookmark_green {
+    background-image: -webkit-gradient(linear,left top, left bottom,
+    color-stop(0%,#7CB049),
+    color-stop(100%, #82B94D));
+    height:2.0em;
+    position:absolute;
+    top:relative;
+    right:1em;
+    width:1.25em;
+    z-index:1;
+    }
+div.bookmark_red {
+    background-image: -webkit-gradient(linear,left top, left bottom,
+    color-stop(0%,#C33029),
+    color-stop(100%, #CD332B));
+    height:2.0em;
+    position:absolute;
+    top:relative;
+    right:1em;
+    width:1.25em;
+    z-index:1;
+    }
+div.bookmark_blue:after,
+div.bookmark_green:after,
+div.bookmark_red:after {
     content:"";
     display:block;
     border:0.625em solid transparent;
@@ -17,7 +41,6 @@ div.bookmark:after {
     position:absolute;
     bottom:0;
     }
-
 div.book_note {
     background: -webkit-linear-gradient(0deg, #F5F5F5 0%, #FFF 25%, #FFF 75%, #F5F5F5 100%);
     border: 1px solid #CCC;
@@ -26,7 +49,6 @@ div.book_note {
     position: relative;
     -webkit-border-radius: 4px;
     }
-
 table.bookmark {
     background-image: -webkit-gradient(radial, center center, 0, center center, 100,
      color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));
@@ -40,7 +62,6 @@ table.bookmark {
     -webkit-border-radius:4px;
     width:100%;
     }
-
 table.bookmark td.location {
     text-align:center;
     }

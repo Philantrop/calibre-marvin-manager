@@ -327,7 +327,8 @@ class AnnotationElementsTable(QTableWidget):
         pas.annotations.append(Annotation(self.sample_ann_1))
         pas.annotations.append(Annotation(self.sample_ann_2))
         pas.annotations.append(Annotation(self.sample_ann_3))
-        self.parent.wv.setHtml(pas.to_HTML(pas.create_soup()))
+        preview_soup = pas.to_HTML(pas.create_soup())
+        self.parent.wv.setHtml(unicode(preview_soup.renderContents()))
 
     def resize_row_height(self, lines, row):
         point_size = self.FONT.pointSize()

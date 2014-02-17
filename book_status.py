@@ -4221,13 +4221,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if True:
                 BOOKMARK_TEMPLATE = (
                     '<div>'
-                    '<div class="bookmark"></div>'
+                    '<div class="{0}"></div>'
                     '<table class="bookmark">'
-                    '<tbody><tr><td class="location">{0}'
+                    '<tbody><tr><td class="location">{1}'
                     '</td></tr></tbody></table>'
-                    '<p class="note" style="margin:0 0 6 0;text-indent:0.5em;font-style:italic">{1}</p>'
+                    '<p class="note" style="margin:0 0 6 0;text-indent:0.5em;font-style:italic">{2}</p>'
                     '</div>'
                     )
+                BOOKMARK_COLORS = {
+                    "0":'bookmark_red',
+                    "1":'bookmark_blue',
+                    "2":'bookmark_green'}
+
             bookmarks = {}
             bookmark_notes = self.opts.db.get_bookmark_notes(bookmark_notes_table, book_id)
             soup = None
@@ -4240,11 +4245,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         location = self.tocs[book_id][str(section - 1)]
                     except:
                         location = "Section %d" % section
-                    bookmarks[loc_sort] = {'note': row[b'note_text'], 'location': location}
+                    bookmarks[loc_sort] = {
+                        'color': BOOKMARK_COLORS[row[b'highlight_color']],
+                        'location': location,
+                        'note': row[b'note_text']}
 
                 soup = BeautifulSoup(DIV_TEMPLATE.format('bookmark_notes'))
                 for bookmark in sorted(bookmarks.keys(), reverse=True):
                     soup.div.insert(0, BOOKMARK_TEMPLATE.format(
+                        bookmarks[bookmark]['color'],
                         bookmarks[bookmark]['location'],
                         bookmarks[bookmark]['note']))
             return soup
