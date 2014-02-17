@@ -4225,7 +4225,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 ' color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));'
                 'padding:0.75em;'
                 'margin:0.5em 0;'
-                '-webkit-border-radius:8px;'
+                '-webkit-border-radius:4px;'
                 '}'
 
                 'table.bookmark {'
@@ -4316,7 +4316,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 cur = con.cursor()
                 cur.execute('''
                                SELECT * FROM Highlights
-                               WHERE BookId = '{0}'
+                               WHERE BookId = '{0}' AND Deleted = "0"
                                ORDER BY NoteDateTime
                             '''.format(book_id))
                 rows = cur.fetchall()
@@ -4512,6 +4512,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             soup.body.insert(0, bookmark_notes_soup)
         if book_notes_soup is not None:
             soup.body.insert(0, book_notes_soup)
+
         return unicode(soup.renderContents())
 
     def _get_marvin_collections(self, book_id):
@@ -4691,7 +4692,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                 Note,
                                 Text
                               FROM Highlights
-                              WHERE BookID = '{0}'
+                              WHERE BookID = '{0}' AND Deleted = "0"
                            '''.format(book_id))
             hl_rows = hl_cur.fetchall()
             highlights += len(hl_rows)
