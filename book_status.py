@@ -4232,8 +4232,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 'background-image: -webkit-gradient('
                 ' radial, center center, 0, center center, 100,'
                 ' color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));'
-                'border-color:black;'
-                'border-width:1px;'
                 'color:black;'
                 'font-size:90%;'
                 'font-weight:bold;'
