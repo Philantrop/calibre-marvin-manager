@@ -4225,7 +4225,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 ' color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));'
                 'padding:0.75em;'
                 'margin:0.5em 0;'
-                '-webkit-border-radius:10px;'
+                '-webkit-border-radius:8px;'
                 '}'
 
                 'table.bookmark {'
