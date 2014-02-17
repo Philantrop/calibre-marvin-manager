@@ -190,6 +190,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
         # Init the prefs file
         self.init_prefs()
 
+        # Populate CSS resources
+        self.inflate_css_resources()
+
         # Populate dialog resources
         self.inflate_dialog_resources()
 
@@ -206,6 +209,29 @@ class MarvinManagerAction(InterfaceAction, Logger):
         # Hook exit in case we need to do cleanup
         atexit.register(self.onexit)
         '''
+
+    def inflate_css_resources(self):
+        '''
+        Extract CSS resources from the plugin. If the file already exists,
+        don't replace it as user may have edited.
+        '''
+        css = []
+        with ZipFile(self.plugin_path, 'r') as zf:
+            for candidate in zf.namelist():
+                if candidate.endswith('/'):
+                    continue
+                if candidate.startswith('css/'):
+                    css.append(candidate)
+        ir = self.load_resources(css)
+        for css_file in css:
+            if not css_file in ir:
+                continue
+            fs = os.path.join(self.resources_path, css_file)
+            if not os.path.exists(fs):
+                if not os.path.exists(os.path.dirname(fs)):
+                    os.makedirs(os.path.dirname(fs))
+                with open(fs, 'wb') as f:
+                    f.write(ir[css_file])
 
     def inflate_dialog_resources(self):
         '''

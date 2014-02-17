@@ -4198,55 +4198,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 '<body></body>'
                 '</html>'
                 )
-            STYLE_TEMPLATE = (
-                'div.bookmark {'
-                'background-image: -webkit-gradient(linear,left top, left bottom,'
-                ' color-stop(0%,#bb3a34),color-stop(100%, #e74841));'
-                'height:2.0em;'
-                'position:absolute;'
-                'top:relative;'
-                'right:1em;'
-                'width:1.25em;'
-                'z-index:1;'
-                '}'
-
-                'div.bookmark:after {'
-                "content:'';"
-                'display:block;'
-                'border:0.625em solid transparent;'
-                'border-bottom-color:white;'
-                'position:absolute;'
-                'bottom:0;'
-                '}'
-
-                'div.book_note {'
-                'background-image: -webkit-gradient('
-                ' radial, center center, 0, center center, 200,'
-                ' color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));'
-                'padding:0.75em;'
-                'margin:0.5em 0;'
-                '-webkit-border-radius:4px;'
-                '}'
-
-                'table.bookmark {'
-                'background-image: -webkit-gradient('
-                ' radial, center center, 0, center center, 100,'
-                ' color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));'
-                'color:black;'
-                'font-size:90%;'
-                'font-weight:bold;'
-                'margin-bottom:6px;'
-                'padding:0px;'
-                'position:relative;'
-                'top:1px;'
-                '-webkit-border-radius:4px;'
-                'width:100%;'
-                '}'
-
-                'table.bookmark td.location {'
-                'text-align:center;'
-                '}'
-                )
 
         def _build_book_notes(book_id, book_notes_table):
             '''
@@ -4502,8 +4453,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Assemble the soup
         soup = BeautifulSoup(HTML_TEMPLATE)
         if bookmark_notes_soup or book_notes_soup:
+            # Load the CSS from MXD resources
+            path = os.path.join(self.parent.opts.resources_path, 'css', 'annotations.css')
+            with open(path, 'rb') as f:
+                css = f.read().decode('utf-8')
             style_tag = Tag(soup, 'style')
-            style_tag.insert(0, STYLE_TEMPLATE)
+            style_tag.insert(0, css)
             soup.head.style.replaceWith(style_tag)
         soup.body.insert(0, annotations_soup)
         if bookmark_notes_soup is not None:
