@@ -302,7 +302,7 @@ def merge_annotations(parent, cid, old_soup, new_soup):
             # Capture existing annotations
             parent.opts.db.capture_content(ouas, cid, TRANSIENT_DB)
 
-            # Regurgitate old_soup with current CSS
+            # Regurgitate annotations with current CSS
             rerendered_annotations = parent.opts.db.rerender_to_html(TRANSIENT_DB, cid)
             regurgitated_soup = BeautifulSoup(rerendered_annotations)
 
@@ -315,7 +315,8 @@ def merge_annotations(parent, cid, old_soup, new_soup):
             else:
                 timestamps[timestamp] = {'device_hash': dua['hash']}
 
-        merged_soup = BeautifulSoup(ANNOTATIONS_HEADER)
+        merged_annotations = Tag(BeautifulSoup(), 'div',
+            [('class', "user_annotations"), ('style','margin:0')])
 
         for ts in sorted(timestamps):
             if 'stored_hash' in timestamps[ts] and not 'device_hash' in timestamps[ts]:
@@ -337,9 +338,15 @@ def merge_annotations(parent, cid, old_soup, new_soup):
             else:
                 continue
 
-            merged_soup.div.append(annotation)
+            merged_annotations.append(annotation)
 
-        return unicode(sort_merged_annotations(merged_soup))
+        merged_annotations = sort_merged_annotations(merged_annotations)
+
+        # Update new_soup with merged_annotations
+        new_soup_uas = new_soup.find('div', 'user_annotations')
+        new_soup_uas.replaceWith(merged_annotations)
+
+        return unicode(new_soup)
 
 
 def merge_annotations_with_comments(parent, cid, comments_soup, new_soup):
