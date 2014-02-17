@@ -21,7 +21,8 @@ from xml.sax.saxutils import escape
 from PyQt4 import QtCore
 from PyQt4.Qt import (Qt, QAbstractTableModel,
                       QApplication, QBrush,
-                      QColor, QCursor, QDialogButtonBox, QFont, QFontMetrics, QGridLayout,
+                      QColor, QCursor, QDialogButtonBox, QEvent,
+                      QFont, QFontMetrics, QGridLayout,
                       QHeaderView, QHBoxLayout, QIcon,
                       QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
                       QPainter, QPixmap, QProgressDialog, QPushButton,
@@ -1233,6 +1234,17 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._clear_selected_rows()
         self.filter_clear()
 
+    def eventFilter(self, source, event):
+        '''
+        Trap Enter/Return key in filter QLineEdit
+        '''
+        if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Return:
+            # Ignore Enter/Return key by processing it locally
+            return True
+        else:
+            # Return the event so it can be processed elsewhere
+            return QLineEdit.eventFilter(self, source, event)
+
     def filter_clear(self):
         '''
         Clear the filter, show all rows
@@ -1328,6 +1340,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Line edit
         self.filter_le = QLineEdit()
         #self.filter_le.setFrame(False)
+        self.filter_le.installEventFilter(self)
         self.filter_le.textEdited.connect(self.filter_table_rows)
         self.filter_le.setPlaceholderText("Filter by Title, Author, Series or Subject")
         self.filter_le.setToolTip("Filter books by Title, Author, Series or Subject")
