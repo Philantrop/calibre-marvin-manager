@@ -4209,6 +4209,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 'width:1.25em;'
                 'z-index:1;'
                 '}'
+
                 'div.bookmark:after {'
                 "content:'';"
                 'display:block;'
@@ -4217,6 +4218,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 'position:absolute;'
                 'bottom:0;'
                 '}'
+
                 'div.book_note {'
                 'background-image: -webkit-gradient('
                 ' radial, center center, 0, center center, 200,'
@@ -4224,6 +4226,27 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 'padding:0.75em;'
                 'margin:0.5em 0;'
                 '-webkit-border-radius:10px;'
+                '}'
+
+                'table.bookmark {'
+                'background-image: -webkit-gradient('
+                ' radial, center center, 0, center center, 100,'
+                ' color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));'
+                'border-color:black;'
+                'border-width:1px;'
+                'color:black;'
+                'font-size:90%;'
+                'font-weight:bold;'
+                'margin-bottom:6px;'
+                'padding:0px;'
+                'position:relative;'
+                'top:1px;'
+                '-webkit-border-radius:4px;'
+                'width:100%;'
+                '}'
+
+                'table.bookmark td.location {'
+                'text-align:center;'
                 '}'
                 )
 
@@ -4250,15 +4273,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 BOOKMARK_TEMPLATE = (
                     '<div>'
                     '<div class="bookmark"></div>'
-                    '<table cellpadding="0" width="100%" '
-                    'style="background-color:#C8C8C8;'
-                    'color:black;'
-                    'font-size:90%;'
-                    'font-weight:bold;'
-                    'margin-bottom:6px;'
-                    'position:relative;'
-                    'top:1px;">'
-                    '<tbody><tr><td class="location" style="text-align:left">{0}'
+                    '<table class="bookmark">'
+                    '<tbody><tr><td class="location">{0}'
                     '</td></tr></tbody></table>'
                     '<p class="note" style="margin:0 0 6 0;text-indent:0.5em;font-style:italic">{1}</p>'
                     '</div>'
