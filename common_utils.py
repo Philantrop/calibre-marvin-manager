@@ -884,22 +884,26 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                 uas = old_soup.find('div', 'user_annotations')
                 if uas:
                     # Remove user_annotations from originating custom field
-                    uas.extract()
+                    #uas.extract()
 
                     # Capture content
                     parent.opts.db.capture_content(uas, cid, transient_db)
 
                     # Regurgitate content with current CSS style
-                    new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+                    #new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+                    rerendered_annotations = BeautifulSoup(
+                        parent.opts.db.rerender_to_html(transient_db, cid))
+                    uas.replaceWith(rerendered_annotations)
 
                     # Save stripped custom field data
                     um = mi.metadata_for_field(old_destination_field)
-                    um['#value#'] = unicode(old_soup)
+                    #um['#value#'] = unicode(old_soup)
+                    um['#value#'] = None
                     mi.set_user_metadata(old_destination_field, um)
 
-                    # Add new_soup to destination field
+                    # Add updated soup to destination field
                     um = mi.metadata_for_field(new_destination_field)
-                    um['#value#'] = unicode(new_soup)
+                    um['#value#'] = unicode(old_soup)
                     mi.set_user_metadata(new_destination_field, um)
 
                     # Update the record
@@ -952,17 +956,21 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                 uas = old_soup.find('div', 'user_annotations')
                 if uas:
                     # Remove user_annotations from originating custom field
-                    uas.extract()
+                    #uas.extract()
 
                     # Capture content
                     parent.opts.db.capture_content(uas, cid, transient_db)
 
                     # Regurgitate content with current CSS style
-                    new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+                    #new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+                    rerendered_annotations = BeautifulSoup(
+                        parent.opts.db.rerender_to_html(transient_db, cid))
+                    uas.replaceWith(rerendered_annotations)
 
                     # Add stripped old_soup plus new_soup to destination field
                     um = mi.metadata_for_field(new_destination_field)
-                    um['#value#'] = unicode(old_soup) + unicode(new_soup)
+                    #um['#value#'] = unicode(old_soup) + unicode(new_soup)
+                    um['#value#'] = unicode(old_soup)
                     mi.set_user_metadata(new_destination_field, um)
 
                     # Update the record
