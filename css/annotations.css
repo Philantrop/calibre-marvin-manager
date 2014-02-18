@@ -1,30 +1,22 @@
 div.bookmark_blue {
     background-image: -webkit-gradient(linear,left top, left bottom,
-    color-stop(0%,#0097CC),
+    color-stop(0%,#008CBF),
     color-stop(100%, #009ED6));
-    height:2.0em;
-    position:absolute;
-    top:relative;
-    right:1em;
-    width:1.25em;
-    z-index:1;
     }
 div.bookmark_green {
     background-image: -webkit-gradient(linear,left top, left bottom,
-    color-stop(0%,#7CB049),
+    color-stop(0%,#73A343),
     color-stop(100%, #82B94D));
-    height:2.0em;
-    position:absolute;
-    top:relative;
-    right:1em;
-    width:1.25em;
-    z-index:1;
     }
 div.bookmark_red {
     background-image: -webkit-gradient(linear,left top, left bottom,
-    color-stop(0%,#C33029),
+    color-stop(0%,#BF3030),
     color-stop(100%, #CD332B));
-    height:2.0em;
+    }
+div.bookmark_blue,
+div.bookmark_green,
+div.bookmark_red {
+    height:2.1em;
     position:absolute;
     top:relative;
     right:1em;
