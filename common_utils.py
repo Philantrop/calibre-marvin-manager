@@ -788,7 +788,7 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
     import calibre_plugins.marvin_manager.config as cfg
 
     _log_location(annotation_map)
-    _log(" %s -> %s" % (old_destination_field, new_destination_field))
+    _log(" %s -> %s" % (repr(old_destination_field), repr(new_destination_field)))
 
     db = parent.opts.gui.current_db
     id = db.FIELD_MAP['id']
@@ -876,41 +876,6 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                                     commit=True, force_changes=True, notify=True)
                     pb.increment()
 
-        # custom -> custom
-        elif old_destination_field.startswith('#') and new_destination_field.startswith('#'):
-
-            if mi.get_user_metadata(old_destination_field, False)['#value#'] is not None:
-                old_soup = BeautifulSoup(mi.get_user_metadata(old_destination_field, False)['#value#'])
-                uas = old_soup.find('div', 'user_annotations')
-                if uas:
-                    # Remove user_annotations from originating custom field
-                    #uas.extract()
-
-                    # Capture content
-                    parent.opts.db.capture_content(uas, cid, transient_db)
-
-                    # Regurgitate content with current CSS style
-                    #new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
-                    rerendered_annotations = BeautifulSoup(
-                        parent.opts.db.rerender_to_html(transient_db, cid))
-                    uas.replaceWith(rerendered_annotations)
-
-                    # Save stripped custom field data
-                    um = mi.metadata_for_field(old_destination_field)
-                    #um['#value#'] = unicode(old_soup)
-                    um['#value#'] = None
-                    mi.set_user_metadata(old_destination_field, um)
-
-                    # Add updated soup to destination field
-                    um = mi.metadata_for_field(new_destination_field)
-                    um['#value#'] = unicode(old_soup)
-                    mi.set_user_metadata(new_destination_field, um)
-
-                    # Update the record
-                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
-                                    commit=True, force_changes=True, notify=True)
-                    pb.increment()
-
         # same field -> same field - called from config:configure_appearance()
         elif (old_destination_field == new_destination_field):
             pb.set_label('{:^100}'.format('Updating annotations for %d books' % total_books))
@@ -961,7 +926,7 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                     # Capture content
                     parent.opts.db.capture_content(uas, cid, transient_db)
 
-                    # Regurgitate content with current CSS style
+                    # Regurgitate annotations with current CSS style
                     #new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
                     rerendered_annotations = BeautifulSoup(
                         parent.opts.db.rerender_to_html(transient_db, cid))
@@ -970,6 +935,41 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                     # Add stripped old_soup plus new_soup to destination field
                     um = mi.metadata_for_field(new_destination_field)
                     #um['#value#'] = unicode(old_soup) + unicode(new_soup)
+                    um['#value#'] = unicode(old_soup)
+                    mi.set_user_metadata(new_destination_field, um)
+
+                    # Update the record
+                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                    commit=True, force_changes=True, notify=True)
+                    pb.increment()
+
+        # custom -> custom
+        elif old_destination_field.startswith('#') and new_destination_field.startswith('#'):
+
+            if mi.get_user_metadata(old_destination_field, False)['#value#'] is not None:
+                old_soup = BeautifulSoup(mi.get_user_metadata(old_destination_field, False)['#value#'])
+                uas = old_soup.find('div', 'user_annotations')
+                if uas:
+                    # Remove user_annotations from originating custom field
+                    #uas.extract()
+
+                    # Capture content
+                    parent.opts.db.capture_content(uas, cid, transient_db)
+
+                    # Regurgitate content with current CSS style
+                    #new_soup = parent.opts.db.rerender_to_html(transient_db, cid)
+                    rerendered_annotations = BeautifulSoup(
+                        parent.opts.db.rerender_to_html(transient_db, cid))
+                    uas.replaceWith(rerendered_annotations)
+
+                    # Save stripped custom field data
+                    um = mi.metadata_for_field(old_destination_field)
+                    #um['#value#'] = unicode(old_soup)
+                    um['#value#'] = None
+                    mi.set_user_metadata(old_destination_field, um)
+
+                    # Add updated soup to destination field
+                    um = mi.metadata_for_field(new_destination_field)
                     um['#value#'] = unicode(old_soup)
                     mi.set_user_metadata(new_destination_field, um)
 

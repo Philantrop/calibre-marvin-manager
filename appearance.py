@@ -127,7 +127,7 @@ class AnnotationElementsTable(QTableWidget):
     sample_ann_1 = {
         'text': ['Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean placerat condimentum semper. Aliquam hendrerit nisl mauris, nec laoreet orci. Donec rutrum consequat ultricies.',
                  'Curabitur sollicitudin euismod felis, vitae mollis magna vestibulum id.'],
-        'note': ['This is a note appended to the highlight.',
+        'note': ['This is a note appended to an annotation.',
                  'And additional comments after a linebreak.'],
         'highlightcolor': 'Yellow',
         'timestamp': time.mktime(time.localtime()),
@@ -144,7 +144,7 @@ class AnnotationElementsTable(QTableWidget):
     sample_ann_3 = {
         'text': ['Morbi massa tellus, laoreet id pretium sed, volutpat in felis.',
                  'Donec massa nulla, malesuada vitae volutpat quis, accumsan ut tellus.'],
-        'note': ['This is a note appended to the highlight.',
+        'note': ['This is a note appended to an annotation.',
                  'And additional comments after a linebreak.'],
         'highlightcolor': 'Purple',
         'timestamp': time.mktime(time.localtime()),

@@ -4215,14 +4215,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         def _build_book_notes(book_id, book_notes_table):
             '''
+            Build a book_note with custom CSS
+            Applied CSS is a combination of inline style plus p.book_note
             '''
             book_notes = self.opts.db.get_book_notes(book_notes_table, book_id)
             soup = None
             if book_notes:
                 soup = BeautifulSoup(DIV_TEMPLATE.format('book_note'))
                 for row in book_notes:
-                    p_tag = Tag(soup, 'p', [('class', "book_note")])
-                    p_tag.insert(0, row[b'note_text'])
+                    p_tag = Tag(soup, 'p', [('class', "book_note"),
+                                            ('style', "{0}".format(_get_note_style()))])
+                    note = row[b'note_text'].replace('\n', '<br/>')
+                    p_tag.insert(0, note)
                     soup.div.insert(0, p_tag)
             return soup
 
@@ -4232,12 +4236,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             '''
             if True:
                 BOOKMARK_TEMPLATE = (
-                    '<div>'
+                    '<div class="bookmark">'
                     '<div class="{0}"></div>'
                     '<table class="bookmark">'
                     '<tbody><tr><td class="location">{1}'
                     '</td></tr></tbody></table>'
-                    '<p class="bookmark_note">{2}</p>'
+                    '<p class="bookmark_note" style="{2}">{3}</p>'
                     '</div>'
                     )
                 BOOKMARK_COLORS = {
@@ -4253,6 +4257,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     section = int(row[b'section_number'])
                     loc = int(float(row[b'location']) * 1000)
                     loc_sort = "{0:04d}.{1:04d}".format(section, loc)
+                    note = row[b'note_text'].replace('\n', '<br/>')
                     try:
                         location = self.tocs[book_id][str(section - 1)]
                     except:
@@ -4260,13 +4265,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     bookmarks[loc_sort] = {
                         'color': BOOKMARK_COLORS[row[b'highlight_color']],
                         'location': location,
-                        'note': row[b'note_text']}
+                        'note': note}
 
                 soup = BeautifulSoup(DIV_TEMPLATE.format('bookmark_notes'))
                 for bookmark in sorted(bookmarks.keys(), reverse=True):
                     soup.div.insert(0, BOOKMARK_TEMPLATE.format(
                         bookmarks[bookmark]['color'],
                         bookmarks[bookmark]['location'],
+                        _get_note_style(),
                         bookmarks[bookmark]['note']))
             return soup
 
@@ -4413,6 +4419,19 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             'note_text': row[b'Text'],
                             'section_number': row[b'SectionNumber']}
                         self.opts.db.add_to_bookmark_notes_db(bookmark_notes_table, bookmark_note)
+
+        def _get_note_style():
+            # Retrieve CSS prefs for Notes
+            from calibre_plugins.marvin_manager.appearance import default_elements
+            stored_css = self.prefs.get('appearance_css', default_elements)
+            for element in stored_css:
+                if element['name'] == 'Note':
+                    note_style = re.sub('\n', '', element['css'])
+                    break
+            else:
+                self._log_location("ERROR: Unable to find 'Note' in stored_css")
+                note_style = ''
+            return note_style
 
         # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
         local_db_path = getattr(self.parent.connected_device, "local_db_path")
