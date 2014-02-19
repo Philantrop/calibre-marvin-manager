@@ -41,6 +41,15 @@ div.book_note {
     position: relative;
     -webkit-border-radius: 4px;
     }
+p.book_note {
+    font-style: italic;
+    margin: 0;
+    }
+p.bookmark_note {
+    font-style: italic;
+    margin: 0 0 6 0;
+    text-indent:0.5em;
+    }
 table.bookmark {
     background-image: -webkit-gradient(radial, center center, 0, center center, 100,
      color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));

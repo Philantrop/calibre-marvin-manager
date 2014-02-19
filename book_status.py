@@ -4221,10 +4221,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if book_notes:
                 soup = BeautifulSoup(DIV_TEMPLATE.format('book_note'))
                 for row in book_notes:
-                    p_tag = Tag(soup, 'p', [('style', "margin:0")])
-                    i_tag = Tag(soup, 'i')
-                    p_tag.insert(0, i_tag)
-                    i_tag.insert(0, row[b'note_text'])
+                    p_tag = Tag(soup, 'p', [('class', "book_note")])
+                    p_tag.insert(0, row[b'note_text'])
                     soup.div.insert(0, p_tag)
             return soup
 
@@ -4239,7 +4237,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     '<table class="bookmark">'
                     '<tbody><tr><td class="location">{1}'
                     '</td></tr></tbody></table>'
-                    '<p class="note" style="margin:0 0 6 0;text-indent:0.5em;font-style:italic">{2}</p>'
+                    '<p class="bookmark_note">{2}</p>'
                     '</div>'
                     )
                 BOOKMARK_COLORS = {
