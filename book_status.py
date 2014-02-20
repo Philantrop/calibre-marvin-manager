@@ -48,7 +48,8 @@ from calibre.utils.magick.draw import thumbnail
 from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
-from calibre_plugins.marvin_manager.annotations import merge_annotations
+from calibre_plugins.marvin_manager.annotations import (BookNotes, BookmarkNotes,
+    merge_annotations)
 
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
@@ -4201,7 +4202,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         if True:
             DIV_TEMPLATE = '''<div class="{0}"></div>'''
             HTML_TEMPLATE = (
-                '<?xml version=\'1.0\' encoding=\'utf-8\'?>'
+                #'<?xml version=\'1.0\' encoding=\'utf-8\'?>'
                 '<html xmlns="http://www.w3.org/1999/xhtml">'
                 '<head>'
                 '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>'
@@ -4218,17 +4219,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             Build a book_note with custom CSS
             Applied CSS is a combination of inline style plus p.book_note
             '''
-            book_notes = self.opts.db.get_book_notes(book_notes_table, book_id)
-            soup = None
-            if book_notes:
-                soup = BeautifulSoup(DIV_TEMPLATE.format('book_note'))
-                for row in book_notes:
-                    p_tag = Tag(soup, 'p', [('class', "book_note"),
-                                            ('style', "{0}".format(_get_note_style()))])
-                    note = row[b'note_text'].replace('\n', '<br/>')
-                    p_tag.insert(0, note)
-                    soup.div.insert(0, p_tag)
-            return soup
+            bns = self.opts.db.get_book_notes(book_notes_table, book_id)
+            book_notes = [row[b'note_text'].replace('\n', '<br/>') for row in bns]
+            return BookNotes().construct(book_notes)
 
         def _build_bookmark_notes(book_id, bookmark_notes_table):
             '''
@@ -4249,11 +4242,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     "1":'bookmark_blue',
                     "2":'bookmark_green'}
 
-            bookmarks = {}
-            bookmark_notes = self.opts.db.get_bookmark_notes(bookmark_notes_table, book_id)
+            bmns = self.opts.db.get_bookmark_notes(bookmark_notes_table, book_id)
             soup = None
-            if bookmark_notes:
-                for row in bookmark_notes:
+            if bmns:
+                bookmark_notes = {}
+                for row in bmns:
                     section = int(row[b'section_number'])
                     loc = int(float(row[b'location']) * 1000)
                     loc_sort = "{0:04d}.{1:04d}".format(section, loc)
@@ -4262,18 +4255,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         location = self.tocs[book_id][str(section - 1)]
                     except:
                         location = "Section %d" % section
-                    bookmarks[loc_sort] = {
+                    bookmark_notes[loc_sort] = {
                         'color': BOOKMARK_COLORS[row[b'highlight_color']],
                         'location': location,
                         'note': note}
-
-                soup = BeautifulSoup(DIV_TEMPLATE.format('bookmark_notes'))
-                for bookmark in sorted(bookmarks.keys(), reverse=True):
-                    soup.div.insert(0, BOOKMARK_TEMPLATE.format(
-                        bookmarks[bookmark]['color'],
-                        bookmarks[bookmark]['location'],
-                        _get_note_style(),
-                        bookmarks[bookmark]['note']))
+                soup = BookmarkNotes().construct(bookmark_notes)
             return soup
 
         def _get_active_annotations(book_id, annotations_table):

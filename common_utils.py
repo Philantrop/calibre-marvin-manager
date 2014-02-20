@@ -786,6 +786,7 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
     annotation_map precalculated in thread in config.py
     '''
     import calibre_plugins.marvin_manager.config as cfg
+    from calibre_plugins.marvin_manager.annotations import BookNotes, BookmarkNotes
 
     _log_location(annotation_map)
     _log(" %s -> %s" % (repr(old_destination_field), repr(new_destination_field)))
@@ -918,11 +919,20 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
             else:
                 # Update custom field
                 old_soup = BeautifulSoup(mi.get_user_metadata(old_destination_field, False)['#value#'])
+
+                # Rerender book notes div
+                bnd = old_soup.find('div', 'book_note')
+                if bnd:
+                    bnd.replaceWith(BookNotes().reconstruct(bnd))
+
+                # Rerender bookmark notes div
+                bmnd = old_soup.find('div', 'bookmark_notes')
+                if bmnd:
+                    bmnd.replaceWith(BookmarkNotes().reconstruct(bmnd))
+
+                # Rerender annotations
                 uas = old_soup.find('div', 'user_annotations')
                 if uas:
-                    # Remove user_annotations from originating custom field
-                    #uas.extract()
-
                     # Capture content
                     parent.opts.db.capture_content(uas, cid, transient_db)
 
@@ -932,27 +942,37 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                         parent.opts.db.rerender_to_html(transient_db, cid))
                     uas.replaceWith(rerendered_annotations)
 
-                    # Add stripped old_soup plus new_soup to destination field
-                    um = mi.metadata_for_field(new_destination_field)
-                    #um['#value#'] = unicode(old_soup) + unicode(new_soup)
-                    um['#value#'] = unicode(old_soup)
-                    mi.set_user_metadata(new_destination_field, um)
+                # Add stripped old_soup plus new_soup to destination field
+                um = mi.metadata_for_field(new_destination_field)
+                um['#value#'] = unicode(old_soup)
+                mi.set_user_metadata(new_destination_field, um)
 
-                    # Update the record
-                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
-                                    commit=True, force_changes=True, notify=True)
-                    pb.increment()
+                # Update the record
+                db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                commit=True, force_changes=True, notify=True)
+
+
+                pb.increment()
 
         # custom -> custom
         elif old_destination_field.startswith('#') and new_destination_field.startswith('#'):
 
             if mi.get_user_metadata(old_destination_field, False)['#value#'] is not None:
                 old_soup = BeautifulSoup(mi.get_user_metadata(old_destination_field, False)['#value#'])
+
+                # Rerender book notes div
+                bnd = old_soup.find('div', 'book_note')
+                if bnd:
+                    bnd.replaceWith(BookNotes().reconstruct(bnd))
+
+                # Rerender bookmark notes div
+                bmnd = old_soup.find('div', 'bookmark_notes')
+                if bmnd:
+                    bmnd.replaceWith(BookmarkNotes().reconstruct(bmnd))
+
+                # Rerender annotations
                 uas = old_soup.find('div', 'user_annotations')
                 if uas:
-                    # Remove user_annotations from originating custom field
-                    #uas.extract()
-
                     # Capture content
                     parent.opts.db.capture_content(uas, cid, transient_db)
 
@@ -973,10 +993,10 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
                     um['#value#'] = unicode(old_soup)
                     mi.set_user_metadata(new_destination_field, um)
 
-                    # Update the record
-                    db.set_metadata(cid, mi, set_title=False, set_authors=False,
-                                    commit=True, force_changes=True, notify=True)
-                    pb.increment()
+                # Update the record
+                db.set_metadata(cid, mi, set_title=False, set_authors=False,
+                                commit=True, force_changes=True, notify=True)
+                pb.increment()
 
     # Hide the progress bar
     pb.hide()

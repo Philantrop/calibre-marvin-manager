@@ -232,6 +232,108 @@ class Annotations(Annotation, Logger):
         return soup
 
 
+class BookNotes(object, Logger):
+    '''
+    A simple class to render and re-render Book notes
+    '''
+    def construct(self, book_notes):
+        '''
+        Given a list of notes, render HTML
+        '''
+        soup = None
+        if book_notes:
+            soup = BeautifulSoup('''<div class="{0}"></div>'''.format('book_note'))
+            for note in book_notes:
+                p_tag = Tag(soup, 'p', [('class', "book_note"),
+                                        ('style', "{0}".format(self._get_note_style()))])
+                p_tag.insert(0, note)
+                soup.div.insert(0, p_tag)
+        return soup
+
+    def reconstruct(self, soup):
+        '''
+        Update style attribute
+        '''
+        p_tags = soup.findAll('p', 'book_note')
+        for p_tag in p_tags:
+            p_tag['style'] = self._get_note_style()
+        return soup
+
+    def _get_note_style(self):
+        '''
+        Get the current CSS for book_notes
+        '''
+        from calibre_plugins.marvin_manager.appearance import default_elements
+        stored_css = plugin_prefs.get('appearance_css', default_elements)
+
+        note_style = ''
+        for element in stored_css:
+            if element['name'] == 'Note':
+                note_style = re.sub('\n', '', element['css'])
+                break
+        else:
+            _log_location("ERROR: Unable to find 'Note' in stored_css")
+
+        return note_style
+
+
+class BookmarkNotes(object, Logger):
+    '''
+    A simple class to render and re-render Bookmark notes
+    '''
+    BOOKMARK_TEMPLATE = (
+        '<div class="bookmark">'
+        '<div class="{0}"></div>'
+        '<table class="bookmark">'
+        '<tbody><tr><td class="location">{1}'
+        '</td></tr></tbody></table>'
+        '<p class="bookmark_note" style="{2}">{3}</p>'
+        '</div>'
+        )
+    BOOKMARK_COLORS = {
+        "0":'bookmark_red',
+        "1":'bookmark_blue',
+        "2":'bookmark_green'}
+
+    def construct(self, bookmark_notes):
+        '''
+        bookmark_notes: {loc_sort: {color, location, note}…}
+        '''
+        soup = None
+        if bookmark_notes:
+            soup = BeautifulSoup('''<div class="{0}"></div>'''.format('bookmark_notes'))
+            for bookmark in sorted(bookmark_notes.keys(), reverse=True):
+                soup.div.insert(0, self.BOOKMARK_TEMPLATE.format(
+                    bookmark_notes[bookmark]['color'],
+                    bookmark_notes[bookmark]['location'],
+                    self._get_note_style(),
+                    bookmark_notes[bookmark]['note']))
+        return soup
+
+    def reconstruct(self, soup):
+        p_tags = soup.findAll('p', 'bookmark_note')
+        for p_tag in p_tags:
+            p_tag['style'] = self._get_note_style()
+        return soup
+
+    def _get_note_style(self):
+        '''
+        Get the current CSS for bookmark_notes
+        '''
+        from calibre_plugins.marvin_manager.appearance import default_elements
+        stored_css = plugin_prefs.get('appearance_css', default_elements)
+
+        note_style = ''
+        for element in stored_css:
+            if element['name'] == 'Note':
+                note_style = re.sub('\n', '', element['css'])
+                break
+        else:
+            _log_location("ERROR: Unable to find 'Note' in stored_css")
+
+        return note_style
+
+
 def merge_annotations(parent, cid, old_soup, new_soup):
     '''
     old_soup, new_soup: BeautifulSoup()
