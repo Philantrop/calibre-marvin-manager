@@ -282,39 +282,61 @@ class BookmarkNotes(object, Logger):
     A simple class to render and re-render Bookmark notes
     '''
     BOOKMARK_TEMPLATE = (
-        '<div class="bookmark">'
-        '<div class="{0}"></div>'
+        '<div class="bookmark" location_sort="{0}">'
+        '<div class="{1}"></div>'
         '<table class="bookmark">'
-        '<tbody><tr><td class="location">{1}'
+        '<tbody><tr><td class="location">{2}'
         '</td></tr></tbody></table>'
-        '<p class="bookmark_note" style="{2}">{3}</p>'
+        '<p class="bookmark_note" style="{3}">{4}</p>'
         '</div>'
         )
-    BOOKMARK_COLORS = {
-        "0":'bookmark_red',
-        "1":'bookmark_blue',
-        "2":'bookmark_green'}
 
     def construct(self, bookmark_notes):
         '''
         bookmark_notes: {loc_sort: {color, location, note}…}
+        Optionally include <hr> between booknotes
         '''
         soup = None
         if bookmark_notes:
             soup = BeautifulSoup('''<div class="{0}"></div>'''.format('bookmark_notes'))
-            for bookmark in sorted(bookmark_notes.keys(), reverse=True):
-                soup.div.insert(0, self.BOOKMARK_TEMPLATE.format(
-                    bookmark_notes[bookmark]['color'],
-                    bookmark_notes[bookmark]['location'],
+            dtc = 0
+            for i, location_sort in enumerate(sorted(bookmark_notes.keys())):
+                soup.div.insert(dtc, self.BOOKMARK_TEMPLATE.format(
+                    location_sort,
+                    bookmark_notes[location_sort]['color'],
+                    bookmark_notes[location_sort]['location'],
                     self._get_note_style(),
-                    bookmark_notes[bookmark]['note']))
+                    bookmark_notes[location_sort]['note']))
+                dtc += 1
+                if (i < len(bookmark_notes) - 1 and
+                    plugin_prefs.get('appearance_hr_checkbox', False)):
+                    soup.div.insert(dtc, plugin_prefs.get('HORIZONTAL_RULE', '<hr width="80%" />'))
+                    dtc += 1
         return soup
 
     def reconstruct(self, soup):
-        p_tags = soup.findAll('p', 'bookmark_note')
-        for p_tag in p_tags:
-            p_tag['style'] = self._get_note_style()
-        return soup
+        '''
+        Rebuild bookmark_notes with current note style
+        '''
+        bookmark_notes = self._deconstruct(soup)
+        reconstructed_soup = self.construct(bookmark_notes)
+        return reconstructed_soup
+
+    def _deconstruct(self, soup):
+        '''
+        Extract dict of bookmark parameters from extant bookmarks
+        <p> may have imbedded <br/> elements
+        '''
+        bookmark_notes = {}
+        div_tags = soup.findAll('div', 'bookmark')
+        for div_tag in div_tags:
+            location_sort = div_tag['location_sort']
+            bookmark_notes[location_sort] = {
+                'color': div_tag.div['class'],
+                'location': div_tag.find('td', 'location').string,
+                'note': unicode(div_tag.find('p', 'bookmark_note').renderContents())
+                }
+        return bookmark_notes
 
     def _get_note_style(self):
         '''

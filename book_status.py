@@ -4227,20 +4227,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             '''
             Build a div with bookmark notes
             '''
-            if True:
-                BOOKMARK_TEMPLATE = (
-                    '<div class="bookmark">'
-                    '<div class="{0}"></div>'
-                    '<table class="bookmark">'
-                    '<tbody><tr><td class="location">{1}'
-                    '</td></tr></tbody></table>'
-                    '<p class="bookmark_note" style="{2}">{3}</p>'
-                    '</div>'
-                    )
-                BOOKMARK_COLORS = {
-                    "0":'bookmark_red',
-                    "1":'bookmark_blue',
-                    "2":'bookmark_green'}
+            BOOKMARK_COLORS = {
+                "0":'bookmark_red',
+                "1":'bookmark_blue',
+                "2":'bookmark_green'}
 
             bmns = self.opts.db.get_bookmark_notes(bookmark_notes_table, book_id)
             soup = None
@@ -4249,13 +4239,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 for row in bmns:
                     section = int(row[b'section_number'])
                     loc = int(float(row[b'location']) * 1000)
-                    loc_sort = "{0:04d}.{1:04d}".format(section, loc)
+                    location_sort = "{0:04d}.{1:04d}".format(section, loc)
                     note = row[b'note_text'].replace('\n', '<br/>')
                     try:
                         location = self.tocs[book_id][str(section - 1)]
                     except:
                         location = "Section %d" % section
-                    bookmark_notes[loc_sort] = {
+                    bookmark_notes[location_sort] = {
                         'color': BOOKMARK_COLORS[row[b'highlight_color']],
                         'location': location,
                         'note': note}
