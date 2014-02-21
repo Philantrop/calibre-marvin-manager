@@ -48,7 +48,8 @@ from calibre.utils.magick.draw import thumbnail
 from calibre.utils.wordcount import get_wordcount_obj
 from calibre.utils.zipfile import ZipFile
 
-from calibre_plugins.marvin_manager.annotations import (BookNotes, BookmarkNotes,
+from calibre_plugins.marvin_manager.annotations import (
+    ANNOTATIONS_HTML_TEMPLATE, BookNotes, BookmarkNotes,
     merge_annotations)
 
 from calibre_plugins.marvin_manager.common_utils import (
@@ -4197,22 +4198,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     def _get_formatted_annotations(self, book_id):
         '''
         Fetch and format Book notes, Bookmark notes, Annotations for book_id
+        appearance:preview_css() uses code modeled from this method to construct preview
         '''
-        # Templates
-        if True:
-            DIV_TEMPLATE = '''<div class="{0}"></div>'''
-            HTML_TEMPLATE = (
-                #'<?xml version=\'1.0\' encoding=\'utf-8\'?>'
-                '<html xmlns="http://www.w3.org/1999/xhtml">'
-                '<head>'
-                '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>'
-                '<meta name="calibre-dont-sanitize">'
-                '<title>Annotations</title>'
-                '<style></style>'
-                '</head>'
-                '<body></body>'
-                '</html>'
-                )
+        DIV_TEMPLATE = '''<div class="{0}"></div>'''
 
         def _build_book_notes(book_id, book_notes_table):
             '''
@@ -4467,15 +4455,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         book_notes_soup = _build_book_notes(book_id, book_notes_table)
 
         # Assemble the soup
-        soup = BeautifulSoup(HTML_TEMPLATE)
-        if bookmark_notes_soup or book_notes_soup:
-            # Load the CSS from MXD resources
-            path = os.path.join(self.parent.opts.resources_path, 'css', 'annotations.css')
-            with open(path, 'rb') as f:
-                css = f.read().decode('utf-8')
-            style_tag = Tag(soup, 'style')
-            style_tag.insert(0, css)
-            soup.head.style.replaceWith(style_tag)
+        soup = BeautifulSoup(ANNOTATIONS_HTML_TEMPLATE)
+
+        # Load the CSS from MXD resources
+        path = os.path.join(self.parent.opts.resources_path, 'css', 'annotations.css')
+        with open(path, 'rb') as f:
+            css = f.read().decode('utf-8')
+        style_tag = Tag(soup, 'style')
+        style_tag.insert(0, css)
+        soup.head.style.replaceWith(style_tag)
+
         soup.body.insert(0, annotations_soup)
         if bookmark_notes_soup is not None:
             soup.body.insert(0, bookmark_notes_soup)

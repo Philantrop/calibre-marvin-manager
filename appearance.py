@@ -23,6 +23,7 @@ from PyQt4.Qt import (Qt, QAbstractItemView, QCheckBox, QComboBox,
 from PyQt4.QtWebKit import QWebView
 
 from calibre.constants import islinux, isosx, iswindows
+from calibre.ebooks.BeautifulSoup import BeautifulSoup, Tag
 from calibre.utils.config import JSONConfig
 
 from calibre_plugins.marvin_manager.common_utils import (HelpView, SizePersistedDialog)
@@ -124,34 +125,57 @@ class AnnotationElementsTable(QTableWidget):
                 'CSS':  {'ordinal': 1, 'name': 'CSS'},
                 }
 
+    # Sample content for preview
     sample_ann_1 = {
-        'text': ['Lorem ipsum dolor sit amet, consectetur adipiscing elit. Aenean placerat condimentum semper. Aliquam hendrerit nisl mauris, nec laoreet orci. Donec rutrum consequat ultricies.',
-                 'Curabitur sollicitudin euismod felis, vitae mollis magna vestibulum id.'],
-        'note': ['This is a note appended to an annotation.',
-                 'And additional comments after a linebreak.'],
+        'text': [
+            ("What really knocks me out is a book that, when you're all done reading it, "
+             "you wish the author that wrote it was a terrific friend of yours and "
+             "you could call him up on the phone whenever you felt like it. "
+             "That doesn't happen much, though.")],
+        'note': ['— J.D. Salinger'],
         'highlightcolor': 'Yellow',
         'timestamp': time.mktime(time.localtime()),
         'location': 'Chapter 4',
         'location_sort': 0
         }
     sample_ann_2 = {
-        'text': ['Phasellus sit amet ipsum id velit commodo convallis. In dictum felis non tellus volutpat in tincidunt neque varius. Sed at mauris augue. Vestibulum ligula nunc, ullamcorper id suscipit sed, auctor quis erat. In hac habitasse platea dictumst. Aliquam sit amet nulla dolor, ut tempus libero. In hac habitasse platea dictumst. Etiam consectetur orci vel massa eleifend in vestibulum odio auctor. Praesent orci turpis, aliquet non eleifend sit amet, sollicitudin sit amet augue.'],
-        'highlightcolor': 'Green',
+        'text': [
+            ("Literature is a luxury; fiction is a necessity.")],
+        'note': ['— G.K. Chesterton'],
+        'highlightcolor': 'Pink',
         'timestamp': time.mktime(time.localtime()),
         'location': 'Chapter 12',
         'location_sort': 1
         }
     sample_ann_3 = {
-        'text': ['Morbi massa tellus, laoreet id pretium sed, volutpat in felis.',
-                 'Donec massa nulla, malesuada vitae volutpat quis, accumsan ut tellus.'],
-        'note': ['This is a note appended to an annotation.',
-                 'And additional comments after a linebreak.'],
+        'text': [
+            ("There is no surer foundation for a beautiful friendship "
+             "than a mutual taste in literature.")],
+        'note': ['— P.G. Wodehouse'],
         'highlightcolor': 'Purple',
         'timestamp': time.mktime(time.localtime()),
         'location': 'Chapter 53',
         'location_sort': 2
         }
-
+    sample_book_notes = [
+        "Create book notes from Marvin’s Library view by swiping left on a cover, "
+        "then touching <b>Notes</b>.<br/>"
+        "Create book notes from Marvin’s Home screen by long-touching a cover, then "
+        "touching <b>Notes</b>."
+        ]
+    sample_bookmark_notes = {
+        "1": {'color': 'bookmark_red',
+              'location': 'Chapter 1',
+              'note': ('Create bookmark notes from Marvin’s <b>Bookmarks</b> screen. '
+                       'Swipe left on a bookmark to edit.')},
+        "2": {'color': 'bookmark_green',
+              'location': 'Chapter 2',
+              'note': ('Enable multi-color bookmarks from Marvin’s '
+                       '<b>Options | More</b> screen.')},
+        "3": {'color': 'bookmark_blue',
+              'location': 'Chapter 3',
+              'note': ('Bookmarks with notes are included in the Annotations summary.')},
+        }
 
     def __init__(self, parent, object_name):
         self.parent = parent
@@ -319,16 +343,40 @@ class AnnotationElementsTable(QTableWidget):
 
     def preview_css(self):
         '''
-        Construct a dummy annotation for preview purposes
+        Construct a dummy set of notes and annotation for preview purposes
+        Modeled after book_status:_get_formatted_annotations()
         '''
-        from calibre_plugins.marvin_manager.annotations import Annotation, Annotations
+        from calibre_plugins.marvin_manager.annotations import (
+            ANNOTATIONS_HTML_TEMPLATE, Annotation, Annotations, BookNotes, BookmarkNotes)
 
+        # Assemble the preview soup
+        soup = BeautifulSoup(ANNOTATIONS_HTML_TEMPLATE)
+
+        # Load the CSS from MXD resources
+        path = os.path.join(self.parent.opts.resources_path, 'css', 'annotations.css')
+        with open(path, 'rb') as f:
+            css = f.read().decode('utf-8')
+        style_tag = Tag(soup, 'style')
+        style_tag.insert(0, css)
+        soup.head.style.replaceWith(style_tag)
+
+        # Assemble the sample Book notes
+        book_notes_soup = BookNotes().construct(self.sample_book_notes)
+        soup.body.append(book_notes_soup)
+
+        # Assemble the sample Bookmark notes
+        bookmark_notes_soup = BookmarkNotes().construct(self.sample_bookmark_notes)
+        soup.body.append(bookmark_notes_soup)
+
+        # Assemble the sample annotations
         pas = Annotations(None, title="Preview")
         pas.annotations.append(Annotation(self.sample_ann_1))
         pas.annotations.append(Annotation(self.sample_ann_2))
         pas.annotations.append(Annotation(self.sample_ann_3))
-        preview_soup = pas.to_HTML(pas.create_soup())
-        self.parent.wv.setHtml(unicode(preview_soup.renderContents()))
+        annotations_soup = pas.to_HTML(pas.create_soup())
+        soup.body.append(annotations_soup)
+
+        self.parent.wv.setHtml(unicode(soup.renderContents()))
 
     def resize_row_height(self, lines, row):
         point_size = self.FONT.pointSize()

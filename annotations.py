@@ -32,6 +32,17 @@ COLOR_MAP = {
 
 ANNOTATION_DIV_STYLE = "margin:0 0 0.5em 0"
 ANNOTATIONS_HEADER = '''<div class="user_annotations" style="margin:0"></div>'''
+ANNOTATIONS_HTML_TEMPLATE = (
+        '<html xmlns="http://www.w3.org/1999/xhtml">'
+        '<head>'
+        '<meta http-equiv="content-type" content="text/html; charset=utf-8"/>'
+        '<meta name="calibre-dont-sanitize">'
+        '<title>Annotations</title>'
+        '<style></style>'
+        '</head>'
+        '<body></body>'
+        '</html>'
+        )
 
 
 class Annotation(object):
