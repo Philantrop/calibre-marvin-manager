@@ -172,9 +172,6 @@ class AnnotationElementsTable(QTableWidget):
               'location': 'Chapter 2',
               'note': ('Enable multi-color bookmarks from Marvin’s '
                        '<b>Options | More</b> screen.')},
-        "3": {'color': 'bookmark_blue',
-              'location': 'Chapter 3',
-              'note': ('Bookmarks with notes are included in the Annotations summary.')},
         }
 
     def __init__(self, parent, object_name):

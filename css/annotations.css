@@ -3,18 +3,18 @@ div.bookmark {
     }
 div.bookmark_blue {
     background-image: -webkit-gradient(linear,left top, left bottom,
-    color-stop(0%,#008CBF),
-    color-stop(100%, #009ED6));
+    color-stop(0%,#0083B3),
+    color-stop(100%,#00A6E3));
     }
 div.bookmark_green {
     background-image: -webkit-gradient(linear,left top, left bottom,
-    color-stop(0%,#73A343),
-    color-stop(100%, #82B94D));
+    color-stop(0%,#6A963E),
+    color-stop(100%,#8BC754));
     }
 div.bookmark_red {
     background-image: -webkit-gradient(linear,left top, left bottom,
-    color-stop(0%,#BF3030),
-    color-stop(100%, #CD332B));
+    color-stop(0%,#B32D2D),
+    color-stop(100%,#D9362E));
     }
 div.bookmark_blue,
 div.bookmark_green,
