@@ -360,10 +360,14 @@ class AnnotationElementsTable(QTableWidget):
         # Assemble the sample Book notes
         book_notes_soup = BookNotes().construct(self.sample_book_notes)
         soup.body.append(book_notes_soup)
+        cd_tag = Tag(soup, 'div', [('class', "divider")])
+        soup.body.append(cd_tag)
 
         # Assemble the sample Bookmark notes
         bookmark_notes_soup = BookmarkNotes().construct(self.sample_bookmark_notes)
         soup.body.append(bookmark_notes_soup)
+        cd_tag = Tag(soup, 'div', [('class', "divider")])
+        soup.body.append(cd_tag)
 
         # Assemble the sample annotations
         pas = Annotations(None, title="Preview")

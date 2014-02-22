@@ -4489,14 +4489,21 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Populate style tag with minified CSS
         style_tag = Tag(soup, 'style')
         style_tag.append(_minify_css(css))
-        #style_tag.append(css)
         soup.head.style.replaceWith(style_tag)
 
-        soup.body.insert(0, annotations_soup)
-        if bookmark_notes_soup is not None:
-            soup.body.insert(0, bookmark_notes_soup)
+        # Add pieces, with dividers as needed
         if book_notes_soup is not None:
-            soup.body.insert(0, book_notes_soup)
+            soup.body.append(book_notes_soup)
+            if annotations_soup.div.contents or bookmark_notes_soup:
+                cd_tag = Tag(soup, 'div', [('class', "divider")])
+                soup.body.append(cd_tag)
+        if bookmark_notes_soup is not None:
+            soup.body.append(bookmark_notes_soup)
+            if annotations_soup.div.contents:
+                cd_tag = Tag(soup, 'div', [('class', "divider")])
+                soup.body.append(cd_tag)
+        if annotations_soup is not None:
+            soup.body.append(annotations_soup)
 
         return unicode(soup.renderContents())
 

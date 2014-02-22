@@ -3,7 +3,7 @@
 */
 
 div.bookmark_notes {
-    margin: 0 0 1.5em 0;
+    margin: 0;
     }
 
 div.bookmark {
@@ -60,17 +60,6 @@ div.bookmark_red:after {
     }
 
 /*
-** Section divider after Book notes, Bookmark notes
-*/
-div.book_notes:after,
-div.bookmark_notes:after {
-    content:"∙ ∙ ∙";
-    display:block;
-    margin: 0 0 1em 0;
-    text-align:center;
-    }
-
-/*
 ** Shaded background for Bookmark notes TOC location
 */
 div.book_note {
@@ -80,6 +69,16 @@ div.book_note {
     padding: 1em;
     position: relative;
     -webkit-border-radius: 4px;
+    }
+
+/*
+** Section divider after Book notes, Bookmark notes
+*/
+div.divider:after {
+    content:"∙ ∙ ∙";
+    display:block;
+    margin: 0 0 0.5em 0;
+    text-align:center;
     }
 
 p.book_note {
