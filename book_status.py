@@ -4397,6 +4397,30 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 note_style = ''
             return note_style
 
+        def _minify_css(css):
+            '''
+            Strip comments, collapse white space
+            '''
+            # Comments
+            css = re.sub(r'/\*[\s\S]*?\*/', '', css)
+
+            # More than one whitespace
+            css = re.sub(r'\s\s+', ' ', css)
+
+            # No whitespace before EOL
+            css = re.sub(r'\s+\n', '', css)
+
+            # Remove space before and after certain chars
+            for char in ('{', '}', ':', ';', ','):
+                css = re.sub(char + r'\s', char, css)
+                css = re.sub(r'\s' + char, char, css)
+            css = re.sub(r'}\s(#|\w)', r'}\1', css)
+            css = re.sub(r';}', r'}', css) # no need for the ; before end of attributes
+            css = re.sub(r'}//-->', r'}\n//-->', css)
+
+            return css.strip()
+
+
         # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
         local_db_path = getattr(self.parent.connected_device, "local_db_path")
 
@@ -4461,8 +4485,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         path = os.path.join(self.parent.opts.resources_path, 'css', 'annotations.css')
         with open(path, 'rb') as f:
             css = f.read().decode('utf-8')
+
+        # Populate style tag with minified CSS
         style_tag = Tag(soup, 'style')
-        style_tag.insert(0, css)
+        style_tag.append(_minify_css(css))
+        #style_tag.append(css)
         soup.head.style.replaceWith(style_tag)
 
         soup.body.insert(0, annotations_soup)

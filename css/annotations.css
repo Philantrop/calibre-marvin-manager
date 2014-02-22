@@ -1,21 +1,39 @@
+/*
+** Layout CSS for Book notes, Bookmarks and Annotations
+*/
+
+div.bookmark_notes {
+    margin: 0 0 1.5em 0;
+    }
+
 div.bookmark {
     margin: 0 0 0.5em 0;
     }
+
+/*
+** CSS for rendering bookmark images
+*/
 div.bookmark_blue {
     background-image: -webkit-gradient(linear,left top, left bottom,
     color-stop(0%,#0083B3),
     color-stop(100%,#00A6E3));
     }
+
 div.bookmark_green {
     background-image: -webkit-gradient(linear,left top, left bottom,
     color-stop(0%,#6A963E),
     color-stop(100%,#8BC754));
     }
+
 div.bookmark_red {
     background-image: -webkit-gradient(linear,left top, left bottom,
     color-stop(0%,#B32D2D),
     color-stop(100%,#D9362E));
     }
+
+/*
+** CSS for rendering bookmark images
+*/
 div.bookmark_blue,
 div.bookmark_green,
 div.bookmark_red {
@@ -26,6 +44,10 @@ div.bookmark_red {
     width:1.25em;
     z-index:1;
     }
+
+/*
+** CSS for rendering bookmark images
+*/
 div.bookmark_blue:after,
 div.bookmark_green:after,
 div.bookmark_red:after {
@@ -36,6 +58,21 @@ div.bookmark_red:after {
     display:block;
     position:absolute;
     }
+
+/*
+** Section divider after Book notes, Bookmark notes
+*/
+div.book_notes:after,
+div.bookmark_notes:after {
+    content:"∙ ∙ ∙";
+    display:block;
+    margin: 0 0 1em 0;
+    text-align:center;
+    }
+
+/*
+** Shaded background for Bookmark notes TOC location
+*/
 div.book_note {
     background: -webkit-linear-gradient(0deg, #F5F5F5 0%, #FFF 25%, #FFF 75%, #F5F5F5 100%);
     border: 1px solid #CCC;
@@ -44,12 +81,21 @@ div.book_note {
     position: relative;
     -webkit-border-radius: 4px;
     }
+
 p.book_note {
     margin: 0;
     }
+
 p.bookmark_note {
-    margin: 0 0 6 0;
+    margin: 0 0 6px 0;
     }
+
+table.annotation {
+    padding:0px;
+    -webkit-border-radius:4px;
+    width:100%;
+    }
+
 table.bookmark {
     background-image: -webkit-gradient(radial, center center, 0, center center, 100,
      color-stop(0, #F8F8F8), color-stop(1, #E8E8E8));
@@ -63,6 +109,7 @@ table.bookmark {
     -webkit-border-radius:4px;
     width:100%;
     }
+
 table.bookmark td.location {
     text-align:center;
     }

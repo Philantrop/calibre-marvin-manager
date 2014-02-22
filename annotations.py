@@ -162,12 +162,14 @@ class Annotations(Annotation, Logger):
             elif element == 'Note':
                 comments_body += '{note}'
             elif element == 'Timestamp':
-                ts_css = '''<table cellpadding="0" width="100%" style="{ts_style}" color="{color}">
+
+                ts_css = '''<table class="annotation" style="{ts_style}" color="{color}">
                                 <tr>
                                     <td class="location" style="text-align:left">{location}</td>
                                     <td class="timestamp" uts="{unix_timestamp}" style="text-align:right">{friendly_timestamp}</td>
                                 </tr>
                             </table>'''
+
                 comments_body += re.sub(r'>\s+<', r'><', ts_css)
 
         if self.annotations:
@@ -253,12 +255,14 @@ class BookNotes(object, Logger):
         '''
         soup = None
         if book_notes:
-            soup = BeautifulSoup('''<div class="{0}"></div>'''.format('book_note'))
+            soup = BeautifulSoup('''<div class="{0}"></div>'''.format('book_notes'))
             for note in book_notes:
+                div_tag = Tag(soup, 'div', [('class', "book_note")])
                 p_tag = Tag(soup, 'p', [('class', "book_note"),
                                         ('style', "{0}".format(self._get_note_style()))])
-                p_tag.insert(0, note)
-                soup.div.insert(0, p_tag)
+                p_tag.append(note)
+                div_tag.append(p_tag)
+                soup.div.append(div_tag)
         return soup
 
     def reconstruct(self, soup):
