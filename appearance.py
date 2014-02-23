@@ -167,6 +167,9 @@ class AnnotationElementsTable(QTableWidget):
         "1": {'color': 'bookmark_red',
               'location': 'Chapter 1',
               'note': ('Create bookmark notes from Marvin’s <b>Bookmarks</b> screen. '
+                       'Access the Table of Contents screen by tapping the book icon '
+                       'in the top toolbar of the Book screen, then tapping <b>Bookmarks</b> '
+                       'in the bottom toolbar. '
                        'Swipe left on a bookmark to edit.')},
         "2": {'color': 'bookmark_green',
               'location': 'Chapter 2',
