@@ -89,18 +89,24 @@
 	font-size: small;
 	text-align: left;
     }
-    tr.gray {
-        background-color: #E5E5E5;
-        font-family:"Lucida Console", Monaco, monospace;
-        font-size:smaller;
-    }
-    tr.magenta {
-        background-color: #FF99E5;
+    tr.dark_gray {
+        background-color: #989898;
+		color:white;
         font-family:"Lucida Console", Monaco, monospace;
         font-size:smaller;
     }
     tr.green {
         background-color: #99FF99;
+        font-family:"Lucida Console", Monaco, monospace;
+        font-size:smaller;
+    }
+    tr.light_gray {
+        background-color: #D8D8D8;
+        font-family:"Lucida Console", Monaco, monospace;
+        font-size:smaller;
+    }
+    tr.magenta {
+        background-color: #FF99E5;
         font-family:"Lucida Console", Monaco, monospace;
         font-size:smaller;
     }
@@ -162,10 +168,10 @@
 		  <li>Calculate word counts for one or multiple books.</li>
 		  <li>Generate Deep View  lists of names, dates, events and places.</li>
 		  <li>Show reading progress, date last read.</li>
-		  <li>Manage <strong>New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags, and Locked status of books in your Marvin library.</li>
+		  <li>Manage <strong>Ratings, New</strong>, <strong>Reading list</strong> and <strong>Read</strong> flags, and Locked status of books in your Marvin library.</li>
 		  <li>View annotations, vocabulary words, Deep View content and pinned articles.</li>
 		  <li>Manage collection assignments, including creating, renaming and deleting collections.</li>
-		  <li>Transfer reading progress,  last read and word counts from Marvin to calibre custom columns.</li>
+		  <li>Transfer reading progress,  last read, locked and word counts from Marvin to calibre custom columns.</li>
 	  </ul>
 	</div>
   <hr />
@@ -175,11 +181,13 @@
 <div class="topic">
 <h3><a name="configuration" id="configuration"></a>2. <a href="#toc">Configuration</a></h3>
 <p>Open the context menu for the Marvin XD icon (right-click the icon or click the down arrow), then click <strong>Customize plugin</strong> to display the <strong>Customize Marvin XD</strong> dialog.<img src="images/config.png" alt="" class="inline" /></p>
-<p>The<strong> Custom columns assignments</strong> section connects  Marvin  details to custom columns in calibre. For example, by selecting a custom column in calibre for Collections, you can synchronize collection assignments between calibre and Marvin. You may  specify custom columns for <em>Annotations</em>, <em>Collections</em>, <em>Last read</em>, <em>Progress</em>, <em>Read</em>, <em>Reading list</em> and <em>Word count</em>, enabling you to synchronize those Marvin details to calibre.</p>
+<p>The<strong> Custom column assignments</strong> section connects  Marvin  details to custom columns in calibre. For example, by selecting a custom column in calibre for Collections, you can synchronize collection assignments between calibre and Marvin. You may  specify custom columns for <em>Annotations</em>, <em>Collections</em>, <em>Last read</em>, <em>Locked, Progress</em>, <em>Read</em>, <em>Reading list</em> and <em>Word count</em>.</p>
 <p>Clicking the combo box presents a list of existing custom columns eligible for use with the associated Marvin details.</p>
 <p>Clicking the Wizard button leads you through the steps to create a new custom column, or renames an existing custom column.</p>
 <p><strong>CSS:</strong> Click the <strong>Annotations</strong> button to customize the CSS applied to Annotations. Click the <strong>Articles, Vocabulary</strong> button to customize the CSS applied to Articles and Vocabulary.</p>
-<p><strong>General options:</strong> <strong>Automatically refresh custom column content</strong>: When checked,  enabled custom column content will be synchronized upon opening Marvin XD for all books installed in Marvin that are also in your calibre library.<br />
+<p><strong>General options:</strong> <strong>Apply temporary markers to duplicate books</strong>: When checked, books in Marvin determined to be duplicates of books in calibre will be marked.<br />
+  <strong>Apply temporary markers to books with updated content</strong>: When checked, books with matching metadata but differing content will be marked.<br />
+  <strong>Automatically refresh custom column content</strong>: When checked,  enabled custom column content will be synchronized upon opening Marvin XD for all books installed in Marvin that are also in your calibre library.<br />
   <strong>Show reading progress as percentage: </strong>When checked<strong>,</strong> displays reading progress as a numeric percentage. When unchecked, reading progress is shown as a series of dots.</p> 
 <p><strong>Debug options: Enable debug logging for Marvin XD, </strong><strong>Enable debug logging for libiMobileDevice</strong>: If you are having a problem with the plugin, you may be asked to enable one or both of these checkboxes, then restart calibre in debug mode from a terminal window to generate a debug log. </p>
 <p>To start calibre in debug mode, type <tt>calibre-debug -g</tt> in a terminal window.</p>
@@ -197,16 +205,6 @@
       <td>in calibre library</td>
       <td>Match status</td>
     </tr>
-    <tr class="gray">
-      <td>Gray</td>
-      <td class="checked">&#x2713;</td>
-      <td>Installed in calibre and Marvin, no match found.</td>
-    </tr>
-    <tr class="magenta">
-      <td>Magenta</td>
-      <td class="checked">multiple</td>
-      <td>Installed in calibre and Marvin, more than one copy in calibre.</td>
-    </tr>
     <tr class="green">
       <td>Green</td>
       <td class="checked">&#x2713;</td>
@@ -217,20 +215,35 @@
       <td class="checked">&#x2713;</td>
       <td>Installed in calibre and Marvin, some metadata differences.</td>
     </tr>
+    <tr class="magenta">
+      <td>Magenta</td>
+      <td class="checked">multiple</td>
+      <td>Installed in calibre and Marvin, more than one copy in calibre.</td>
+    </tr>
     <tr class="orange">
       <td>Orange</td>
       <td class="checked">&#x2713;</td>
       <td>Installed in calibre and Marvin, more than one copy in Marvin.</td>
     </tr>
+    <tr class="light_gray">
+      <td>Light Gray</td>
+      <td class="checked">&#x2713;</td>
+      <td>Installed in calibre and Marvin, but no match found.</td>
+    </tr>
+    <tr class="dark_gray">
+      <td>Dark Gray</td>
+      <td class="checked">&#x2713;</td>
+      <td>Installed in calibre and Marvin, book contents updated in Marvin.</td>
+    </tr>
     <tr class="white">
       <td>White</td>
       <td class="checked">&nbsp;</td>
-      <td>Installed in Marvin. The book is not in your calibre library.</td>
+      <td>Installed in Marvin only.</td>
     </tr>
     <tr class="red">
       <td>Red</td>
       <td class="checked">&nbsp;</td>
-      <td>More than one copy in Marvin. The book is not in your calibre library.</td>
+      <td>More than one copy installed in Marvin.</td>
     </tr>
   </table>
   <p>Click <img src="images/hide_matches.png" alt="" align="absmiddle" /> to return to the regular display listing.</p>
@@ -240,15 +253,15 @@
 <div class="topic">
 <h3><a name="scenarios" id="scenarios"></a>4. <a href="#toc">FAQs</a></h3>
 <div class="usage">
-  <p class="usage-topic">How does the Marvin XD plugin relate to the iOS reader applications driver? Do I still need it?</p>
-<p class="usage-explanation">Yes, you still need the iOS reader applications driver configured with Marvin as your preferred iOS reader application. Marvin XD communicates with the regular driver to accomplish its tasks. Marvin XD offers many more features than a conventional device driver. You should be able to accomplish all Marvin tasks through Marvin XD.</p>
+  <p class="usage-topic">How does the Marvin XD plugin relate to the iOS reader applications driver? Do I need both plugins?</p>
+<p class="usage-explanation">Yes, you  need the iOS reader applications driver (iOSRA) configured with Marvin as your preferred iOS reader application. Marvin XD communicates with the iOSRA driver to accomplish its tasks. Marvin XD offers many more features than a conventional device driver. You should be able to accomplish all Marvin tasks through Marvin XD.</p>
 </div>
 <hr />
 
 <div class="usage">
 <p class="usage-topic">I see lots of books with yellow backgrounds when showing match status. Is that bad?</p>
-<p class="usage-explanation">No, that's good! Yellow means that the book content is the same between calibre and Marvin, but there are some metadata differences. The differences could be as minor as a difference in the title, or perhaps you have applied a new cover in Marvin. </p>
-<p class="usage-explanation">To compare the metadata, double-click the title to open the Metadata window. To make the books match exactly, choose which metadata you want to use, and apply it. The changes are applied immediately.</p>
+<p class="usage-explanation">No, that's good! Yellow means that the book content is the same between calibre and Marvin, but there are some metadata differences. The differences could be as minor as a difference in the title, or perhaps an updated cover. </p>
+<p class="usage-explanation">To compare the metadata, double-click the title to open the Metadata window. To make the books match exactly, choose which metadata you want to use, and apply it. Changes are applied immediately.</p>
 </div>
 <hr />
 
@@ -321,7 +334,7 @@
   </tr>
   <tr class="action">
     <td>Add annotations to a  custom column</td>
-    <td>Fetch  annotations from Marvin, apply to  custom column specified for Annotations (in configuration dialog). Applies to selected books.</td>
+    <td>Fetch  notes and annotations from Marvin, apply to  custom column specified for Annotations (in configuration dialog). Applies to selected books.</td>
     <td><ul>
       <li>Annotations context menu</li>
     </ul></td>
@@ -342,7 +355,7 @@
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Apply last read date to a calibre  column</td>
+    <td>Apply last read date to a calibre column</td>
     <td>Apply last read date to custom column specified for Last read (in configuration dialog). Applies to selected books.</td>
     <td><ul>
       <li>Last read double-click</li>
@@ -350,7 +363,14 @@
     </ul></td>
   </tr>
   <tr class="action">
-    <td>Apply reading progress to a  custom column</td>
+    <td>Apply rating</td>
+    <td>Apply rating (0-5 stars) to selected books. If book is matched in calibre, rating will also be applied to calibre metadata.</td>
+    <td><ul>
+      <li>Rating context menu</li>
+    </ul></td>
+  </tr>
+  <tr class="action">
+    <td>Apply reading progress to a custom column</td>
     <td>Apply reading progress to custom column specified for Progress (in configuration dialog). Applies to selected books. Books flagged as <strong>New</strong> will have no reading progress; books flagged as <strong>Read</strong> will have 100% reading progress.</td>
     <td><ul>
       <li>Progress double-click</li>
@@ -514,7 +534,7 @@
   </tr>
   <tr class="action">
     <td>Refresh  custom columns</td>
-    <td>Apply contents of Progress, Last read and Annotations columns to  custom columns (assigned in configuration dialog) for selected books. You may also enable automatic refresh of custom column content in the plugin's configuration dialog.</td>
+    <td>Apply contents of Progress, Last read, Locked and Annotations columns to  custom columns (assigned in configuration dialog) for selected books. You may also enable automatic refresh of custom column content in the plugin's configuration dialog.</td>
     <td><ul>
       <li>Main window button</li>
       <li>Configuration dialog</li>

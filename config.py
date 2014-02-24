@@ -286,7 +286,7 @@ class ConfigWidget(QWidget, Logger):
         self.cfg_annotations_appearance_toolbutton.setIcon(self.annotations_icon)
         self.cfg_annotations_appearance_toolbutton.clicked.connect(self.configure_appearance)
         self.cfg_css_options_qgl.addWidget(self.cfg_annotations_appearance_toolbutton, current_row, 0)
-        self.cfg_annotations_label = ClickableQLabel("Annotations")
+        self.cfg_annotations_label = ClickableQLabel("Book notes, Bookmark notes and Annotations")
         self.connect(self.cfg_annotations_label, SIGNAL('clicked()'), self.configure_appearance)
         self.cfg_css_options_qgl.addWidget(self.cfg_annotations_label, current_row, 1)
         current_row += 1
