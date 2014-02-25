@@ -148,7 +148,7 @@ class Annotations(Annotation, Logger):
                 note_style = re.sub('\n', '', element['css'])
             elif element['name'] == 'Text':
                 text_style = re.sub('\n', '', element['css'])
-            elif element['name'] == 'Timestamp':
+            elif element['name'] == 'Location':
                 ts_style = re.sub('\n', '', element['css'])
 
         # Additional CSS for timestamp color and bg to be formatted
@@ -161,7 +161,7 @@ class Annotations(Annotation, Logger):
                 comments_body += '{text}'
             elif element == 'Note':
                 comments_body += '{note}'
-            elif element == 'Timestamp':
+            elif element == 'Location':
 
                 ts_css = '''<table class="annotation" style="{ts_style}" color="{color}">
                                 <tr>
@@ -319,7 +319,7 @@ class BookmarkNotes(object, Logger):
                 soup.div.insert(dtc, self.BOOKMARK_TEMPLATE.format(
                     location_sort,
                     bookmark_notes[location_sort]['color'],
-                    self._get_style('Timestamp'),
+                    self._get_style('Location'),
                     bookmark_notes[location_sort]['location'],
                     self._get_style('Note'),
                     bookmark_notes[location_sort]['note']))
