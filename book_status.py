@@ -3244,9 +3244,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         ''' LIGHT_GRAY: Book has been updated in calibre '''
                         match_quality = self.MATCH_COLORS.index('LIGHT_GRAY')
                 else:
-                    # No UUID, but calibre recognizes as a match
-                    ''' DARK_GRAY: Book has been updated in Marvin '''
-                    match_quality = self.MATCH_COLORS.index('DARK_GRAY')
+                    # No UUID, but calibre recognizes a TITLE/AUTHOR match
+                    if book_data.metadata_mismatches:
+                        match_quality = self.MATCH_COLORS.index('YELLOW')
+                    else:
+                        match_quality = self.MATCH_COLORS.index('DARK_GRAY')
             else:
                 '''
                 Book is not in calibre library
@@ -4383,19 +4385,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             'note_text': row[b'Text'],
                             'section_number': row[b'SectionNumber']}
                         self.opts.db.add_to_bookmark_notes_db(bookmark_notes_table, bookmark_note)
-
-        def _get_note_style():
-            # Retrieve CSS prefs for Notes
-            from calibre_plugins.marvin_manager.appearance import default_elements
-            stored_css = self.prefs.get('appearance_css', default_elements)
-            for element in stored_css:
-                if element['name'] == 'Note':
-                    note_style = re.sub('\n', '', element['css'])
-                    break
-            else:
-                self._log_location("ERROR: Unable to find 'Note' in stored_css")
-                note_style = ''
-            return note_style
 
         def _minify_css(css):
             '''

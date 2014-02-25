@@ -300,9 +300,9 @@ class BookmarkNotes(object, Logger):
         '<div class="bookmark" location_sort="{0}">'
         '<div class="{1}"></div>'
         '<table class="bookmark">'
-        '<tbody><tr><td class="location">{2}'
+        '<tbody><tr><td class="location" style="{2}">{3}'
         '</td></tr></tbody></table>'
-        '<p class="bookmark_note" style="{3}">{4}</p>'
+        '<p class="bookmark_note" style="{4}">{5}</p>'
         '</div>'
         )
 
@@ -319,8 +319,9 @@ class BookmarkNotes(object, Logger):
                 soup.div.insert(dtc, self.BOOKMARK_TEMPLATE.format(
                     location_sort,
                     bookmark_notes[location_sort]['color'],
+                    self._get_style('Timestamp'),
                     bookmark_notes[location_sort]['location'],
-                    self._get_note_style(),
+                    self._get_style('Note'),
                     bookmark_notes[location_sort]['note']))
                 dtc += 1
                 if (i < len(bookmark_notes) - 1 and
@@ -353,6 +354,23 @@ class BookmarkNotes(object, Logger):
                 }
         return bookmark_notes
 
+    def _get_style(self, target):
+        '''
+        Get the current CSS for target
+        '''
+        from calibre_plugins.marvin_manager.appearance import default_elements
+        stored_css = plugin_prefs.get('appearance_css', default_elements)
+
+        style = ''
+        for element in stored_css:
+            if element['name'] == target:
+                style = re.sub('\n', '', element['css'])
+                break
+        else:
+            self._log_location("ERROR: Unable to find '{0}' in stored_css".format(target))
+        return style
+
+    """
     def _get_note_style(self):
         '''
         Get the current CSS for bookmark_notes
@@ -366,10 +384,10 @@ class BookmarkNotes(object, Logger):
                 note_style = re.sub('\n', '', element['css'])
                 break
         else:
-            _log_location("ERROR: Unable to find 'Note' in stored_css")
+            self._log_location("ERROR: Unable to find 'Note' in stored_css")
 
         return note_style
-
+    """
 
 def merge_annotations(parent, cid, old_soup, new_soup):
     '''
