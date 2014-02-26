@@ -805,6 +805,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
+                self.developer_menu.addSeparator()
                 action = 'Restore from backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
                 ac = self.create_menu_item(self.developer_menu, action, image=icon)
