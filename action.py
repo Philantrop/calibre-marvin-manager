@@ -14,7 +14,8 @@ from functools import partial
 from lxml import etree, html
 from zipfile import ZipFile
 
-from PyQt4.Qt import (Qt, QApplication, QCursor, QIcon, QMenu, QTimer, QUrl,
+from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QIcon,
+                      QMenu, QTimer, QUrl,
                       pyqtSignal)
 
 from calibre.constants import DEBUG
@@ -82,7 +83,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location(action)
         if action in ['Delete calibre hashes', 'Delete Marvin hashes',
-                      'Nuke annotations', 'Reset column widths']:
+                      'Nuke annotations', 'Reset column widths',
+                      'Restore from backup']:
             if action == 'Delete Marvin hashes':
                 remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
                 rhc = b'/'.join([remote_cache_folder, BookStatusDialog.HASH_CACHE_FS])
@@ -114,6 +116,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self._log("deleting marvin_library_column_widths")
                 self.prefs.pop('marvin_library_column_widths')
                 self.prefs.commit()
+            elif action == 'Restore from backup':
+                self.restore_from_backup()
+
         else:
             self._log("unrecognized action")
 
@@ -800,6 +805,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
+                action = 'Restore from backup'
+                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+                ac = self.create_menu_item(self.developer_menu, action, image=icon)
+                ac.triggered.connect(partial(self.developer_utilities, action))
+
             # Process Dropbox sync records automatically once only.
             if process_dropbox:
                 self.process_dropbox_sync_records()
@@ -845,6 +855,40 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def reset_marvin_library(self):
         self._log_location("not implemented")
+
+    def restore_from_backup(self):
+        '''
+        Put a user-selected marvin.backup into /Documents
+        Display a dialog telling user how to complete restore
+        '''
+        self._log_location()
+
+        # Get the backup file
+        source = QFileDialog.getOpenFileName(
+            self.gui,
+            "Select Marvin backup file to restore",
+            os.path.expanduser("~"),
+            "marvin.backup")
+        if source:
+            self._busy_panel_setup("Copying marvin.backup to /Documents…")
+            # Copy selected backup to /Documents
+            tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
+            destination = b'/'.join(['/Documents', 'marvin.backup'])
+            self.ios.copy_to_idevice(source, tmp)
+            self.ios.rename(tmp, destination)
+            self._busy_panel_teardown()
+
+            # Display dialog detailing how to complete restore
+            title = "Restore Marvin from backup"
+            msg = ('<p>To complete the restore process:</p>'
+                   '<ul>'
+                   '<li>Touch <b>Disconnect</b> on the calibre connector</li>'
+                   '<li>Press the Home button to return to the Home screen</li>'
+                   '<li>Force-quit Marvin</li>'
+                   '<li>Restart Marvin</li>'
+                   '</ul>'
+                   )
+            d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
     def show_configuration(self):
         self.interface_action_base_plugin.do_user_config(self.gui)
