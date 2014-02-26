@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import atexit, cPickle as pickle, os, sys, threading
+import atexit, cPickle as pickle, os, re, sys, threading
 
 from functools import partial
 from lxml import etree, html
@@ -90,6 +90,17 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 if self.ios.exists(rhc):
                     self.ios.remove(rhc)
                     self._log("remote hash cache at %s deleted" % rhc)
+
+                # Remove cover hashes for connected device
+                device_cached_hashes = "{0}_cover_hashes.json".format(
+                    re.sub('\W', '_', self.ios.device_name))
+                dch = os.path.join(self.resources_path, device_cached_hashes)
+                if os.path.exists(dch):
+                    os.remove(dch)
+                    self._log("cover hashes at {0} deleted".format(dch))
+                else:
+                    self._log("no cover hashes found at {0}".format(dch))
+
             elif action == 'Delete calibre hashes':
                 self.gui.current_db.delete_all_custom_book_data('epub_hash')
                 self._log("cached epub hashes deleted")
