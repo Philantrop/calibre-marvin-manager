@@ -706,13 +706,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
         if prefs_version <= "1.2.0":
             appearance_css = self.prefs.get('appearance_css', None)
             if appearance_css is not None:
-                _log_update()
-                self._log("changing appearance_css 'Timestamp' to 'Location'")
                 for element in appearance_css:
                     if element['name'] == 'Timestamp':
                         element['name'] = 'Location'
                         self.prefs.set('appearance_css', appearance_css)
                         updated = True
+                        _log_update()
+                        self._log("changing appearance_css 'Timestamp' to 'Location'")
                     break
 
         if updated:
@@ -805,10 +805,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
-                self.developer_menu.addSeparator()
+
+                # Backup/restore menu
+                m.addSeparator()
+                self.backup_restore_menu = m.addMenu(
+                    QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png')),
+                    "Backup/Restore")
+
                 action = 'Restore from backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                ac = self.create_menu_item(self.developer_menu, action, image=icon)
+                ac = self.create_menu_item(self.backup_restore_menu, action, image=icon)
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
             # Process Dropbox sync records automatically once only.
@@ -879,17 +885,39 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self.ios.rename(tmp, destination)
             self._busy_panel_teardown()
 
-            # Display dialog detailing how to complete restore
-            title = "Restore Marvin from backup"
-            msg = ('<p>To complete the restore process:</p>'
-                   '<ul>'
-                   '<li>Touch <b>Disconnect</b> on the calibre connector</li>'
-                   '<li>Press the Home button to return to the Home screen</li>'
-                   '<li>Force-quit Marvin</li>'
-                   '<li>Restart Marvin</li>'
-                   '</ul>'
-                   )
-            d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+            s_size = os.stat(source).st_size
+            try:
+                d_size = int(self.ios.exists(destination)['st_size'])
+            except:
+                d_size = 0
+
+            # Verify transferred size
+            if s_size == d_size:
+                self._log("Backup verifies: {0:,} bytes".format(s_size))
+                # Display dialog detailing how to complete restore
+                title = "Restore Marvin from backup"
+                msg = ('<p>To complete the restore process on {0}:</p>'
+                       '<ul>'
+                       '<li>Touch <b>Disconnect</b> on the calibre connector</li>'
+                       '<li>Press the Home button to return to the Home screen</li>'
+                       '<li>Force-quit Marvin</li>'
+                       '<li>Restart Marvin</li>'
+                       '</ul>'
+                       ).format(self.ios.device_name)
+                d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+            else:
+                self._log("Backup does not verify: source {0:,} dest {1:,}".format(
+                    s_size, d_size))
+                self.ios.remove(destination)
+                title = "Restore unsuccessful"
+                msg = ('<p>Backup does not verify.</p>'
+                       '<p>'
+                       '<tt>Src: {0:,}</tt><br/>'
+                       '<tt>Dst: {1:,}</tt></p>'
+                       '<p>Restore cancelled.</p>'
+                      ).format(s_size, d_size)
+                d = MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
+                self._log("Restore cancelled")
 
     def show_configuration(self):
         self.interface_action_base_plugin.do_user_config(self.gui)
