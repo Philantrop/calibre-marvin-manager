@@ -3728,7 +3728,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         hash = self._compute_epub_hash(lbp)
 
         # Add it to the hash_cache
-        self._log("adding hash to cache: %s" % hash)
+        #self._log("adding hash to cache: %s" % hash)
         self.hash_cache[path] = hash
 
         # Delete the local copy
