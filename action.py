@@ -898,6 +898,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        '</ul>'
                        ).format(self.ios.device_name)
                 d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+
+                # Delete cached Marvin data
+                self.developer_utilities('Delete Marvin hashes')
             else:
                 self._log("Backup does not verify: source {0:,} dest {1:,}".format(
                     s_size, d_size))
