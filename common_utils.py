@@ -527,6 +527,38 @@ class InventoryCollections(QThread):
                                 self.heatmap[ca] += 1
 
 
+class RestoreBackup(QThread):
+    '''
+    Copy a (potentially large) source backup file to connected device
+    '''
+    def __init__(self, parent, backup_image):
+        QThread.__init__(self, parent)
+        self.ios = parent.ios
+        self.signal = SIGNAL("restore_backup_complete")
+        self.src = backup_image
+        self.src_size = os.stat(self.src).st_size
+
+    def run(self):
+        tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
+        self.dst = b'/'.join(['/Documents', 'marvin.backup'])
+        self.ios.copy_to_idevice(self.src, tmp)
+        self.ios.rename(tmp, self.dst)
+        self.verify()
+        self.emit(self.signal)
+
+    def verify(self):
+        '''
+        Confirm source size == dest size
+        '''
+        try:
+            self.dst_size = int(self.ios.exists(self.dst)['st_size'])
+        except:
+            self.dst_size = -1
+
+        if self.src_size != self.dst_size:
+            self.ios.remove(self.dst)
+
+
 class RowFlasher(QThread):
     '''
     Flash rows_to_flash to show where ops occurred

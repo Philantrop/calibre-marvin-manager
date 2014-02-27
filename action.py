@@ -34,7 +34,7 @@ from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    CompileUI, IndexLibrary, Logger, MyBlockingBusy, ProgressBar, Struct,
+    CompileUI, IndexLibrary, Logger, MyBlockingBusy, ProgressBar, RestoreBackup, Struct,
     get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
 #from calibre_plugins.marvin_manager.dropbox import PullDropboxUpdates
@@ -808,13 +808,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 # Backup/restore menu
                 m.addSeparator()
-                self.backup_restore_menu = m.addMenu(
-                    QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png')),
-                    "Backup/Restore")
-
                 action = 'Restore from backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                ac = self.create_menu_item(self.backup_restore_menu, action, image=icon)
+                ac = self.create_menu_item(m, action, image=icon)
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
             # Process Dropbox sync records automatically once only.
@@ -865,7 +861,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def restore_from_backup(self):
         '''
-        Put a user-selected marvin.backup into /Documents
+        Invoke RestoreBackup() in a separate thread
         Display a dialog telling user how to complete restore
         '''
         self._log_location()
@@ -877,19 +873,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
             os.path.expanduser("~"),
             "marvin.backup")
         if source:
-            self._busy_panel_setup("Copying marvin.backup to /Documents…")
-            # Copy selected backup to /Documents
-            tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
-            destination = b'/'.join(['/Documents', 'marvin.backup'])
-            self.ios.copy_to_idevice(source, tmp)
-            self.ios.rename(tmp, destination)
+            copy_operation = RestoreBackup(self, source)
+            self._busy_panel_setup("Copying marvin.backup ({0:,} bytes)\nto {1}…".format(
+                copy_operation.src_size, self.ios.device_name))
+            copy_operation.start()
+            while not copy_operation.isFinished():
+                Application.processEvents()
             self._busy_panel_teardown()
 
-            s_size = os.stat(source).st_size
-            try:
-                d_size = int(self.ios.exists(destination)['st_size'])
-            except:
-                d_size = 0
+            s_size = copy_operation.src_size
+            d_size = copy_operation.dst_size
 
             # Verify transferred size
             if s_size == d_size:
@@ -908,7 +901,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
             else:
                 self._log("Backup does not verify: source {0:,} dest {1:,}".format(
                     s_size, d_size))
-                self.ios.remove(destination)
                 title = "Restore unsuccessful"
                 msg = ('<p>Backup does not verify.</p>'
                        '<p>'
