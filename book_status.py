@@ -53,7 +53,7 @@ from calibre_plugins.marvin_manager.annotations import (
     merge_annotations)
 
 from calibre_plugins.marvin_manager.common_utils import (
-    AbortRequestException, AnnotationStruct, Book, BookStruct, InventoryCollections,
+    AbortRequestException, AnnotationStruct, Book, BookStruct, CommandHandler, InventoryCollections,
     Logger, MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
     get_cc_mapping, get_icon, updateCalibreGUIView,
     FULL_STAR)
@@ -1294,6 +1294,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.busy = False
         self.busy_cancel_requested = False
         self.busy_panel = None
+        self.connected_device = parent.connected_device
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = None
         self.icon = get_icon(parent.icon)
@@ -1305,7 +1306,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.library_scanner = parent.library_scanner
         self.library_title_map = None
         self.library_uuid_map = None
-        self.local_cache_folder = self.parent.connected_device.temp_dir
+        self.local_cache_folder = self.connected_device.temp_dir
         self.local_hash_cache = None
         self.marvin_cancellation_required = False
         self.remote_hash_cache = None
@@ -1320,7 +1321,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.archived_cover_hashes = JSONConfig(device_cached_hashes)
 
         # Subscribe to Marvin driver change events
-        self.parent.connected_device.marvin_device_signals.reader_app_status_changed.connect(
+        self.connected_device.marvin_device_signals.reader_app_status_changed.connect(
             self.marvin_status_changed)
 
         self._log_location()
@@ -1582,7 +1583,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             sys.path.insert(0, dialog_resources_path)
             this_dc = importlib.import_module('add_collections')
             sys.path.remove(dialog_resources_path)
-            dlg = this_dc.AddCollectionsDialog(self, self.parent.connected_device)
+            dlg = this_dc.AddCollectionsDialog(self, self.connected_device)
             dlg.initialize()
             dlg.exec_()
             if dlg.result() == dlg.Accepted:
@@ -1662,7 +1663,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                            content_dict,
                            book_id,
                            self.installed_books[book_id],
-                           self.parent.connected_device.local_db_path)
+                           self.connected_device.local_db_path)
             dlg.exec_()
 
         else:
@@ -1749,7 +1750,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             # Get a list of DV items by querying mainDb
             entities = "Entities_%d" % book_id
             entity_locations = "EntityLocations_%d" % book_id
-            con = sqlite3.connect(self.parent.connected_device.local_db_path)
+            con = sqlite3.connect(self.connected_device.local_db_path)
             with con:
                 con.row_factory = sqlite3.Row
                 dv_names_cur = con.cursor()
@@ -1886,7 +1887,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                            content_dict,
                            book_id,
                            self.installed_books[book_id],
-                           self.parent.connected_device.local_db_path
+                           self.connected_device.local_db_path
                            )
             dlg.exec_()
 
@@ -1908,7 +1909,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         current_collections = {}
 
         # Get all Marvin collection names
-        con = sqlite3.connect(self.parent.connected_device.local_db_path)
+        con = sqlite3.connect(self.connected_device.local_db_path)
         with con:
             con.row_factory = sqlite3.Row
 
@@ -1944,7 +1945,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                     dlg = this_dc.MyDeviceCategoryEditor(self, tag_to_match=None,
                                                          data=current_collections, key=sort_key,
-                                                         connected_device=self.parent.connected_device)
+                                                         connected_device=self.connected_device)
                     dlg.exec_()
                     if dlg.result() == dlg.Accepted:
                         if self.library_collections.isRunning():
@@ -1976,7 +1977,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     dlg.initialize(self,
                                    current_collections,
                                    self.library_collections.ids,
-                                   self.parent.connected_device)
+                                   self.connected_device)
                     dlg.exec_()
                 else:
                     self._log("ERROR: Can't import from '%s'" % klass)
@@ -2018,7 +2019,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                self.installed_books[book_id].title,
                                original_calibre_collections,
                                original_marvin_collections,
-                               self.parent.connected_device)
+                               self.connected_device)
                 dlg.exec_()
                 if dlg.result() == dlg.Accepted:
                     updated_calibre_collections = dlg.results['updated_calibre_collections']
@@ -2067,7 +2068,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                            cid,
                            self.installed_books[book_id],
                            enable_metadata_updates,
-                           self.parent.connected_device.local_db_path)
+                           self.connected_device.local_db_path)
             dlg.exec_()
             if dlg.result() == dlg.Accepted and mismatches:
                 action = dlg.stored_command
@@ -2177,7 +2178,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._busy_status_setup()
 
             db = self.opts.gui.current_db
-            cached_books = self.parent.connected_device.cached_books
+            cached_books = self.connected_device.cached_books
 
             # Update calibre metadata from Marvin metadata, bind uuid
             for i, item in enumerate(added):
@@ -2284,7 +2285,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             UPDATE_FIELD = b'MetadataUpdated'
             arg2 = ''
 
-            con = sqlite3.connect(self.parent.connected_device.local_db_path)
+            con = sqlite3.connect(self.connected_device.local_db_path)
             with con:
                 con.row_factory = sqlite3.Row
 
@@ -2540,7 +2541,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if updated and update_gui:
                 updateCalibreGUIView()
 
-    def _build_metadata_update(self, book_id, cid, book, mismatches):
+    def _build_metadata_update(self, book_id, cid, book, mismatches, update_soup):
         '''
         Build a metadata update command file for Marvin
         '''
@@ -2561,13 +2562,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     year=year, month=month, day=day)
             return result
 
-        cached_books = self.parent.connected_device.cached_books
+        cached_books = self.connected_device.cached_books
         target_epub = self.installed_books[book_id].path
 
         # Init the update_metadata command file
         command_element = "updatemetadata"
-        update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
+        #update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+        #    command_element, time.mktime(time.localtime())))
         root = update_soup.find(command_element)
         root['cleanupcollections'] = 'yes'
 
@@ -2596,7 +2597,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Cover
         if 'cover_hash' in mismatches:
-            desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
+            desired_thumbnail_height = self.connected_device.THUMBNAIL_HEIGHT
             try:
                 cover = thumbnail(book.cover_data[1],
                                   desired_thumbnail_height,
@@ -2917,7 +2918,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             merged = sorted(flags + collections, key=sort_key)
 
             # Update driver (cached_books)
-            cached_books = self.parent.connected_device.cached_books
+            cached_books = self.connected_device.cached_books
             cached_books[path]['device_collections'] = merged
 
             # Update Device model
@@ -3556,10 +3557,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     # Remove from cached_paths in driver
                     if True:
                         for ptd in paths_to_delete:
-                            self.parent.connected_device.cached_books.pop(ptd)
+                            self.connected_device.cached_books.pop(ptd)
                     else:
                         # The book is not in booklists, how/when removed?
-                        self.parent.connected_device.remove_books_from_metadata(paths_to_delete,
+                        self.connected_device.remove_books_from_metadata(paths_to_delete,
                                                                                 self.parent.gui.booklists())
 
                     # Update the visible Device model
@@ -3678,7 +3679,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location(book_ids)
 
         dvp_status = {}
-        con = sqlite3.connect(self.parent.connected_device.local_db_path)
+        con = sqlite3.connect(self.connected_device.local_db_path)
         with con:
             con.row_factory = sqlite3.Row
             # Get all the books
@@ -3741,7 +3742,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         cover_bytes = None
         self._log_location("fetching large cover from cache")
-        con = sqlite3.connect(self.parent.connected_device.local_db_path)
+        con = sqlite3.connect(self.connected_device.local_db_path)
         with con:
             con.row_factory = sqlite3.Row
 
@@ -3755,7 +3756,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             row = cover_cur.fetchone()
 
         book_hash = row[b'Hash']
-        large_covers_subpath = self.parent.connected_device._cover_subpath(size="large")
+        large_covers_subpath = self.connected_device._cover_subpath(size="large")
         cover_path = '/'.join([large_covers_subpath, '%s.jpg' % book_hash])
         stats = self.ios.exists(cover_path)
         if stats:
@@ -4411,7 +4412,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
 
         # ~~~~~~~~~~ Emulating get_installed_books() ~~~~~~~~~~
-        local_db_path = getattr(self.parent.connected_device, "local_db_path")
+        local_db_path = getattr(self.connected_device, "local_db_path")
 
         template = "{0}_books"
         books_db = template.format(re.sub('\W', '_', self.ios.device_name))
@@ -4717,7 +4718,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                 # Generate calibre cover hash (same process used by driver when sending books)
                 cover_hash = '0'
-                desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
+                desired_thumbnail_height = self.connected_device.THUMBNAIL_HEIGHT
                 try:
                     #self._log("mi.cover_data[0]: %s" % repr(mi.cover_data[0]))
                     sized_thumb = thumbnail(mi.cover_data[1],
@@ -4950,11 +4951,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             installed_books = {}
 
             # Wait for device driver to complete initialization, but tell user what's happening
-            if not hasattr(self.parent.connected_device, "cached_books"):
+            if not hasattr(self.connected_device, "cached_books"):
                 self._busy_panel_setup("Waiting for driver to finish initialization…")
 
             while True:
-                if not hasattr(self.parent.connected_device, "cached_books"):
+                if not hasattr(self.connected_device, "cached_books"):
                     Application.processEvents()
                 else:
                     if self.busy_panel is not None:
@@ -4962,14 +4963,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     break
 
             # Is there a valid mainDb?
-            local_db_path = getattr(self.parent.connected_device, "local_db_path")
+            local_db_path = getattr(self.connected_device, "local_db_path")
             if local_db_path is not None:
                 # Fetch/compute hashes
-                cached_books = self.parent.connected_device.cached_books
+                cached_books = self.connected_device.cached_books
                 hashes = self._scan_marvin_books(cached_books)
 
                 # Get the mainDb data
-                con = sqlite3.connect(self.parent.connected_device.local_db_path)
+                con = sqlite3.connect(self.connected_device.local_db_path)
                 with con:
                     con.row_factory = sqlite3.Row
 
@@ -5199,9 +5200,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
         # Wait for the driver to be silent
-        while self.parent.connected_device.get_busy_flag():
+        while self.connected_device.get_busy_flag():
             Application.processEvents()
-        self.parent.connected_device.set_busy_flag(True)
+        self.connected_device.set_busy_flag(True)
 
         # Copy command file to staging folder
         self._stage_command_file(command_name, update_soup,
@@ -5223,7 +5224,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Try to reset the busy flag, although it might fail
         try:
-            self.parent.connected_device.set_busy_flag(False)
+            self.connected_device.set_busy_flag(False)
         except:
             pass
 
@@ -5243,8 +5244,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             local_busy = True
             self._busy_status_setup(msg=msg)
 
-        local_db_path = self.parent.connected_device.local_db_path
-        remote_db_path = self.parent.connected_device.books_subpath
+        local_db_path = self.connected_device.local_db_path
+        remote_db_path = self.connected_device.books_subpath
 
         # Report size of remote_db
         stats = self.ios.exists(remote_db_path)
@@ -5705,7 +5706,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             merged = sorted(flags + collections, key=sort_key)
 
             # Update driver (cached_books)
-            cached_books = self.parent.connected_device.cached_books
+            cached_books = self.connected_device.cached_books
             cached_books[path]['device_collections'] = merged
 
             # Update Device model
@@ -5918,9 +5919,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         if self.prefs.get('execute_marvin_commands', True):
 
             self.ios.write(command_soup.renderContents(),
-                           b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]))
-            self.ios.rename(b'/'.join([self.parent.connected_device.staging_folder, b'%s.tmp' % command_name]),
-                            b'/'.join([self.parent.connected_device.staging_folder, b'%s.xml' % command_name]))
+                           b'/'.join([self.connected_device.staging_folder, b'%s.tmp' % command_name]))
+            self.ios.rename(b'/'.join([self.connected_device.staging_folder, b'%s.tmp' % command_name]),
+                            b'/'.join([self.connected_device.staging_folder, b'%s.xml' % command_name]))
 
         else:
             self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
@@ -6004,7 +6005,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._log("mismatches:\n%s" % mismatches)
 
         # We need these if uuid needs to be updated
-        cached_books = self.parent.connected_device.cached_books
+        cached_books = self.connected_device.cached_books
         path = self.installed_books[book_id].path
 
         # Find the book in Device map
@@ -6045,7 +6046,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if marvin_cover is not None:
                     db.set_cover(cid, marvin_cover)
 
-                    desired_thumbnail_height = self.parent.connected_device.THUMBNAIL_HEIGHT
+                    desired_thumbnail_height = self.connected_device.THUMBNAIL_HEIGHT
                     cover = thumbnail(marvin_cover,
                                       desired_thumbnail_height,
                                       desired_thumbnail_height)
@@ -6233,7 +6234,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         updated_collections = sorted(updated_flags + marvin_collections, key=sort_key)
 
         # Update driver
-        cached_books = self.parent.connected_device.cached_books
+        cached_books = self.connected_device.cached_books
         cached_books[path]['device_collections'] = updated_collections
 
         # Update Device model
@@ -6369,7 +6370,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # ~~~~~~ Marvin ~~~~~~
 
-        cached_books = self.parent.connected_device.cached_books
+        cached_books = self.connected_device.cached_books
 
         deleted_in_marvin = []
         for ctd in details['delete']:
@@ -6560,7 +6561,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.installed_books[book_id].device_collections = updated_marvin_collections
 
         # Merge active flags with updated marvin collections
-        cached_books = self.parent.connected_device.cached_books
+        cached_books = self.connected_device.cached_books
         path = self.installed_books[book_id].path
         active_flags = self.installed_books[book_id].flags
         updated_collections = sorted(active_flags +
@@ -6600,15 +6601,24 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location("'{0}' cid:{1}".format(mi.title, cid))
         #self._log("mismatches:\n%s" % mismatches)
 
-        command_name = "update_metadata"
-        update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
+        ch = CommandHandler(self)
+        ch.construct_metadata_command(cmd_name='update_metadata', cmd_element="updatemetadata")
+        update_soup = self._build_metadata_update(book_id, cid, mi, mismatches, ch.command_soup)
+        #command_name = "update_metadata"
+        #update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
+
+        """
         results = self._issue_command(command_name, update_soup)
         if results['code']:
             #return self._show_command_error('_update_marvin_metadata', results)
             return results
+        """
+        ch.issue_command()
+        if ch.results['code']:
+            return ch.results
 
         # Update in-memory caches
-        cached_books = self.parent.connected_device.cached_books
+        cached_books = self.connected_device.cached_books
         path = self.installed_books[book_id].path
 
         # Find the book in Device map
@@ -6899,7 +6909,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         if self.prefs.get('execute_marvin_commands', True):
             self._log("%s: waiting for '%s'" %
                       (datetime.now().strftime('%H:%M:%S.%f'),
-                      self.parent.connected_device.status_fs))
+                      self.connected_device.status_fs))
 
             if not timeout_override:
                 timeout_value = self.WATCHDOG_TIMEOUT
@@ -6912,11 +6922,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.watchdog.start()
 
             while True:
-                if not self.ios.exists(self.parent.connected_device.status_fs):
+                if not self.ios.exists(self.connected_device.status_fs):
                     # status.xml not created yet
                     if self.operation_timed_out:
                         final_code = '-1'
-                        self.ios.remove(self.parent.connected_device.status_fs)
+                        self.ios.remove(self.connected_device.status_fs)
                         results = {
                             'code': -1,
                             'status': 'timeout',
@@ -6943,7 +6953,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     while code == '-1':
                         try:
                             if self.operation_timed_out:
-                                self.ios.remove(self.parent.connected_device.status_fs)
+                                self.ios.remove(self.connected_device.status_fs)
                                 results = {
                                     'code': -1,
                                     'status': 'timeout',
@@ -6957,9 +6967,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                 self._log("user requesting cancellation")
 
                                 # Create "cancel.command" in staging folder
-                                ft = (b'/'.join([self.parent.connected_device.staging_folder,
+                                ft = (b'/'.join([self.connected_device.staging_folder,
                                                  b'cancel.tmp']))
-                                fs = (b'/'.join([self.parent.connected_device.staging_folder,
+                                fs = (b'/'.join([self.connected_device.staging_folder,
                                                  b'cancel.command']))
                                 self.ios.write("please stop", ft)
                                 self.ios.rename(ft, fs)
@@ -6970,7 +6980,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                 # Clear flags so we can complete processing
                                 self.marvin_cancellation_required = False
 
-                            status = etree.fromstring(self.ios.read(self.parent.connected_device.status_fs))
+                            status = etree.fromstring(self.ios.read(self.connected_device.status_fs))
                             code = status.get('code')
                             timestamp = float(status.get('timestamp'))
                             if timestamp != current_timestamp:
@@ -7046,7 +7056,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         details += '\n'.join(msgs)
                         self._log(details)
                         results['details'] = '\n'.join(msgs)
-                        self.ios.remove(self.parent.connected_device.status_fs)
+                        self.ios.remove(self.connected_device.status_fs)
 
                         self._log("%s: '%s' complete with errors" %
                                   (datetime.now().strftime('%H:%M:%S.%f'),
@@ -7054,16 +7064,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                     # Get the response file from the staging folder
                     if get_response:
-                        rf = b'/'.join([self.parent.connected_device.staging_folder, get_response])
+                        rf = b'/'.join([self.connected_device.staging_folder, get_response])
                         self._log("fetching response '%s'" % rf)
-                        if not self.ios.exists(self.parent.connected_device.status_fs):
+                        if not self.ios.exists(self.connected_device.status_fs):
                             response = "%s not found" % rf
                         else:
                             response = self.ios.read(rf)
                             self.ios.remove(rf)
                         results['response'] = response
 
-                    self.ios.remove(self.parent.connected_device.status_fs)
+                    self.ios.remove(self.connected_device.status_fs)
 
                     self._log("%s: '%s' complete" %
                               (datetime.now().strftime('%H:%M:%S.%f'),

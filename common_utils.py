@@ -647,6 +647,14 @@ class CommandHandler(Logger):
         self.command_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
             cmd_type, time.mktime(time.localtime())))
 
+    def construct_metadata_command(self, cmd_element=None, cmd_name=None):
+        '''
+        Create METADATA_COMMAND_XML soup
+        '''
+        self.command_name = cmd_name
+        self.command_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+            cmd_element, time.mktime(time.localtime())))
+
     def issue_command(self, get_response=None):
         '''
         Consolidated command handler
