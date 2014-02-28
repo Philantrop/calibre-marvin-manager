@@ -1695,12 +1695,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if not self.installed_books[book_id].articles:
                 return
 
-            command_name = "command"
+#             command_name = "command"
             command_type = "GetDeepViewArticlesHTML"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
-            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
-            update_soup.command.insert(0, parameters_tag)
+#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                 command_type, time.mktime(time.localtime())))
+            ch = CommandHandler(self)
+            ch.construct_general_command(command_type)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], ch.command_soup)
+            ch.command_soup.command.insert(0, parameters_tag)
 
             header = None
             group_box_title = 'Deep View articles'
@@ -1714,15 +1716,17 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self._log("no DV content for %s" % title)
                 return
 
-            command_name = "command"
+#             command_name = "command"
             command_type = "GetFirstOccurrenceHTML"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
-            parameters_tag = Tag(update_soup, 'parameters')
-            update_soup.command.insert(0, parameters_tag)
+#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                 command_type, time.mktime(time.localtime())))
+            ch = CommandHandler(self)
+            ch.construct_general_command(command_type)
+            parameters_tag = Tag(ch.command_soup, 'parameters')
+            ch.command_soup.command.insert(0, parameters_tag)
 
             # The bookID we know - entityID and hits we get from the user
-            parameter_tag = Tag(update_soup, 'parameter')
+            parameter_tag = Tag(ch.command_soup, 'parameter')
             parameter_tag['name'] = "bookID"
             parameter_tag.insert(0, str(book_id))
             parameters_tag.insert(0, parameter_tag)
@@ -1794,13 +1798,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                 if dlg.result:
                     # entityID
-                    parameter_tag = Tag(update_soup, 'parameter')
+                    parameter_tag = Tag(ch.command_soup, 'parameter')
                     parameter_tag['name'] = "entityID"
                     parameter_tag.insert(0, dlg.result['ID'])
                     parameters_tag.insert(0, parameter_tag)
 
                     # hits
-                    parameter_tag = Tag(update_soup, 'parameter')
+                    parameter_tag = Tag(ch.command_soup, 'parameter')
                     parameter_tag['name'] = "hits"
                     parameter_tag.insert(0, dlg.result['hits'])
                     parameters_tag.insert(0, parameter_tag)
@@ -1810,10 +1814,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     return
 
         elif action == 'show_global_vocabulary':
-            command_name = "command"
+#             command_name = "command"
             command_type = "GetGlobalVocabularyHTML"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
+#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                 command_type, time.mktime(time.localtime())))
+            ch = CommandHandler(self)
+            ch.construct_general_command(command_type)
 
             title = "All vocabulary words"
             header = None
@@ -1825,12 +1831,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if not self.installed_books[book_id].vocabulary:
                 return
 
-            command_name = "command"
+#             command_name = "command"
             command_type = "GetLocalVocabularyHTML"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
-            parameters_tag = self._build_parameters(self.installed_books[book_id], update_soup)
-            update_soup.command.insert(0, parameters_tag)
+#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                 command_type, time.mktime(time.localtime())))
+            ch = CommandHandler(self)
+            ch.construct_general_command(command_type)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], ch.command_soup)
+            ch.command_soup.command.insert(0, parameters_tag)
 
             header = None
             group_box_title = 'Vocabulary words'
@@ -1846,15 +1854,18 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             return
 
         self._busy_status_setup(msg="Retrieving %s…" % group_box_title)
-        results = self._issue_command(command_name, update_soup,
-                                      get_response="html_response.html",
-                                      update_local_db=False)
+
+#         results = self._issue_command(command_name, update_soup,
+#                                       get_response="html_response.html",
+#                                       update_local_db=False)
+        ch.issue_command(get_response="html_response.html")
+
         self._busy_status_teardown()
 
-        if results['code']:
-            return self._show_command_error(command_type, results)
+        if ch.results['code']:
+            return self._show_command_error(command_type, ch.results)
         else:
-            response = results['response']
+            response = ch.results['response']
 
         if response:
             # <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
@@ -2402,7 +2413,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if update_gui:
                 updateCalibreGUIView()
 
-    def _apply_locked(self, update_gui=True):
+    def _apply_locked(self, update_gui=True, update_local_db=True):
         '''
         If cc exists for Locked, examine both calibre and Marvin.
         If locked in either location, set both to locked
@@ -2413,12 +2424,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._log_location()
 
             # Build the Marvin command shell
-            command_name = "command"
+#             command_name = "command"
             command_type = "LockBooks"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
-            manifest_tag = Tag(update_soup, 'manifest')
-            update_soup.command.insert(0, manifest_tag)
+#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                 command_type, time.mktime(time.localtime())))
+            ch = CommandHandler(self)
+            ch.construct_general_command(command_type)
+            manifest_tag = Tag(ch.command_soup, 'manifest')
+            ch.command_soup.command.insert(0, manifest_tag)
 
             selected_books = self._selected_books()
             c_updated = False
@@ -2455,7 +2468,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             self.installed_books[book_id].pin = new_pin_value
 
                             # Add the book to the manifest
-                            book_tag = Tag(update_soup, 'book')
+                            book_tag = Tag(ch.command_soup, 'book')
                             book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                             book_tag['filename'] = self.installed_books[book_id].path
                             book_tag['title'] = self.installed_books[book_id].title
@@ -2480,10 +2493,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 updateCalibreGUIView()
 
             if m_updated:
-                results = self._issue_command(command_name, update_soup,
-                                              update_local_db=True)
-                if results['code']:
-                    return self._show_command_error('apply_locked', results)
+#                 results = self._issue_command(command_name, update_soup,
+#                                               update_local_db=True)
+                ch.issue_command()
+
+                if ch.results['code']:
+                    return self._show_command_error('apply_locked', ch.results)
+
+                # Update the local db
+                if update_local_db:
+                    self._localize_marvin_database()
 
     def _apply_progress(self, update_gui=True):
         '''
@@ -2850,25 +2869,30 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.installed_books[book_id].word_count = wc
 
                 # Tell Marvin about the updated word_count
-                command_name = 'update_metadata_items'
-                command_element = 'updatemetadataitems'
-                update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-                    command_element, time.mktime(time.localtime())))
-                book_tag = Tag(update_soup, 'book')
+#                 command_name = 'update_metadata_items'
+#                 command_element = 'updatemetadataitems'
+#                 update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+#                     command_element, time.mktime(time.localtime())))
+                ch = CommandHandler(self)
+                ch.construct_metadata_command(
+                    cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
+
+                book_tag = Tag(ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
 
                 book_tag['wordcount'] = wordcount.words
-                update_soup.manifest.insert(0, book_tag)
+                ch.command_soup.manifest.insert(0, book_tag)
 
-                results = self._issue_command(command_name, update_soup, update_local_db=False)
-                if results['code']:
+#                 results = self._issue_command(command_name, update_soup, update_local_db=False)
+                ch.issue_command()
+                if ch.results['code']:
                     if not silent:
                         #pb.hide()
                         self._busy_status_teardown()
-                    self._show_command_error(command_name, results)
+                    self._show_command_error(command_name, ch.results)
                     return stats
 
             # Update local_db for all changes
@@ -3906,7 +3930,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                                    sort_value)
         return collection_match
 
-    def _generate_deep_view(self):
+    def _generate_deep_view(self, update_local_db=True):
         '''
         '''
         #WORST_CASE_CONVERSION_RATE = 2800   # WPM iPad1
@@ -3957,27 +3981,31 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                  show_copy_button=False)
                 if not dlg.exec_():
                     self._log("user declined to proceed with estimated_time of %s" % estimated_time)
+                    # Update local_db anyway, as it has updated word counts
+                    self._localize_marvin_database()
                     return
             else:
                 # Use method default timeout
                 timeout = None
 
-            command_name = "command"
+#             command_name = "command"
             command_type = "GenerateDeepView"
-            update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                command_type, time.mktime(time.localtime())))
+#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                 command_type, time.mktime(time.localtime())))
+            ch = CommandHandler(self)
+            ch.construct_general_command(command_type)
 
             # Build a manifest of selected books
-            manifest_tag = Tag(update_soup, 'manifest')
+            manifest_tag = Tag(ch.command_soup, 'manifest')
             for row in sorted(selected_books.keys(), reverse=True):
                 book_id = selected_books[row]['book_id']
-                book_tag = Tag(update_soup, 'book')
+                book_tag = Tag(ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
                 manifest_tag.insert(0, book_tag)
-            update_soup.command.insert(0, manifest_tag)
+            ch.command_soup.command.insert(0, manifest_tag)
 
             busy_msg = ("Generating Deep View for %s" %
                 ("1 book…" if len(selected_books) == 1 else
@@ -3985,13 +4013,19 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             self._busy_status_setup(msg=busy_msg, show_cancel=len(selected_books) > 1,
                 marvin_cancellation_required=True)
-            results = self._issue_command(command_name, update_soup,
-                                          timeout_override=timeout,
-                                          update_local_db=True)
+#             results = self._issue_command(command_name, update_soup,
+#                                           timeout_override=timeout,
+#                                           update_local_db=True)
+            ch.issue_command(timeout_override=timeout)
+
             self._busy_status_teardown()
 
-            if results['code']:
-                return self._show_command_error(command_type, results)
+            if ch.results['code']:
+                return self._show_command_error(command_type, ch.results)
+
+            # Update the local db
+            if update_local_db:
+                self._localize_marvin_database()
 
             # Get the latest DeepViewPrepared status for selected books
             book_ids = [selected_books[row]['book_id'] for row in selected_books.keys()]
@@ -5150,11 +5184,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Inform Marvin of updated flags + collections
         '''
         # ~~~~~~~~ Update Marvin with Flags + Collections ~~~~~~~~
-        command_name = 'update_metadata_items'
-        command_element = 'updatemetadataitems'
-        update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
-        book_tag = Tag(update_soup, 'book')
+#         command_name = 'update_metadata_items'
+#         command_element = 'updatemetadataitems'
+#         update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+#             command_element, time.mktime(time.localtime())))
+        ch = CommandHandler(self)
+        ch.construct_metadata_command(
+            cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
+        book_tag = Tag(ch.command_soup, 'book')
         book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
         book_tag['filename'] = self.installed_books[book_id].path
         book_tag['title'] = self.installed_books[book_id].title
@@ -5164,14 +5201,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         collections = self.installed_books[book_id].device_collections
         merged = sorted(flags + collections, key=sort_key)
 
-        collections_tag = Tag(update_soup, 'collections')
+        collections_tag = Tag(ch.command_soup, 'collections')
         for tag in sorted(merged, key=sort_key):
-            c_tag = Tag(update_soup, 'collection')
+            c_tag = Tag(ch.command_soup, 'collection')
             c_tag.insert(0, escape(tag))
             collections_tag.insert(0, c_tag)
         book_tag.insert(0, collections_tag)
 
-        update_soup.manifest.insert(0, book_tag)
+        ch.command_soup.manifest.insert(0, book_tag)
 
         local_busy = False
         if self.busy:
@@ -5179,13 +5216,20 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         else:
             local_busy = True
             self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
-        results = self._issue_command(command_name, update_soup,
-                                      update_local_db=update_local_db)
+
+#         results = self._issue_command(command_name, update_soup,
+#                                       update_local_db=update_local_db)
+        ch.issue_command()
+
         if local_busy:
             self._busy_status_teardown()
 
-        if results['code']:
-            return self._show_command_error(command_name, results)
+        if ch.results['code']:
+            return self._show_command_error(command_name, ch.results)
+
+        # Update the local db
+        if update_local_db:
+            self._localize_marvin_database()
 
     def _issue_command(self, command_name, update_soup,
                        get_response=None,
@@ -5779,7 +5823,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         Application.processEvents()
 
-    def _set_rating(self, rating, silent=False, update_gui=True):
+    def _set_rating(self, rating, silent=False, update_gui=True, update_local_db=True):
         '''
         Apply passed rating to selected books.
         '''
@@ -5801,10 +5845,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         total_books = len(selected_books)
         if total_books:
             # Build a command shell
-            command_name = 'update_metadata_items'
-            command_element = 'updatemetadataitems'
-            update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-                command_element, time.mktime(time.localtime())))
+#             command_name = 'update_metadata_items'
+#             command_element = 'updatemetadataitems'
+#             update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+#                 command_element, time.mktime(time.localtime())))
+            ch = CommandHandler(self)
+            ch.construct_metadata_command(
+                cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
 
             # Save the selection
             self.saved_selection_region = self.tv.visualRegionForSelection(self.tv.selectionModel().selection())
@@ -5844,23 +5891,25 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         self.tm.set_match_quality(row, self.MATCH_COLORS.index('GREEN'))
 
                 # Add the book to the command file
-                book_tag = Tag(update_soup, 'book')
+                book_tag = Tag(ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
                 book_tag['rating'] = rating
-                update_soup.manifest.insert(0, book_tag)
+                ch.command_soup.manifest.insert(0, book_tag)
 
-            results = self._issue_command(command_name, update_soup, update_local_db=False)
-            if results['code']:
+#             results = self._issue_command(command_name, update_soup, update_local_db=False)
+            ch.issue_command()
+            if ch.results['code']:
                 if not silent:
                     self._busy_status_teardown()
-                self._show_command_error(command_name, results)
+                self._show_command_error(command_name, ch.results)
                 return
 
             # Update local_db for all changes
-            self._localize_marvin_database()
+            if update_local_db:
+                self._localize_marvin_database()
 
             if not silent:
                 self._busy_status_teardown()
@@ -5870,6 +5919,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 for rect in self.saved_selection_region.rects():
                     self.tv.setSelection(rect, QItemSelectionModel.Select)
                 self.saved_selection_region = None
+
         else:
             self._log("No selected books")
             title = "Rating"
@@ -6052,28 +6102,36 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     cover_hash = hashlib.md5(cover[2]).hexdigest()
 
                     # Tell Marvin about the updated cover_hash
-                    command_name = 'update_metadata_items'
-                    command_element = 'updatemetadataitems'
-                    update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-                        command_element, time.mktime(time.localtime())))
-                    book_tag = Tag(update_soup, 'book')
+#                     command_name = 'update_metadata_items'
+#                     command_element = 'updatemetadataitems'
+#                     update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+#                         command_element, time.mktime(time.localtime())))
+                    ch = CommandHandler(self)
+                    ch.construct_metadata_command(
+                        cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
+                    book_tag = Tag(ch.command_soup, 'book')
                     book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                     book_tag['filename'] = self.installed_books[book_id].path
                     book_tag['title'] = self.installed_books[book_id].title
                     book_tag['uuid'] = mismatches[key]['Marvin']
 
-                    cover_tag = Tag(update_soup, 'cover')
+                    cover_tag = Tag(ch.command_soup, 'cover')
                     cover_tag['hash'] = cover_hash
                     cover_tag['encoding'] = 'base64'
                     cover_tag.insert(0, base64.b64encode(marvin_cover))
                     book_tag.insert(0, cover_tag)
 
-                    update_soup.manifest.insert(0, book_tag)
+                    ch.command_soup.manifest.insert(0, book_tag)
 
-                    results = self._issue_command(command_name, update_soup,
-                                                  update_local_db=update_local_db)
-                    if results['code']:
-                        return self._show_command_error(command_name, results)
+#                     results = self._issue_command(command_name, update_soup,
+#                                                   update_local_db=update_local_db)
+                    ch.issue_command()
+                    if ch.results['code']:
+                        return self._show_command_error(command_name, ch.results)
+
+                    # Update the local db
+                    if update_local_db:
+                        self._localize_marvin_database()
 
                     # Update cached_books
                     cached_books[path]['cover_hash'] = cover_hash
@@ -6126,24 +6184,33 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
 
                 # Tell Marvin about the updated uuid
-                command_name = 'update_metadata_items'
-                command_element = 'updatemetadataitems'
-                update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-                    command_element, time.mktime(time.localtime())))
-                book_tag = Tag(update_soup, 'book')
+#                 command_name = 'update_metadata_items'
+#                 command_element = 'updatemetadataitems'
+#                 update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
+#                     command_element, time.mktime(time.localtime())))
+                ch = CommandHandler(self)
+                ch.construct_metadata_command(
+                    cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
+
+                book_tag = Tag(ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = mismatches[key]['Marvin']
 
                 book_tag['newuuid'] = mismatches[key]['calibre']
-                update_soup.manifest.insert(0, book_tag)
+                ch.command_soup.manifest.insert(0, book_tag)
 
-                results = self._issue_command(command_name, update_soup,
-                                              update_local_db=update_local_db)
-                if results['code']:
-                    #return self._show_command_error(command_name, results)
-                    return results
+#                 results = self._issue_command(command_name, update_soup,
+#                                               update_local_db=update_local_db)
+                ch.issue_command()
+                if ch.results['code']:
+                    #return self._show_command_error(command_name, ch.results)
+                    return ch.results
+
+                # Update the local db
+                if update_local_db:
+                    self._localize_marvin_database()
 
         updateCalibreGUIView()
 
@@ -6268,7 +6335,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             "1 book" if rows_to_refresh == 1 else "{0} books".format(rows_to_refresh)))
         MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
-    def _update_global_collections(self, details):
+    def _update_global_collections(self, details, update_local_db=True):
         '''
         details = {'rename': {'<old_name>': '<new_name>', ...}
                    'delete': (['<collection_to_delete>', ...])
@@ -6390,12 +6457,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 # Issue one update per deleted collection
                 for book_id, book in self.installed_books.items():
 
-                    command_name = "command"
+#                     command_name = "command"
                     command_type = "UpdateGlobalCollections"
-                    update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                        command_type, time.mktime(time.localtime())))
-                    parameters_tag = Tag(update_soup, 'parameters')
-                    update_soup.command.insert(0, parameters_tag)
+#                     update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                         command_type, time.mktime(time.localtime())))
+                    ch = CommandHandler(self)
+                    ch.construct_general_command(command_type)
+
+                    parameters_tag = Tag(ch.command_soup, 'parameters')
+                    ch.command_soup.command.insert(0, parameters_tag)
 
                     if ctd in book.device_collections:
                         self._log("%s: delete '%s'" % (book.title, book.device_collections))
@@ -6412,32 +6482,39 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         cached_books[book.path]['device_collections'] = book.device_collections
 
                         # Add a <parameter action="delete"> tag
-                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag = Tag(ch.command_soup, 'parameter')
                         parameter_tag['name'] = "action"
                         parameter_tag.insert(0, "delete")
                         parameters_tag.insert(0, parameter_tag)
 
-                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag = Tag(ch.command_soup, 'parameter')
                         parameter_tag['name'] = "name"
                         parameter_tag.insert(0, ctd)
                         parameters_tag.insert(0, parameter_tag)
 
-                        results = self._issue_command(command_name, update_soup)
-                        if results['code']:
-                            return self._show_command_error(command_type, results)
+#                         results = self._issue_command(command_name, update_soup)
+                        ch_issue_command()
+                        if ch.results['code']:
+                            return self._show_command_error(command_type, ch.results)
+
+                        # Update the local db
+                        if update_local_db:
+                            self._localize_marvin_database()
 
         for ctr in details['rename']:
             if ctr in details['locations']['Marvin'] and ctr not in deleted_in_marvin:
 
                 # Issue one update per renamed collection
                 for book_id, book in self.installed_books.items():
-
-                    command_name = "command"
+#                     command_name = "command"
                     command_type = "UpdateGlobalCollections"
-                    update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-                        command_type, time.mktime(time.localtime())))
-                    parameters_tag = Tag(update_soup, 'parameters')
-                    update_soup.command.insert(0, parameters_tag)
+#                     update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+#                         command_type, time.mktime(time.localtime())))
+                    ch = CommandHandler(self)
+                    ch.construct_general_command(command_type)
+
+                    parameters_tag = Tag(ch.command_soup, 'parameters')
+                    ch.command_soup.command.insert(0, parameters_tag)
 
                     if ctr in book.device_collections:
                         self._log("%s: rename '%s'" % (book.title, book.device_collections))
@@ -6457,26 +6534,31 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         cached_books[book.path]['device_collections'] = book.device_collections
 
                         # Add the parameter tags
-                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag = Tag(ch.command_soup, 'parameter')
                         parameter_tag['name'] = "action"
                         parameter_tag.insert(0, "rename")
                         parameters_tag.insert(0, parameter_tag)
 
-                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag = Tag(ch.command_soup, 'parameter')
                         parameter_tag['name'] = "name"
                         parameter_tag.insert(0, ctr)
                         parameters_tag.insert(0, parameter_tag)
 
-                        parameter_tag = Tag(update_soup, 'parameter')
+                        parameter_tag = Tag(ch.command_soup, 'parameter')
                         parameter_tag['name'] = "newname"
                         parameter_tag.insert(0, replacement)
                         parameters_tag.insert(0, parameter_tag)
 
-                        results = self._issue_command(command_name, update_soup)
-                        if results['code']:
-                            return self._show_command_error(command_type, results)
+#                         results = self._issue_command(command_name, update_soup)
+                        ch.issue_command()
+                        if ch.results['code']:
+                            return self._show_command_error(command_type, ch.results)
 
-    def _update_locked_status(self, action, update_gui=True):
+                        # Update the local db
+                        if update_local_db:
+                            self._localize_marvin_database()
+
+    def _update_locked_status(self, action, update_gui=True, update_local_db=True):
         '''
         Update Marvin locked status
         Update calibre custom column if mapped cc
@@ -6554,7 +6636,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             return self._show_command_error('update_locked_status', ch.results)
 
         # Update the local db
-        self._localize_marvin_database()
+        if update_local_db:
+            self._localize_marvin_database()
 
     def _update_marvin_collections(self, book_id, updated_marvin_collections):
         '''
@@ -6585,7 +6668,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Tell Marvin about the changes
         self._inform_marvin_collections(book_id)
 
-    def _update_marvin_metadata(self, book_id, cid, mismatches, model_row):
+    def _update_marvin_metadata(self, book_id, cid, mismatches, model_row, update_local_db=True):
         '''
         Update Marvin from calibre metadata
         This clones upload_books() in the iOS reader application driver
@@ -6622,7 +6705,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             return ch.results
 
         # Update the local db
-        self._localize_marvin_database()
+        if update_local_db:
+            self._localize_marvin_database()
 
         # Update in-memory caches
         cached_books = self.connected_device.cached_books

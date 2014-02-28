@@ -624,19 +624,19 @@ class CommandHandler(Logger):
     </manifest>
     </{0}>'''
 
-    def __init__(self, parent, get_response=None, timeout_override=None):
+    def __init__(self, parent):
         self._log_location()
         self.busy_cancel_requested = False
         self.command_name = None
         self.command_soup = None
         self.connected_device = parent.connected_device
-        self.get_response = get_response
+        self.get_response = None
         self.ios = parent.ios
         self.marvin_cancellation_required = False
         self.operation_timed_out = False
         self.prefs = parent.prefs
         self.results = None
-        self.timeout_override = timeout_override
+        self.timeout_override = None
 
     def construct_general_command(self, cmd_type):
         '''
@@ -655,11 +655,20 @@ class CommandHandler(Logger):
         self.command_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
             cmd_element, time.mktime(time.localtime())))
 
-    def issue_command(self, get_response=None):
+    def delete_response(self):
+        '''
+        Delete the get_response file
+        '''
+
+
+    def issue_command(self, get_response=None, timeout_override=None):
         '''
         Consolidated command handler
         '''
         self._log_location()
+
+        self.get_response = get_response
+        self.timeout_override = timeout_override
 
         QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
 
@@ -881,9 +890,9 @@ class CommandHandler(Logger):
 
                     # Get the response file from the staging folder
                     if self.get_response:
-                        rf = b'/'.join([self.connected_device.staging_folder, get_response])
+                        rf = b'/'.join([self.connected_device.staging_folder, self.get_response])
                         self._log("fetching response '%s'" % rf)
-                        if not self.ios.exists(self.connected_device.status_fs):
+                        if not self.ios.exists(rf):
                             response = "%s not found" % rf
                         else:
                             response = self.ios.read(rf)
