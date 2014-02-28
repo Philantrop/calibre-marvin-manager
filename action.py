@@ -34,7 +34,7 @@ from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    CommandHandler, CompileUI, IndexLibrary, Logger, MyBlockingBusy,
+    CommandHandler, CompileUI, IndexLibrary, Logger, MoveBackup, MyBlockingBusy,
     ProgressBar, RestoreBackup, Struct,
     get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
@@ -119,7 +119,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
         # Check for existing backup before overwriting
         # stats['st_mtime'], stats['st_size']
-        backup_location = '/'.join(['/Documents', '/Backup', 'marvin.backup'])
+        backup_folder = b'/'.join(['/Documents', 'Backup'])
+        backup_location = b'/'.join(['/Documents', 'Backup', 'marvin.backup'])
         stats = self.ios.exists(backup_location)
         if stats:
             self._log(stats)
@@ -142,7 +143,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
         self._busy_panel_setup("Backing up {0:,} books from {1}…".format(
             total_books, self.ios.device_name))
-
         ch = CommandHandler(self)
         ch.construct_general_command('backup')
         ch.issue_command()
@@ -155,7 +155,33 @@ class MarvinManagerAction(InterfaceAction, Logger):
                    '<p>Click <b>Show details</b> for more information.</p>')
             det_msg = ch.results['details']
             MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg).exec_()
+            return
 
+        # Move backup to the specified location
+        stats = self.ios.exists(backup_location)
+        if stats:
+            destination_folder = str(QFileDialog.getExistingDirectory(
+                self.gui,
+                "Select destination folder for marvin.backup",
+                os.path.expanduser("~"),
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks))
+
+            # Move from iDevice to destination_folder
+            move_operation = MoveBackup(self, backup_folder, destination_folder)
+            msg = '<p>Moving marvin.backup ({0:,} bytes)…</p>'.format(
+                   int(stats['st_size']))
+            self._busy_panel_setup(msg)
+            move_operation.start()
+            while not move_operation.isFinished():
+                Application.processEvents()
+            self._busy_panel_teardown()
+
+            # Inform user backup operation is complete
+            title = "Backup operation complete"
+            msg = '<p>Marvin library has been backed up to {0}.</p>'.format(destination_folder)
+            MessageBox(MessageBox.INFO, title, msg).exec_()
+        else:
+            self._log("No backup file found at {0}".format(backup_location))
 
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
@@ -888,6 +914,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 # Backup/restore
                 m.addSeparator()
+                #if self.connected_device.marvin_version >= (2, 7, 0):
                 action = 'Create backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
                 ac = self.create_menu_item(m, action, image=icon)

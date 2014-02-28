@@ -408,7 +408,6 @@ class ProgressBar(QDialog, Logger):
 
 '''     Threads         '''
 
-
 class IndexLibrary(QThread):
     '''
     Build indexes of library:
@@ -530,14 +529,34 @@ class InventoryCollections(QThread):
                                 self.heatmap[ca] += 1
 
 
+class MoveBackup(QThread):
+    '''
+    Move a (potentially large) backup file from connected device to local fs
+    '''
+    def __init__(self, parent, backup_folder, destination_folder):
+        QThread.__init__(self, parent)
+        self.ios = parent.ios
+        self.backup_folder = backup_folder
+        self.destination_folder = destination_folder
+        self.src = "{0}/marvin.backup".format(backup_folder)
+        self.dst = os.path.join(destination_folder, 'marvin.backup')
+
+    def run(self):
+        if os.path.isfile(self.dst):
+            os.remove(self.dst)
+        with open(self.dst, 'wb') as out:
+            self.ios.copy_from_idevice(self.src, out)
+        self.ios.remove(self.src)
+        self.ios.remove(self.backup_folder)
+
 class RestoreBackup(QThread):
     '''
-    Copy a (potentially large) source backup file to connected device
+    Copy a (potentially large) backup file from local fs to connected device
     '''
     def __init__(self, parent, backup_image):
         QThread.__init__(self, parent)
         self.ios = parent.ios
-        self.signal = SIGNAL("restore_backup_complete")
+        #self.signal = SIGNAL("restore_backup_complete")
         self.src = backup_image
         self.src_size = os.stat(self.src).st_size
 
@@ -547,7 +566,7 @@ class RestoreBackup(QThread):
         self.ios.copy_to_idevice(self.src, tmp)
         self.ios.rename(tmp, self.dst)
         self.verify()
-        self.emit(self.signal)
+        #self.emit(self.signal)
 
     def verify(self):
         '''
