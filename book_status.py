@@ -1021,18 +1021,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             (ARTICLES_COL, 'Articles'),
             ]
 
-    # Marvin XML command template
-    if True:
-        METADATA_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
-        <{0} timestamp=\'{1}\'>
-        <manifest>
-        </manifest>
-        </{0}>'''
-
-        GENERAL_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
-        <command type=\'{0}\' timestamp=\'{1}\'>
-        </command>'''
-
     marvin_device_status_changed = pyqtSignal(dict)
 
     def accept(self):
@@ -6442,11 +6430,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Build the command shell
         self.ch = CommandHandler(self)
         self.ch.construct_general_command(command_type)
-        #command_name = "command"
-        #update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-        #    command_type, time.mktime(time.localtime())))
         manifest_tag = Tag(self.ch.command_soup, 'manifest')
-        #update_soup.command.insert(0, manifest_tag)
         self.ch.command_soup.command.insert(0, manifest_tag)
 
         new_locked_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
