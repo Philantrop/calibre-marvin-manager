@@ -2565,10 +2565,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         cached_books = self.connected_device.cached_books
         target_epub = self.installed_books[book_id].path
 
-        # Init the update_metadata command file
+        # Populate the update_metadata command file
         command_element = "updatemetadata"
-        #update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-        #    command_element, time.mktime(time.localtime())))
         root = update_soup.find(command_element)
         root['cleanupcollections'] = 'yes'
 
@@ -5034,6 +5032,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             this_book.pin = row[b'Pin']
                             this_book.progress = row[b'Progress']
                             this_book.pubdate = _get_pubdate(row)
+                            this_book.publisher = _get_publisher(row)
                             if 'Rating' in row.keys():      # Rating added in 2.6.65
                                 this_book.rating = row[b'Rating']
                             this_book.series = row[b'CalibreSeries']
@@ -6616,6 +6615,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         ch.issue_command()
         if ch.results['code']:
             return ch.results
+
+        # Update the local db
+        self._localize_marvin_database()
 
         # Update in-memory caches
         cached_books = self.connected_device.cached_books
