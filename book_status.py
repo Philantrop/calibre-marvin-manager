@@ -6498,11 +6498,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         lookup = get_cc_mapping('locked', 'field')
 
         # Build the command shell
-        command_name = "command"
-        update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-            command_type, time.mktime(time.localtime())))
-        manifest_tag = Tag(update_soup, 'manifest')
-        update_soup.command.insert(0, manifest_tag)
+        ch = CommandHandler(self)
+        ch.construct_general_command(command_type)
+        #command_name = "command"
+        #update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+        #    command_type, time.mktime(time.localtime())))
+        manifest_tag = Tag(ch.command_soup, 'manifest')
+        #update_soup.command.insert(0, manifest_tag)
+        ch.command_soup.command.insert(0, manifest_tag)
 
         new_locked_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
                                                                  'icons', new_image_name),
@@ -6518,7 +6521,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.installed_books[book_id].pin = new_pin_value
 
             # Add the book to the manifest
-            book_tag = Tag(update_soup, 'book')
+            book_tag = Tag(ch.command_soup, 'book')
             book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
             book_tag['filename'] = self.installed_books[book_id].path
             book_tag['title'] = self.installed_books[book_id].title
@@ -6537,19 +6540,21 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 db.set_metadata(cid, mi, set_title=False, set_authors=False,
                                 commit=True, force_changes=True)
 
-        show_spinner = bool(len(selected_books) > self.MAX_BOOKS_BEFORE_SPINNER)
-        if show_spinner:
-            self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
-        results = self._issue_command(command_name, update_soup, update_local_db=True)
+        self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
 
-        if show_spinner:
-            self._busy_status_teardown()
+        #results = self._issue_command(command_name, update_soup, update_local_db=True)
+        ch.issue_command()
+
+        self._busy_status_teardown()
 
         if update_gui:
             updateCalibreGUIView()
 
-        if results['code']:
-            return self._show_command_error('update_locked_status', results)
+        if ch.results['code']:
+            return self._show_command_error('update_locked_status', ch.results)
+
+        # Update the local db
+        self._localize_marvin_database()
 
     def _update_marvin_collections(self, book_id, updated_marvin_collections):
         '''

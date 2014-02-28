@@ -611,7 +611,7 @@ class CommandHandler(Logger):
     METADATA_COMMAND_XML: specific
     GENERAL_COMMAND_XML: general
     '''
-    POLLING_DELAY = 0.50        # Spinner frequency
+    POLLING_DELAY = 0.25        # Spinner frequency
     WATCHDOG_TIMEOUT = 10.0
 
     GENERAL_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
