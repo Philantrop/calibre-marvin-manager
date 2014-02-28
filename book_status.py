@@ -1695,10 +1695,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if not self.installed_books[book_id].articles:
                 return
 
-#             command_name = "command"
             command_type = "GetDeepViewArticlesHTML"
-#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                 command_type, time.mktime(time.localtime())))
             ch = CommandHandler(self)
             ch.construct_general_command(command_type)
             parameters_tag = self._build_parameters(self.installed_books[book_id], ch.command_soup)
@@ -1716,10 +1713,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self._log("no DV content for %s" % title)
                 return
 
-#             command_name = "command"
             command_type = "GetFirstOccurrenceHTML"
-#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                 command_type, time.mktime(time.localtime())))
             ch = CommandHandler(self)
             ch.construct_general_command(command_type)
             parameters_tag = Tag(ch.command_soup, 'parameters')
@@ -1814,10 +1808,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     return
 
         elif action == 'show_global_vocabulary':
-#             command_name = "command"
             command_type = "GetGlobalVocabularyHTML"
-#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                 command_type, time.mktime(time.localtime())))
             ch = CommandHandler(self)
             ch.construct_general_command(command_type)
 
@@ -1831,10 +1822,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             if not self.installed_books[book_id].vocabulary:
                 return
 
-#             command_name = "command"
             command_type = "GetLocalVocabularyHTML"
-#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                 command_type, time.mktime(time.localtime())))
             ch = CommandHandler(self)
             ch.construct_general_command(command_type)
             parameters_tag = self._build_parameters(self.installed_books[book_id], ch.command_soup)
@@ -1855,9 +1843,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         self._busy_status_setup(msg="Retrieving %s…" % group_box_title)
 
-#         results = self._issue_command(command_name, update_soup,
-#                                       get_response="html_response.html",
-#                                       update_local_db=False)
         ch.issue_command(get_response="html_response.html")
 
         self._busy_status_teardown()
@@ -2424,10 +2409,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self._log_location()
 
             # Build the Marvin command shell
-#             command_name = "command"
             command_type = "LockBooks"
-#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                 command_type, time.mktime(time.localtime())))
             ch = CommandHandler(self)
             ch.construct_general_command(command_type)
             manifest_tag = Tag(ch.command_soup, 'manifest')
@@ -2493,8 +2475,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 updateCalibreGUIView()
 
             if m_updated:
-#                 results = self._issue_command(command_name, update_soup,
-#                                               update_local_db=True)
                 ch.issue_command()
 
                 if ch.results['code']:
@@ -2869,10 +2849,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.installed_books[book_id].word_count = wc
 
                 # Tell Marvin about the updated word_count
-#                 command_name = 'update_metadata_items'
-#                 command_element = 'updatemetadataitems'
-#                 update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-#                     command_element, time.mktime(time.localtime())))
                 ch = CommandHandler(self)
                 ch.construct_metadata_command(
                     cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
@@ -2886,7 +2862,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 book_tag['wordcount'] = wordcount.words
                 ch.command_soup.manifest.insert(0, book_tag)
 
-#                 results = self._issue_command(command_name, update_soup, update_local_db=False)
                 ch.issue_command()
                 if ch.results['code']:
                     if not silent:
@@ -3988,10 +3963,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 # Use method default timeout
                 timeout = None
 
-#             command_name = "command"
             command_type = "GenerateDeepView"
-#             update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                 command_type, time.mktime(time.localtime())))
             ch = CommandHandler(self)
             ch.construct_general_command(command_type)
 
@@ -4013,9 +3985,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             self._busy_status_setup(msg=busy_msg, show_cancel=len(selected_books) > 1,
                 marvin_cancellation_required=True)
-#             results = self._issue_command(command_name, update_soup,
-#                                           timeout_override=timeout,
-#                                           update_local_db=True)
             ch.issue_command(timeout_override=timeout)
 
             self._busy_status_teardown()
@@ -5184,10 +5153,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Inform Marvin of updated flags + collections
         '''
         # ~~~~~~~~ Update Marvin with Flags + Collections ~~~~~~~~
-#         command_name = 'update_metadata_items'
-#         command_element = 'updatemetadataitems'
-#         update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-#             command_element, time.mktime(time.localtime())))
         ch = CommandHandler(self)
         ch.construct_metadata_command(
             cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
@@ -5217,8 +5182,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             local_busy = True
             self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
 
-#         results = self._issue_command(command_name, update_soup,
-#                                       update_local_db=update_local_db)
         ch.issue_command()
 
         if local_busy:
@@ -5230,49 +5193,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         # Update the local db
         if update_local_db:
             self._localize_marvin_database()
-
-    def _issue_command(self, command_name, update_soup,
-                       get_response=None,
-                       timeout_override=None,
-                       update_local_db=True):
-        '''
-        Consolidated command handler
-        '''
-        self._log_location()
-
-        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
-
-        # Wait for the driver to be silent
-        while self.connected_device.get_busy_flag():
-            Application.processEvents()
-        self.connected_device.set_busy_flag(True)
-
-        # Copy command file to staging folder
-        self._stage_command_file(command_name, update_soup,
-                                 show_command=self.prefs.get('show_staged_commands', False))
-
-        # Wait for completion
-        try:
-            results = self._wait_for_command_completion(command_name,
-                timeout_override=timeout_override,
-                get_response=get_response,
-                update_local_db=update_local_db)
-        except:
-            import traceback
-            details = "An error occurred while executing '{0}'.\n\n".format(command_name)
-            details += traceback.format_exc()
-            results = {'code': '2',
-                       'status': "Error communicating with Marvin",
-                       'details': details}
-
-        # Try to reset the busy flag, although it might fail
-        try:
-            self.connected_device.set_busy_flag(False)
-        except:
-            pass
-
-        QApplication.restoreOverrideCursor()
-        return results
 
     def _localize_marvin_database(self):
         '''
@@ -5845,10 +5765,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         total_books = len(selected_books)
         if total_books:
             # Build a command shell
-#             command_name = 'update_metadata_items'
-#             command_element = 'updatemetadataitems'
-#             update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-#                 command_element, time.mktime(time.localtime())))
             ch = CommandHandler(self)
             ch.construct_metadata_command(
                 cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
@@ -5899,7 +5815,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 book_tag['rating'] = rating
                 ch.command_soup.manifest.insert(0, book_tag)
 
-#             results = self._issue_command(command_name, update_soup, update_local_db=False)
             ch.issue_command()
             if ch.results['code']:
                 if not silent:
@@ -5938,42 +5853,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         details = results['details']
         MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
                    show_copy_button=False).exec_()
-
-    def _stage_command_file(self, command_name, command_soup, show_command=False):
-
-        self._log_location(command_name)
-
-        if show_command:
-            if command_name in ['update_metadata', 'update_metadata_items']:
-                soup = BeautifulStoneSoup(command_soup.renderContents())
-                # <descriptions>
-                descriptions = soup.findAll('description')
-                for description in descriptions:
-                    d_tag = Tag(soup, 'description')
-                    d_tag.insert(0, "(description removed for debug stream)")
-                    description.replaceWith(d_tag)
-                # <covers>
-                covers = soup.findAll('cover')
-                for cover in covers:
-                    cover_tag = Tag(soup, 'cover')
-                    cover_tag['hash'] = cover['hash']
-                    cover_tag['encoding'] = cover['encoding']
-                    cover_tag.insert(0, "(cover bytes removed for debug stream)")
-                    cover.replaceWith(cover_tag)
-                self._log(soup.prettify())
-            else:
-                self._log("command_name: %s" % command_name)
-                self._log(command_soup.prettify())
-
-        if self.prefs.get('execute_marvin_commands', True):
-
-            self.ios.write(command_soup.renderContents(),
-                           b'/'.join([self.connected_device.staging_folder, b'%s.tmp' % command_name]))
-            self.ios.rename(b'/'.join([self.connected_device.staging_folder, b'%s.tmp' % command_name]),
-                            b'/'.join([self.connected_device.staging_folder, b'%s.xml' % command_name]))
-
-        else:
-            self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
 
     def _synchronize_flags(self):
         '''
@@ -6102,10 +5981,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     cover_hash = hashlib.md5(cover[2]).hexdigest()
 
                     # Tell Marvin about the updated cover_hash
-#                     command_name = 'update_metadata_items'
-#                     command_element = 'updatemetadataitems'
-#                     update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-#                         command_element, time.mktime(time.localtime())))
                     ch = CommandHandler(self)
                     ch.construct_metadata_command(
                         cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
@@ -6123,8 +5998,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                     ch.command_soup.manifest.insert(0, book_tag)
 
-#                     results = self._issue_command(command_name, update_soup,
-#                                                   update_local_db=update_local_db)
                     ch.issue_command()
                     if ch.results['code']:
                         return self._show_command_error(command_name, ch.results)
@@ -6184,10 +6057,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
 
                 # Tell Marvin about the updated uuid
-#                 command_name = 'update_metadata_items'
-#                 command_element = 'updatemetadataitems'
-#                 update_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
-#                     command_element, time.mktime(time.localtime())))
                 ch = CommandHandler(self)
                 ch.construct_metadata_command(
                     cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
@@ -6201,8 +6070,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 book_tag['newuuid'] = mismatches[key]['calibre']
                 ch.command_soup.manifest.insert(0, book_tag)
 
-#                 results = self._issue_command(command_name, update_soup,
-#                                               update_local_db=update_local_db)
                 ch.issue_command()
                 if ch.results['code']:
                     #return self._show_command_error(command_name, ch.results)
@@ -6457,10 +6324,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 # Issue one update per deleted collection
                 for book_id, book in self.installed_books.items():
 
-#                     command_name = "command"
                     command_type = "UpdateGlobalCollections"
-#                     update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                         command_type, time.mktime(time.localtime())))
                     ch = CommandHandler(self)
                     ch.construct_general_command(command_type)
 
@@ -6492,8 +6356,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         parameter_tag.insert(0, ctd)
                         parameters_tag.insert(0, parameter_tag)
 
-#                         results = self._issue_command(command_name, update_soup)
-                        ch_issue_command()
+                        ch.issue_command()
                         if ch.results['code']:
                             return self._show_command_error(command_type, ch.results)
 
@@ -6506,10 +6369,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                 # Issue one update per renamed collection
                 for book_id, book in self.installed_books.items():
-#                     command_name = "command"
                     command_type = "UpdateGlobalCollections"
-#                     update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
-#                         command_type, time.mktime(time.localtime())))
                     ch = CommandHandler(self)
                     ch.construct_general_command(command_type)
 
@@ -6549,7 +6409,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         parameter_tag.insert(0, replacement)
                         parameters_tag.insert(0, parameter_tag)
 
-#                         results = self._issue_command(command_name, update_soup)
                         ch.issue_command()
                         if ch.results['code']:
                             return self._show_command_error(command_type, ch.results)
@@ -6978,210 +6837,3 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         else:
             # Copy local cache to iDevice
             self.ios.copy_to_idevice(self.local_hash_cache, str(self.remote_hash_cache))
-
-    def _wait_for_command_completion(self, command_name, update_local_db=True,
-            get_response=None, timeout_override=None):
-        '''
-        Wait for Marvin to issue progress reports via status.xml
-        Marvin creates status.xml upon receiving command, increments <progress>
-        from 0.0 to 1.0 as command progresses.
-        '''
-        import traceback
-
-        # POLLING_DELAY affects the frequency with which the spinner is updated
-        POLLING_DELAY = 0.25
-        msg = ''
-        if timeout_override:
-            msg = "using timeout_override %d" % timeout_override
-        self._log_location(msg)
-
-        results = {'code': 0}
-
-        if self.prefs.get('execute_marvin_commands', True):
-            self._log("%s: waiting for '%s'" %
-                      (datetime.now().strftime('%H:%M:%S.%f'),
-                      self.connected_device.status_fs))
-
-            if not timeout_override:
-                timeout_value = self.WATCHDOG_TIMEOUT
-            else:
-                timeout_value = timeout_override
-
-            # Set initial watchdog timer for ACK with default timeout
-            self.operation_timed_out = False
-            self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-            self.watchdog.start()
-
-            while True:
-                if not self.ios.exists(self.connected_device.status_fs):
-                    # status.xml not created yet
-                    if self.operation_timed_out:
-                        final_code = '-1'
-                        self.ios.remove(self.connected_device.status_fs)
-                        results = {
-                            'code': -1,
-                            'status': 'timeout',
-                            'response': None,
-                            'details': 'timeout_value: %d' % timeout_value
-                            }
-                        break
-                    Application.processEvents()
-                    time.sleep(POLLING_DELAY)
-
-                else:
-                    # Start a new watchdog timer per iteration
-                    self.watchdog.cancel()
-                    self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
-                    self.operation_timed_out = False
-                    self.watchdog.start()
-
-                    self._log("%s: monitoring progress of %s" %
-                              (datetime.now().strftime('%H:%M:%S.%f'),
-                              command_name))
-
-                    code = '-1'
-                    current_timestamp = 0.0
-                    while code == '-1':
-                        try:
-                            if self.operation_timed_out:
-                                self.ios.remove(self.connected_device.status_fs)
-                                results = {
-                                    'code': -1,
-                                    'status': 'timeout',
-                                    'response': None,
-                                    'details': 'timeout_value: %d' % timeout_value
-                                    }
-                                break
-
-                            # Cancel requested?
-                            if self.busy_cancel_requested and self.marvin_cancellation_required:
-                                self._log("user requesting cancellation")
-
-                                # Create "cancel.command" in staging folder
-                                ft = (b'/'.join([self.connected_device.staging_folder,
-                                                 b'cancel.tmp']))
-                                fs = (b'/'.join([self.connected_device.staging_folder,
-                                                 b'cancel.command']))
-                                self.ios.write("please stop", ft)
-                                self.ios.rename(ft, fs)
-
-                                # Update status
-                                self._busy_status_msg(msg="Completing operation on current book…")
-
-                                # Clear flags so we can complete processing
-                                self.marvin_cancellation_required = False
-
-                            status = etree.fromstring(self.ios.read(self.connected_device.status_fs))
-                            code = status.get('code')
-                            timestamp = float(status.get('timestamp'))
-                            if timestamp != current_timestamp:
-                                current_timestamp = timestamp
-                                d = datetime.now()
-                                progress = float(status.find('progress').text)
-                                self._log("{0}: {1:>2} {2:>3}%".format(
-                                          d.strftime('%H:%M:%S.%f'),
-                                          code,
-                                          "%3.0f" % (progress * 100)))
-                                """
-                                # Report progress
-                                if self.report_progress is not None:
-                                    self.report_progress(0.5 + progress/2, '')
-                                """
-
-                                # Reset watchdog timer
-                                self.watchdog.cancel()
-                                self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
-                                self.watchdog.start()
-
-                            Application.processEvents()
-                            time.sleep(POLLING_DELAY)
-
-                        except:
-                            self.watchdog.cancel()
-
-                            formatted_lines = traceback.format_exc().splitlines()
-                            current_error = formatted_lines[-1]
-
-                            time.sleep(POLLING_DELAY)
-                            Application.processEvents()
-
-                            self._log("{0}:  retry ({1})".format(
-                                datetime.now().strftime('%H:%M:%S.%f'),
-                                current_error))
-
-                            self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
-                            self.watchdog.start()
-
-                    # Command completed
-                    self.watchdog.cancel()
-
-                    # Construct the results
-                    final_code = status.get('code')
-                    if final_code == '-1':
-                        final_status = "incomplete"
-                    elif final_code == '0':
-                        final_status = "completed successfully"
-                    elif final_code == '1':
-                        final_status = "completed with warnings"
-                    elif final_code == '2':
-                        final_status = "completed with errors"
-                    elif final_code == '3':
-                        final_status = "cancelled by user"
-                    results = {'code': int(final_code), 'status': final_status}
-
-                    '''
-                    if True and command_name == 'update_metadata':
-                        # *** Fake some errors to test ***
-                        self._log("***falsifying error reporting***")
-                        results = {'code': 2, 'status': 'completed with errors',
-                            'details': "[Title - Author.epub] Cannot locate book to update metadata - skipping"}
-                    '''
-
-                    if final_code not in ['0']:
-                        if final_code == '3':
-                            msgs = ['operation cancelled by user']
-                        else:
-                            messages = status.find('messages')
-                            msgs = [msg.text for msg in messages]
-                        details = '\n'.join(["code: %s" % final_code, "status: %s" % final_status])
-                        details += '\n'.join(msgs)
-                        self._log(details)
-                        results['details'] = '\n'.join(msgs)
-                        self.ios.remove(self.connected_device.status_fs)
-
-                        self._log("%s: '%s' complete with errors" %
-                                  (datetime.now().strftime('%H:%M:%S.%f'),
-                                  command_name))
-
-                    # Get the response file from the staging folder
-                    if get_response:
-                        rf = b'/'.join([self.connected_device.staging_folder, get_response])
-                        self._log("fetching response '%s'" % rf)
-                        if not self.ios.exists(self.connected_device.status_fs):
-                            response = "%s not found" % rf
-                        else:
-                            response = self.ios.read(rf)
-                            self.ios.remove(rf)
-                        results['response'] = response
-
-                    self.ios.remove(self.connected_device.status_fs)
-
-                    self._log("%s: '%s' complete" %
-                              (datetime.now().strftime('%H:%M:%S.%f'),
-                              command_name))
-                    break
-
-            # Update local copy of Marvin db
-            if update_local_db and final_code == '0':
-                self._localize_marvin_database()
-
-        else:
-            self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
-        return results
-
-    def _watchdog_timed_out(self):
-        '''
-        Set flag if I/O operation times out
-        '''
-        self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
-        self.operation_timed_out = True
