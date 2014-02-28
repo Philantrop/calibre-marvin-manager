@@ -935,7 +935,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     REMOTE_CACHE_FOLDER = '/'.join(['/Library', 'calibre.mm'])
     UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
     UTF_8_BOM = r'\xef\xbb\xbf'
-    WATCHDOG_TIMEOUT = 10.0
 
     # Flag constants
     if True:
@@ -1034,6 +1033,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         self._log_location()
         self.busy_cancel_requested = True
+        self.ch.busy_cancel_requested = True
         self._busy_status_msg(msg="Cancelling, please wait…")
         self.busy_cancel_button.setEnabled(False)
 
@@ -3932,7 +3932,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             else:
                 estimated_time = "%d:%02d" % (m, s)
 
-            if timeout > self.WATCHDOG_TIMEOUT:
+            if timeout > CommandHandler.WATCHDOG_TIMEOUT:
                 # Confirm that user wants to proceed given estimated time to completion
                 total_books = len(selected_books)
                 book_descriptor = "books" if total_books > 1 else "book"
@@ -3974,6 +3974,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             self._busy_status_setup(msg=busy_msg, show_cancel=len(selected_books) > 1,
                 marvin_cancellation_required=True)
+            self.marvin_cancellation_required = True
             self.ch.issue_command(timeout_override=timeout)
 
             self._busy_status_teardown()

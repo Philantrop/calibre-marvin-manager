@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import atexit, cPickle as pickle, os, re, sys, threading
+import atexit, cPickle as pickle, os, re, sqlite3, sys, threading
 
 from functools import partial
 from lxml import etree, html
@@ -68,10 +68,80 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self.rebuild_menus()
 
     def create_backup(self):
-        self._log_location()
+        '''
+        iPad1:      500 books in 90 seconds - 5.5 books/second
+        iPad Mini:  500 books in 64 seconds - 7.8 books/second
+        '''
+        WORST_CASE_ARCHIVE_RATE = 5.0  # Books/second
+        TIMEOUT_PADDING_FACTOR = 1.5
 
-        self._busy_panel_setup("Creating marvin.backup from {0}…".format(
-            self.ios.device_name))
+        def _count_books():
+            # Get a count of the books
+            con = sqlite3.connect(self.connected_device.local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute('''SELECT
+                                title
+                               FROM Books
+                            ''')
+                rows = cur.fetchall()
+            return(len(rows))
+
+        self._log_location()
+        total_books = _count_books()
+
+        # Estimate worst-case time required to create backup
+        total_seconds = int(total_books/WORST_CASE_ARCHIVE_RATE) + 1
+        timeout = int(total_seconds * TIMEOUT_PADDING_FACTOR)
+
+        m, s = divmod(total_seconds, 60)
+        h, m = divmod(m, 60)
+        if h:
+            estimated_time = "%d:%02d:%02d" % (h, m, s)
+        else:
+            estimated_time = "%d:%02d" % (m, s)
+
+        # If this is going to take some time, warn the user
+        if timeout > CommandHandler.WATCHDOG_TIMEOUT:
+            # Confirm that user wants to proceed given estimated time to completion
+            book_descriptor = "books" if total_books > 1 else "book"
+            title = "Estimated time to create backup"
+            msg = ("<p>Creating a backup of " +
+                   "{0} books ".format(total_books) +
+                   "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
+                   "<p>Proceed?</p>")
+            dlg = MessageBox(MessageBox.QUESTION, title, msg,
+                             show_copy_button=False)
+            if not dlg.exec_():
+                self._log("user declined to proceed with estimated_time of %s" % estimated_time)
+                return
+
+        # Check for existing backup before overwriting
+        # stats['st_mtime'], stats['st_size']
+        backup_location = '/'.join(['/Documents', '/Backup', 'marvin.backup'])
+        stats = self.ios.exists(backup_location)
+        if stats:
+            self._log(stats)
+            from datetime import datetime
+            d = datetime.fromtimestamp(float(stats['st_mtime']))
+            friendly_date = d.strftime("%A, %B %d, %Y")
+            friendly_time = d.strftime("%I:%M%p")
+
+            title = "A backup already exists!"
+            msg = ('<p>There is an existing backup created ' +
+                   '{0} at {1}.</p>'
+                   '<p>Proceeding with this backup will '
+                   'overwrite the existing backup.</p>'
+                   '<p>Proceed?</p>'.format(friendly_date, friendly_time))
+            dlg = MessageBox(MessageBox.QUESTION, title, msg,
+                             show_copy_button=False)
+            if not dlg.exec_():
+                self._log("user declined to overwrite existing backup")
+                return
+
+        self._busy_panel_setup("Backing up {0:,} books from {1}…".format(
+            total_books, self.ios.device_name))
 
         ch = CommandHandler(self)
         ch.construct_general_command('backup')
