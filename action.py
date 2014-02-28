@@ -34,7 +34,8 @@ from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    CompileUI, IndexLibrary, Logger, MyBlockingBusy, ProgressBar, RestoreBackup, Struct,
+    CommandHandler, CompileUI, IndexLibrary, Logger, MyBlockingBusy,
+    ProgressBar, RestoreBackup, Struct,
     get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
 #from calibre_plugins.marvin_manager.dropbox import PullDropboxUpdates
@@ -66,8 +67,25 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def about_to_show_menu(self):
         self.rebuild_menus()
 
-    def backup_restore(self):
-        self._log_location("not implemented")
+    def create_backup(self):
+        self._log_location()
+
+        self._busy_panel_setup("Creating marvin.backup from {0}…".format(
+            self.ios.device_name))
+
+        ch = CommandHandler(self)
+        ch.construct_general_command('backup')
+        ch.issue_command()
+        self._busy_panel_teardown()
+
+        if ch.results['code']:
+            self._log("results: %s" % ch.results)
+            title = "Backup unsuccessful"
+            msg = ('<p>Unable to create backup.</p>'
+                   '<p>Click <b>Show details</b> for more information.</p>')
+            det_msg = ch.results['details']
+            MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg).exec_()
+
 
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
@@ -82,7 +100,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
         '''
         self._log_location(action)
-        if action in ['Delete calibre hashes', 'Delete Marvin hashes',
+        if action in ['Create backup', 'Delete calibre hashes', 'Delete Marvin hashes',
                       'Nuke annotations', 'Reset column widths',
                       'Restore from backup']:
             if action == 'Delete Marvin hashes':
@@ -116,6 +134,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self._log("deleting marvin_library_column_widths")
                 self.prefs.pop('marvin_library_column_widths')
                 self.prefs.commit()
+            elif action == 'Create backup':
+                self.create_backup()
             elif action == 'Restore from backup':
                 self.restore_from_backup()
 
@@ -743,15 +763,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     ac = self.create_menu_item(m, 'Explore Marvin Library', image=I("dialog_information.png"))
                     ac.triggered.connect(self.show_installed_books)
 
-                    if False:
-                        ac = self.create_menu_item(m, 'Backup or Restore Library', image=I("swap.png"))
-                        ac.triggered.connect(self.backup_restore)
-                        ac.setEnabled(False)
-
-                        ac = self.create_menu_item(m, 'Reset Marvin Library', image=I("trash.png"))
-                        ac.triggered.connect(self.reset_marvin_library)
-                        ac.setEnabled(False)
-
                 else:
                     self._log("Marvin not connected")
                     ac = self.create_menu_item(m, 'Marvin not connected')
@@ -805,9 +816,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
-
-                # Backup/restore menu
+                # Backup/restore
                 m.addSeparator()
+                action = 'Create backup'
+                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+                ac = self.create_menu_item(m, action, image=icon)
+                ac.triggered.connect(partial(self.developer_utilities, action))
+
                 action = 'Restore from backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
                 ac = self.create_menu_item(m, action, image=icon)
@@ -886,6 +901,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             # Verify transferred size
             if s_size == d_size:
+                # Delete cached Marvin data
+                self.developer_utilities('Delete Marvin hashes')
+
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
                 # Display dialog detailing how to complete restore
                 title = "Restore Marvin from backup"
@@ -899,8 +917,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        ).format(self.ios.device_name)
                 d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
 
-                # Delete cached Marvin data
-                self.developer_utilities('Delete Marvin hashes')
             else:
                 self._log("Backup does not verify: source {0:,} dest {1:,}".format(
                     s_size, d_size))

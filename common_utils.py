@@ -8,14 +8,17 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import cStringIO, os, re, sys
+import cStringIO, os, re, sys, time, traceback
 
 from collections import defaultdict
+from datetime import datetime
+from lxml import etree
+from threading import Timer
 from time import sleep
 
 from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
-from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup
+from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup, Tag
 from calibre.ebooks.metadata import title_sort
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.gui2 import Application
@@ -26,7 +29,7 @@ from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
-                      QCheckBox, QComboBox, QDial, QDialog, QDialogButtonBox,
+                      QCheckBox, QComboBox, QCursor, QDial, QDialog, QDialogButtonBox,
                       QDoubleSpinBox, QFont, QIcon,
                       QKeySequence, QLabel, QLineEdit,
                       QPixmap, QProgressBar, QPushButton,
@@ -599,6 +602,319 @@ class RowFlasher(QThread):
                 QTimer.singleShot(self.new_time, self.update)
 
 '''     Helper Classes  '''
+
+
+class CommandHandler(Logger):
+    '''
+    Consolidated class for handling Marvin commands
+    Construct two types of commands:
+    METADATA_COMMAND_XML: specific
+    GENERAL_COMMAND_XML: general
+    '''
+    POLLING_DELAY = 0.50        # Spinner frequency
+    WATCHDOG_TIMEOUT = 10.0
+
+    GENERAL_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
+    <command type=\'{0}\' timestamp=\'{1}\'>
+    </command>'''
+
+    METADATA_COMMAND_XML = b'''\xef\xbb\xbf<?xml version='1.0' encoding='utf-8'?>
+    <{0} timestamp=\'{1}\'>
+    <manifest>
+    </manifest>
+    </{0}>'''
+
+    def __init__(self, parent, get_response=None, timeout_override=None):
+        self._log_location()
+        self.busy_cancel_requested = False
+        self.command_name = None
+        self.command_soup = None
+        self.connected_device = parent.connected_device
+        self.get_response = get_response
+        self.ios = parent.ios
+        self.marvin_cancellation_required = False
+        self.operation_timed_out = False
+        self.prefs = parent.prefs
+        self.results = None
+        self.timeout_override = timeout_override
+
+    def construct_general_command(self, cmd_type):
+        '''
+        Create GENERAL_COMMAND_XML soup
+        '''
+        self._log_location("type={0}".format(cmd_type))
+        self.command_name = 'command'
+        self.command_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
+            cmd_type, time.mktime(time.localtime())))
+
+    def issue_command(self, get_response=None):
+        '''
+        Consolidated command handler
+        '''
+        self._log_location()
+
+        QApplication.setOverrideCursor(QCursor(Qt.WaitCursor))
+
+        # Wait for the driver to be silent
+        while self.connected_device.get_busy_flag():
+            Application.processEvents()
+        self.connected_device.set_busy_flag(True)
+
+        # Copy command file to staging folder
+        self._stage_command_file()
+
+        # Wait for completion
+        try:
+            results = self._wait_for_command_completion()
+        except:
+            import traceback
+            details = "An error occurred while executing '{0}'.\n\n".format(self.command_name)
+            details += traceback.format_exc()
+            results = {'code': '2',
+                       'status': "Error communicating with Marvin",
+                       'details': details}
+
+        # Try to reset the busy flag, although it might fail
+        try:
+            self.connected_device.set_busy_flag(False)
+        except:
+            pass
+
+        QApplication.restoreOverrideCursor()
+        self.results = results
+
+    def _stage_command_file(self):
+
+        self._log_location()
+
+        if self.prefs.get('show_staged_commands', False):
+            if self.command_name in ['update_metadata', 'update_metadata_items']:
+                soup = BeautifulStoneSoup(self.command_soup.renderContents())
+                # <descriptions>
+                descriptions = soup.findAll('description')
+                for description in descriptions:
+                    d_tag = Tag(soup, 'description')
+                    d_tag.insert(0, "(description removed for debug stream)")
+                    description.replaceWith(d_tag)
+                # <covers>
+                covers = soup.findAll('cover')
+                for cover in covers:
+                    cover_tag = Tag(soup, 'cover')
+                    cover_tag['hash'] = cover['hash']
+                    cover_tag['encoding'] = cover['encoding']
+                    cover_tag.insert(0, "(cover bytes removed for debug stream)")
+                    cover.replaceWith(cover_tag)
+                self._log(soup.prettify())
+            else:
+                self._log(self.command_soup.prettify())
+
+        if self.prefs.get('execute_marvin_commands', True):
+            tmp = b'/'.join([self.connected_device.staging_folder, b'%s.tmp' % self.command_name])
+            final = b'/'.join([self.connected_device.staging_folder, b'%s.xml' % self.command_name])
+            self.ios.write(self.command_soup.renderContents(), tmp)
+            self.ios.rename(tmp, final)
+
+        else:
+            self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
+
+    def _wait_for_command_completion(self):
+        '''
+        Wait for Marvin to issue progress reports via status.xml
+        Marvin creates status.xml upon receiving command, increments <progress>
+        from 0.0 to 1.0 as command progresses.
+        '''
+
+        msg = ''
+        if self.timeout_override:
+            msg = "using timeout_override %d" % self.timeout_override
+        self._log_location(msg)
+
+        results = {'code': 0}
+
+        if self.prefs.get('execute_marvin_commands', True):
+            self._log("%s: waiting for '%s'" %
+                      (datetime.now().strftime('%H:%M:%S.%f'),
+                      self.connected_device.status_fs))
+
+            if not self.timeout_override:
+                timeout_value = self.WATCHDOG_TIMEOUT
+            else:
+                timeout_value = self.timeout_override
+
+            # Set initial watchdog timer for ACK with default timeout
+            self.operation_timed_out = False
+            self.watchdog = Timer(self.WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+            self.watchdog.start()
+
+            while True:
+                if not self.ios.exists(self.connected_device.status_fs):
+                    # status.xml not created yet
+                    if self.operation_timed_out:
+                        final_code = '-1'
+                        self.ios.remove(self.connected_device.status_fs)
+                        results = {
+                            'code': -1,
+                            'status': 'timeout',
+                            'response': None,
+                            'details': 'timeout_value: %d' % timeout_value
+                            }
+                        break
+                    Application.processEvents()
+                    time.sleep(self.POLLING_DELAY)
+
+                else:
+                    # Start a new watchdog timer per iteration
+                    self.watchdog.cancel()
+                    self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
+                    self.operation_timed_out = False
+                    self.watchdog.start()
+
+                    self._log("%s: monitoring progress of %s" %
+                              (datetime.now().strftime('%H:%M:%S.%f'),
+                              self.command_name))
+
+                    code = '-1'
+                    current_timestamp = 0.0
+                    while code == '-1':
+                        try:
+                            if self.operation_timed_out:
+                                self.ios.remove(self.connected_device.status_fs)
+                                results = {
+                                    'code': -1,
+                                    'status': 'timeout',
+                                    'response': None,
+                                    'details': 'timeout_value: %d' % timeout_value
+                                    }
+                                break
+
+                            # Cancel requested?
+                            if self.busy_cancel_requested and self.marvin_cancellation_required:
+                                self._log("user requesting cancellation")
+
+                                # Create "cancel.command" in staging folder
+                                ft = (b'/'.join([self.connected_device.staging_folder,
+                                                 b'cancel.tmp']))
+                                fs = (b'/'.join([self.connected_device.staging_folder,
+                                                 b'cancel.command']))
+                                self.ios.write("please stop", ft)
+                                self.ios.rename(ft, fs)
+
+                                # Update status
+                                self._busy_status_msg(msg="Completing operation on current book…")
+
+                                # Clear flags so we can complete processing
+                                self.marvin_cancellation_required = False
+
+                            status = etree.fromstring(self.ios.read(self.connected_device.status_fs))
+                            code = status.get('code')
+                            timestamp = float(status.get('timestamp'))
+                            if timestamp != current_timestamp:
+                                current_timestamp = timestamp
+                                d = datetime.now()
+                                progress = float(status.find('progress').text)
+                                self._log("{0}: {1:>2} {2:>3}%".format(
+                                          d.strftime('%H:%M:%S.%f'),
+                                          code,
+                                          "%3.0f" % (progress * 100)))
+                                """
+                                # Report progress
+                                if self.report_progress is not None:
+                                    self.report_progress(0.5 + progress/2, '')
+                                """
+
+                                # Reset watchdog timer
+                                self.watchdog.cancel()
+                                self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
+                                self.watchdog.start()
+
+                            Application.processEvents()
+                            time.sleep(self.POLLING_DELAY)
+
+                        except:
+                            self.watchdog.cancel()
+
+                            formatted_lines = traceback.format_exc().splitlines()
+                            current_error = formatted_lines[-1]
+
+                            time.sleep(self.POLLING_DELAY)
+                            Application.processEvents()
+
+                            self._log("{0}:  retry ({1})".format(
+                                datetime.now().strftime('%H:%M:%S.%f'),
+                                current_error))
+
+                            self.watchdog = Timer(timeout_value, self._watchdog_timed_out)
+                            self.watchdog.start()
+
+                    # Command completed
+                    self.watchdog.cancel()
+
+                    # Construct the results
+                    final_code = status.get('code')
+                    if final_code == '-1':
+                        final_status = "incomplete"
+                    elif final_code == '0':
+                        final_status = "completed successfully"
+                    elif final_code == '1':
+                        final_status = "completed with warnings"
+                    elif final_code == '2':
+                        final_status = "completed with errors"
+                    elif final_code == '3':
+                        final_status = "cancelled by user"
+                    results = {'code': int(final_code), 'status': final_status}
+
+                    '''
+                    if True and command_name == 'update_metadata':
+                        # *** Fake some errors to test ***
+                        self._log("***falsifying error reporting***")
+                        results = {'code': 2, 'status': 'completed with errors',
+                            'details': "[Title - Author.epub] Cannot locate book to update metadata - skipping"}
+                    '''
+
+                    # Get the response file from the staging folder
+                    if self.get_response:
+                        rf = b'/'.join([self.connected_device.staging_folder, get_response])
+                        self._log("fetching response '%s'" % rf)
+                        if not self.ios.exists(self.connected_device.status_fs):
+                            response = "%s not found" % rf
+                        else:
+                            response = self.ios.read(rf)
+                            self.ios.remove(rf)
+                        results['response'] = response
+
+                    self.ios.remove(self.connected_device.status_fs)
+
+                    if final_code not in ['0']:
+                        if final_code == '3':
+                            msgs = ['operation cancelled by user']
+                        else:
+                            messages = status.find('messages')
+                            msgs = [msg.text for msg in messages]
+                        details = '\n'.join(["code: %s" % final_code, "status: %s" % final_status])
+                        details += '\n'.join(msgs)
+                        results['details'] = '\n'.join(msgs)
+
+                        self._log("%s: <%s> complete with errors" %
+                                  (datetime.now().strftime('%H:%M:%S.%f'),
+                                  self.command_name))
+                    else:
+                        self._log("%s: <%s> complete" %
+                                  (datetime.now().strftime('%H:%M:%S.%f'),
+                                  self.command_name))
+                    break
+
+        else:
+            self._log("~~~ execute_marvin_commands disabled in JSON ~~~")
+
+        return results
+
+    def _watchdog_timed_out(self):
+        '''
+        Set flag if I/O operation times out
+        '''
+        self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
+        self.operation_timed_out = True
+
 
 
 class CompileUI():
@@ -1208,3 +1524,4 @@ def updateCalibreGUIView():
             t.conn.close()
             break
         sleep(0.5)
+
