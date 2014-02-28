@@ -1294,6 +1294,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.busy = False
         self.busy_cancel_requested = False
         self.busy_panel = None
+        self.ch = None
         self.connected_device = parent.connected_device
         self.Dispatcher = partial(Dispatcher, parent=self)
         self.hash_cache = None
@@ -1696,10 +1697,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 return
 
             command_type = "GetDeepViewArticlesHTML"
-            ch = CommandHandler(self)
-            ch.construct_general_command(command_type)
-            parameters_tag = self._build_parameters(self.installed_books[book_id], ch.command_soup)
-            ch.command_soup.command.insert(0, parameters_tag)
+            self.ch = CommandHandler(self)
+            self.ch.construct_general_command(command_type)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], self.ch.command_soup)
+            self.ch.command_soup.command.insert(0, parameters_tag)
 
             header = None
             group_box_title = 'Deep View articles'
@@ -1714,13 +1715,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 return
 
             command_type = "GetFirstOccurrenceHTML"
-            ch = CommandHandler(self)
-            ch.construct_general_command(command_type)
-            parameters_tag = Tag(ch.command_soup, 'parameters')
-            ch.command_soup.command.insert(0, parameters_tag)
+            self.ch = CommandHandler(self)
+            self.ch.construct_general_command(command_type)
+            parameters_tag = Tag(self.ch.command_soup, 'parameters')
+            self.ch.command_soup.command.insert(0, parameters_tag)
 
             # The bookID we know - entityID and hits we get from the user
-            parameter_tag = Tag(ch.command_soup, 'parameter')
+            parameter_tag = Tag(self.ch.command_soup, 'parameter')
             parameter_tag['name'] = "bookID"
             parameter_tag.insert(0, str(book_id))
             parameters_tag.insert(0, parameter_tag)
@@ -1792,13 +1793,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                 if dlg.result:
                     # entityID
-                    parameter_tag = Tag(ch.command_soup, 'parameter')
+                    parameter_tag = Tag(self.ch.command_soup, 'parameter')
                     parameter_tag['name'] = "entityID"
                     parameter_tag.insert(0, dlg.result['ID'])
                     parameters_tag.insert(0, parameter_tag)
 
                     # hits
-                    parameter_tag = Tag(ch.command_soup, 'parameter')
+                    parameter_tag = Tag(self.ch.command_soup, 'parameter')
                     parameter_tag['name'] = "hits"
                     parameter_tag.insert(0, dlg.result['hits'])
                     parameters_tag.insert(0, parameter_tag)
@@ -1809,8 +1810,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         elif action == 'show_global_vocabulary':
             command_type = "GetGlobalVocabularyHTML"
-            ch = CommandHandler(self)
-            ch.construct_general_command(command_type)
+            self.ch = CommandHandler(self)
+            self.ch.construct_general_command(command_type)
 
             title = "All vocabulary words"
             header = None
@@ -1823,10 +1824,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 return
 
             command_type = "GetLocalVocabularyHTML"
-            ch = CommandHandler(self)
-            ch.construct_general_command(command_type)
-            parameters_tag = self._build_parameters(self.installed_books[book_id], ch.command_soup)
-            ch.command_soup.command.insert(0, parameters_tag)
+            self.ch = CommandHandler(self)
+            self.ch.construct_general_command(command_type)
+            parameters_tag = self._build_parameters(self.installed_books[book_id], self.ch.command_soup)
+            self.ch.command_soup.command.insert(0, parameters_tag)
 
             header = None
             group_box_title = 'Vocabulary words'
@@ -1843,14 +1844,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         self._busy_status_setup(msg="Retrieving %s…" % group_box_title)
 
-        ch.issue_command(get_response="html_response.html")
+        self.ch.issue_command(get_response="html_response.html")
 
         self._busy_status_teardown()
 
-        if ch.results['code']:
-            return self._show_command_error(command_type, ch.results)
+        if self.ch.results['code']:
+            return self._show_command_error(command_type, self.ch.results)
         else:
-            response = ch.results['response']
+            response = self.ch.results['response']
 
         if response:
             # <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
@@ -2410,10 +2411,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             # Build the Marvin command shell
             command_type = "LockBooks"
-            ch = CommandHandler(self)
-            ch.construct_general_command(command_type)
-            manifest_tag = Tag(ch.command_soup, 'manifest')
-            ch.command_soup.command.insert(0, manifest_tag)
+            self.ch = CommandHandler(self)
+            self.ch.construct_general_command(command_type)
+            manifest_tag = Tag(self.ch.command_soup, 'manifest')
+            self.ch.command_soup.command.insert(0, manifest_tag)
 
             selected_books = self._selected_books()
             c_updated = False
@@ -2450,7 +2451,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             self.installed_books[book_id].pin = new_pin_value
 
                             # Add the book to the manifest
-                            book_tag = Tag(ch.command_soup, 'book')
+                            book_tag = Tag(self.ch.command_soup, 'book')
                             book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                             book_tag['filename'] = self.installed_books[book_id].path
                             book_tag['title'] = self.installed_books[book_id].title
@@ -2475,10 +2476,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 updateCalibreGUIView()
 
             if m_updated:
-                ch.issue_command()
+                self.ch.issue_command()
 
-                if ch.results['code']:
-                    return self._show_command_error('apply_locked', ch.results)
+                if self.ch.results['code']:
+                    return self._show_command_error('apply_locked', self.ch.results)
 
                 # Update the local db
                 if update_local_db:
@@ -2849,25 +2850,25 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.installed_books[book_id].word_count = wc
 
                 # Tell Marvin about the updated word_count
-                ch = CommandHandler(self)
-                ch.construct_metadata_command(
+                self.ch = CommandHandler(self)
+                self.ch.construct_metadata_command(
                     cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
 
-                book_tag = Tag(ch.command_soup, 'book')
+                book_tag = Tag(self.ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
 
                 book_tag['wordcount'] = wordcount.words
-                ch.command_soup.manifest.insert(0, book_tag)
+                self.ch.command_soup.manifest.insert(0, book_tag)
 
-                ch.issue_command()
-                if ch.results['code']:
+                self.ch.issue_command()
+                if self.ch.results['code']:
                     if not silent:
                         #pb.hide()
                         self._busy_status_teardown()
-                    self._show_command_error(command_name, ch.results)
+                    self._show_command_error(command_name, self.ch.results)
                     return stats
 
             # Update local_db for all changes
@@ -3964,20 +3965,20 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 timeout = None
 
             command_type = "GenerateDeepView"
-            ch = CommandHandler(self)
-            ch.construct_general_command(command_type)
+            self.ch = CommandHandler(self)
+            self.ch.construct_general_command(command_type)
 
             # Build a manifest of selected books
-            manifest_tag = Tag(ch.command_soup, 'manifest')
+            manifest_tag = Tag(self.ch.command_soup, 'manifest')
             for row in sorted(selected_books.keys(), reverse=True):
                 book_id = selected_books[row]['book_id']
-                book_tag = Tag(ch.command_soup, 'book')
+                book_tag = Tag(self.ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
                 manifest_tag.insert(0, book_tag)
-            ch.command_soup.command.insert(0, manifest_tag)
+            self.ch.command_soup.command.insert(0, manifest_tag)
 
             busy_msg = ("Generating Deep View for %s" %
                 ("1 book…" if len(selected_books) == 1 else
@@ -3985,12 +3986,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
             self._busy_status_setup(msg=busy_msg, show_cancel=len(selected_books) > 1,
                 marvin_cancellation_required=True)
-            ch.issue_command(timeout_override=timeout)
+            self.ch.issue_command(timeout_override=timeout)
 
             self._busy_status_teardown()
 
-            if ch.results['code']:
-                return self._show_command_error(command_type, ch.results)
+            if self.ch.results['code']:
+                return self._show_command_error(command_type, self.ch.results)
 
             # Update the local db
             if update_local_db:
@@ -5153,10 +5154,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         Inform Marvin of updated flags + collections
         '''
         # ~~~~~~~~ Update Marvin with Flags + Collections ~~~~~~~~
-        ch = CommandHandler(self)
-        ch.construct_metadata_command(
+        self.ch = CommandHandler(self)
+        self.ch.construct_metadata_command(
             cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
-        book_tag = Tag(ch.command_soup, 'book')
+        book_tag = Tag(self.ch.command_soup, 'book')
         book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
         book_tag['filename'] = self.installed_books[book_id].path
         book_tag['title'] = self.installed_books[book_id].title
@@ -5166,14 +5167,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         collections = self.installed_books[book_id].device_collections
         merged = sorted(flags + collections, key=sort_key)
 
-        collections_tag = Tag(ch.command_soup, 'collections')
+        collections_tag = Tag(self.ch.command_soup, 'collections')
         for tag in sorted(merged, key=sort_key):
-            c_tag = Tag(ch.command_soup, 'collection')
+            c_tag = Tag(self.ch.command_soup, 'collection')
             c_tag.insert(0, escape(tag))
             collections_tag.insert(0, c_tag)
         book_tag.insert(0, collections_tag)
 
-        ch.command_soup.manifest.insert(0, book_tag)
+        self.ch.command_soup.manifest.insert(0, book_tag)
 
         local_busy = False
         if self.busy:
@@ -5182,13 +5183,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             local_busy = True
             self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
 
-        ch.issue_command()
+        self.ch.issue_command()
 
         if local_busy:
             self._busy_status_teardown()
 
-        if ch.results['code']:
-            return self._show_command_error(command_name, ch.results)
+        if self.ch.results['code']:
+            return self._show_command_error(command_name, self.ch.results)
 
         # Update the local db
         if update_local_db:
@@ -5765,8 +5766,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         total_books = len(selected_books)
         if total_books:
             # Build a command shell
-            ch = CommandHandler(self)
-            ch.construct_metadata_command(
+            self.ch = CommandHandler(self)
+            self.ch.construct_metadata_command(
                 cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
 
             # Save the selection
@@ -5807,19 +5808,19 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         self.tm.set_match_quality(row, self.MATCH_COLORS.index('GREEN'))
 
                 # Add the book to the command file
-                book_tag = Tag(ch.command_soup, 'book')
+                book_tag = Tag(self.ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = self.installed_books[book_id].uuid
                 book_tag['rating'] = rating
-                ch.command_soup.manifest.insert(0, book_tag)
+                self.ch.command_soup.manifest.insert(0, book_tag)
 
-            ch.issue_command()
-            if ch.results['code']:
+            self.ch.issue_command()
+            if self.ch.results['code']:
                 if not silent:
                     self._busy_status_teardown()
-                self._show_command_error(command_name, ch.results)
+                self._show_command_error(command_name, self.ch.results)
                 return
 
             # Update local_db for all changes
@@ -5981,26 +5982,26 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     cover_hash = hashlib.md5(cover[2]).hexdigest()
 
                     # Tell Marvin about the updated cover_hash
-                    ch = CommandHandler(self)
-                    ch.construct_metadata_command(
+                    self.ch = CommandHandler(self)
+                    self.ch.construct_metadata_command(
                         cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
-                    book_tag = Tag(ch.command_soup, 'book')
+                    book_tag = Tag(self.ch.command_soup, 'book')
                     book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                     book_tag['filename'] = self.installed_books[book_id].path
                     book_tag['title'] = self.installed_books[book_id].title
                     book_tag['uuid'] = mismatches[key]['Marvin']
 
-                    cover_tag = Tag(ch.command_soup, 'cover')
+                    cover_tag = Tag(self.ch.command_soup, 'cover')
                     cover_tag['hash'] = cover_hash
                     cover_tag['encoding'] = 'base64'
                     cover_tag.insert(0, base64.b64encode(marvin_cover))
                     book_tag.insert(0, cover_tag)
 
-                    ch.command_soup.manifest.insert(0, book_tag)
+                    self.ch.command_soup.manifest.insert(0, book_tag)
 
-                    ch.issue_command()
-                    if ch.results['code']:
-                        return self._show_command_error(command_name, ch.results)
+                    self.ch.issue_command()
+                    if self.ch.results['code']:
+                        return self._show_command_error(command_name, self.ch.results)
 
                     # Update the local db
                     if update_local_db:
@@ -6057,23 +6058,23 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.library_scanner.add_to_hash_map(self.installed_books[book_id].hash, uuid)
 
                 # Tell Marvin about the updated uuid
-                ch = CommandHandler(self)
-                ch.construct_metadata_command(
+                self.ch = CommandHandler(self)
+                self.ch.construct_metadata_command(
                     cmd_name='update_metadata_items', cmd_element='updatemetadataitems')
 
-                book_tag = Tag(ch.command_soup, 'book')
+                book_tag = Tag(self.ch.command_soup, 'book')
                 book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
                 book_tag['filename'] = self.installed_books[book_id].path
                 book_tag['title'] = self.installed_books[book_id].title
                 book_tag['uuid'] = mismatches[key]['Marvin']
 
                 book_tag['newuuid'] = mismatches[key]['calibre']
-                ch.command_soup.manifest.insert(0, book_tag)
+                self.ch.command_soup.manifest.insert(0, book_tag)
 
-                ch.issue_command()
-                if ch.results['code']:
-                    #return self._show_command_error(command_name, ch.results)
-                    return ch.results
+                self.ch.issue_command()
+                if self.ch.results['code']:
+                    #return self._show_command_error(command_name, self.ch.results)
+                    return self.ch.results
 
                 # Update the local db
                 if update_local_db:
@@ -6325,11 +6326,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 for book_id, book in self.installed_books.items():
 
                     command_type = "UpdateGlobalCollections"
-                    ch = CommandHandler(self)
-                    ch.construct_general_command(command_type)
+                    self.ch = CommandHandler(self)
+                    self.ch.construct_general_command(command_type)
 
-                    parameters_tag = Tag(ch.command_soup, 'parameters')
-                    ch.command_soup.command.insert(0, parameters_tag)
+                    parameters_tag = Tag(self.ch.command_soup, 'parameters')
+                    self.ch.command_soup.command.insert(0, parameters_tag)
 
                     if ctd in book.device_collections:
                         self._log("%s: delete '%s'" % (book.title, book.device_collections))
@@ -6346,19 +6347,19 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         cached_books[book.path]['device_collections'] = book.device_collections
 
                         # Add a <parameter action="delete"> tag
-                        parameter_tag = Tag(ch.command_soup, 'parameter')
+                        parameter_tag = Tag(self.ch.command_soup, 'parameter')
                         parameter_tag['name'] = "action"
                         parameter_tag.insert(0, "delete")
                         parameters_tag.insert(0, parameter_tag)
 
-                        parameter_tag = Tag(ch.command_soup, 'parameter')
+                        parameter_tag = Tag(self.ch.command_soup, 'parameter')
                         parameter_tag['name'] = "name"
                         parameter_tag.insert(0, ctd)
                         parameters_tag.insert(0, parameter_tag)
 
-                        ch.issue_command()
-                        if ch.results['code']:
-                            return self._show_command_error(command_type, ch.results)
+                        self.ch.issue_command()
+                        if self.ch.results['code']:
+                            return self._show_command_error(command_type, self.ch.results)
 
                         # Update the local db
                         if update_local_db:
@@ -6370,11 +6371,11 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 # Issue one update per renamed collection
                 for book_id, book in self.installed_books.items():
                     command_type = "UpdateGlobalCollections"
-                    ch = CommandHandler(self)
-                    ch.construct_general_command(command_type)
+                    self.ch = CommandHandler(self)
+                    self.ch.construct_general_command(command_type)
 
-                    parameters_tag = Tag(ch.command_soup, 'parameters')
-                    ch.command_soup.command.insert(0, parameters_tag)
+                    parameters_tag = Tag(self.ch.command_soup, 'parameters')
+                    self.ch.command_soup.command.insert(0, parameters_tag)
 
                     if ctr in book.device_collections:
                         self._log("%s: rename '%s'" % (book.title, book.device_collections))
@@ -6394,24 +6395,24 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         cached_books[book.path]['device_collections'] = book.device_collections
 
                         # Add the parameter tags
-                        parameter_tag = Tag(ch.command_soup, 'parameter')
+                        parameter_tag = Tag(self.ch.command_soup, 'parameter')
                         parameter_tag['name'] = "action"
                         parameter_tag.insert(0, "rename")
                         parameters_tag.insert(0, parameter_tag)
 
-                        parameter_tag = Tag(ch.command_soup, 'parameter')
+                        parameter_tag = Tag(self.ch.command_soup, 'parameter')
                         parameter_tag['name'] = "name"
                         parameter_tag.insert(0, ctr)
                         parameters_tag.insert(0, parameter_tag)
 
-                        parameter_tag = Tag(ch.command_soup, 'parameter')
+                        parameter_tag = Tag(self.ch.command_soup, 'parameter')
                         parameter_tag['name'] = "newname"
                         parameter_tag.insert(0, replacement)
                         parameters_tag.insert(0, parameter_tag)
 
-                        ch.issue_command()
-                        if ch.results['code']:
-                            return self._show_command_error(command_type, ch.results)
+                        self.ch.issue_command()
+                        if self.ch.results['code']:
+                            return self._show_command_error(command_type, self.ch.results)
 
                         # Update the local db
                         if update_local_db:
@@ -6439,14 +6440,14 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         lookup = get_cc_mapping('locked', 'field')
 
         # Build the command shell
-        ch = CommandHandler(self)
-        ch.construct_general_command(command_type)
+        self.ch = CommandHandler(self)
+        self.ch.construct_general_command(command_type)
         #command_name = "command"
         #update_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
         #    command_type, time.mktime(time.localtime())))
-        manifest_tag = Tag(ch.command_soup, 'manifest')
+        manifest_tag = Tag(self.ch.command_soup, 'manifest')
         #update_soup.command.insert(0, manifest_tag)
-        ch.command_soup.command.insert(0, manifest_tag)
+        self.ch.command_soup.command.insert(0, manifest_tag)
 
         new_locked_widget = SortableImageWidgetItem(os.path.join(self.parent.opts.resources_path,
                                                                  'icons', new_image_name),
@@ -6462,7 +6463,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.installed_books[book_id].pin = new_pin_value
 
             # Add the book to the manifest
-            book_tag = Tag(ch.command_soup, 'book')
+            book_tag = Tag(self.ch.command_soup, 'book')
             book_tag['author'] = escape(', '.join(self.installed_books[book_id].authors))
             book_tag['filename'] = self.installed_books[book_id].path
             book_tag['title'] = self.installed_books[book_id].title
@@ -6484,15 +6485,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._busy_status_setup(msg=self.UPDATING_MARVIN_MESSAGE)
 
         #results = self._issue_command(command_name, update_soup, update_local_db=True)
-        ch.issue_command()
+        self.ch.issue_command()
 
         self._busy_status_teardown()
 
         if update_gui:
             updateCalibreGUIView()
 
-        if ch.results['code']:
-            return self._show_command_error('update_locked_status', ch.results)
+        if self.ch.results['code']:
+            return self._show_command_error('update_locked_status', self.ch.results)
 
         # Update the local db
         if update_local_db:
@@ -6547,9 +6548,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location("'{0}' cid:{1}".format(mi.title, cid))
         #self._log("mismatches:\n%s" % mismatches)
 
-        ch = CommandHandler(self)
-        ch.construct_metadata_command(cmd_name='update_metadata', cmd_element="updatemetadata")
-        update_soup = self._build_metadata_update(book_id, cid, mi, mismatches, ch.command_soup)
+        self.ch = CommandHandler(self)
+        self.ch.construct_metadata_command(cmd_name='update_metadata', cmd_element="updatemetadata")
+        update_soup = self._build_metadata_update(book_id, cid, mi, mismatches, self.ch.command_soup)
         #command_name = "update_metadata"
         #update_soup = self._build_metadata_update(book_id, cid, mi, mismatches)
 
@@ -6559,9 +6560,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             #return self._show_command_error('_update_marvin_metadata', results)
             return results
         """
-        ch.issue_command()
-        if ch.results['code']:
-            return ch.results
+        self.ch.issue_command()
+        if self.ch.results['code']:
+            return self.ch.results
 
         # Update the local db
         if update_local_db:
