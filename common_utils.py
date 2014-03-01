@@ -16,6 +16,7 @@ from lxml import etree
 from threading import Timer
 from time import sleep
 
+from calibre import sanitize_file_name
 from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup, Tag
@@ -529,25 +530,31 @@ class InventoryCollections(QThread):
                                 self.heatmap[ca] += 1
 
 
-class MoveBackup(QThread):
+class MoveBackup(QThread, Logger):
     '''
     Move a (potentially large) backup file from connected device to local fs
     '''
-    def __init__(self, parent, backup_folder, destination_folder):
+    def __init__(self, parent, backup_folder, destination_folder, storage_name):
         QThread.__init__(self, parent)
         self.ios = parent.ios
         self.backup_folder = backup_folder
         self.destination_folder = destination_folder
         self.src = "{0}/marvin.backup".format(backup_folder)
-        self.dst = os.path.join(destination_folder, 'marvin.backup')
+        self.dst = os.path.join(destination_folder, sanitize_file_name(storage_name))
 
     def run(self):
-        if os.path.isfile(self.dst):
-            os.remove(self.dst)
-        with open(self.dst, 'wb') as out:
-            self.ios.copy_from_idevice(self.src, out)
-        self.ios.remove(self.src)
-        self.ios.remove(self.backup_folder)
+        self._log_location()
+        try:
+            if os.path.isfile(self.dst):
+                os.remove(self.dst)
+            with open(self.dst, 'wb') as out:
+                self.ios.copy_from_idevice(self.src, out)
+            self.ios.remove(self.src)
+            self.ios.remove(self.backup_folder)
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
 
 class RestoreBackup(QThread):
     '''
@@ -663,6 +670,7 @@ class CommandHandler(Logger):
         '''
         self._log_location("type={0}".format(cmd_type))
         self.command_name = 'command'
+        self.command_type = cmd_type
         self.command_soup = BeautifulStoneSoup(self.GENERAL_COMMAND_XML.format(
             cmd_type, time.mktime(time.localtime())))
 
@@ -673,12 +681,6 @@ class CommandHandler(Logger):
         self.command_name = cmd_name
         self.command_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
             cmd_element, time.mktime(time.localtime())))
-
-    def delete_response(self):
-        '''
-        Delete the get_response file
-        '''
-
 
     def issue_command(self, get_response=None, timeout_override=None):
         '''
@@ -745,6 +747,10 @@ class CommandHandler(Logger):
                 self._log(self.command_soup.prettify())
 
         if self.prefs.get('execute_marvin_commands', True):
+            # Make sure there is no orphan status.xml from a previous timeout
+            if self.ios.exists(self.connected_device.status_fs):
+                self.ios.remove(self.connected_device.status_fs)
+
             tmp = b'/'.join([self.connected_device.staging_folder, b'%s.tmp' % self.command_name])
             final = b'/'.join([self.connected_device.staging_folder, b'%s.xml' % self.command_name])
             self.ios.write(self.command_soup.renderContents(), tmp)
@@ -900,11 +906,16 @@ class CommandHandler(Logger):
                     results = {'code': int(final_code), 'status': final_status}
 
                     '''
-                    if True and command_name == 'update_metadata':
+                    if True:
                         # *** Fake some errors to test ***
-                        self._log("***falsifying error reporting***")
-                        results = {'code': 2, 'status': 'completed with errors',
-                            'details': "[Title - Author.epub] Cannot locate book to update metadata - skipping"}
+                        if self.command_name == 'update_metadata':
+                            self._log("***falsifying update_metadata error***")
+                            results = {'code': 2, 'status': 'completed with errors',
+                                'details': "[Title - Author.epub] Cannot locate book to update metadata - skipping"}
+                        elif self.command_name == 'command' and self.command_type == 'backup':
+                            self._log("***falsifying backup error***")
+                            results = {'code': 2, 'status': 'completed with errors',
+                                'details': "Insufficient space available to create backup"}
                     '''
 
                     # Get the response file from the staging folder
@@ -921,11 +932,15 @@ class CommandHandler(Logger):
                     self.ios.remove(self.connected_device.status_fs)
 
                     if final_code not in ['0']:
-                        if final_code == '3':
+                        if final_code == '-1' and self.operation_timed_out:
+                            msgs = ['Operation timed out',
+                                    'timeout_value: {0} seconds'.format(timeout_value)]
+                        elif final_code == '3':
                             msgs = ['operation cancelled by user']
                         else:
                             messages = status.find('messages')
                             msgs = [msg.text for msg in messages]
+
                         details = '\n'.join(["code: %s" % final_code, "status: %s" % final_status])
                         details += '\n'.join(msgs)
                         results['details'] = '\n'.join(msgs)

@@ -10,6 +10,7 @@ __docformat__ = 'restructuredtext en'
 
 import atexit, cPickle as pickle, os, re, sqlite3, sys, threading
 
+from datetime import datetime
 from functools import partial
 from lxml import etree, html
 from zipfile import ZipFile
@@ -72,7 +73,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         iPad1:      500 books in 90 seconds - 5.5 books/second
         iPad Mini:  500 books in 64 seconds - 7.8 books/second
         '''
-        WORST_CASE_ARCHIVE_RATE = 5.0  # Books/second
+        WORST_CASE_ARCHIVE_RATE = 4.0  # Books/second
         TIMEOUT_PADDING_FACTOR = 1.5
 
         def _count_books():
@@ -116,6 +117,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if not dlg.exec_():
                 self._log("user declined to proceed with estimated_time of %s" % estimated_time)
                 return
+        else:
+            timeout = CommandHandler.WATCHDOG_TIMEOUT
 
         # Check for existing backup before overwriting
         # stats['st_mtime'], stats['st_size']
@@ -123,8 +126,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
         backup_location = b'/'.join(['/Documents', 'Backup', 'marvin.backup'])
         stats = self.ios.exists(backup_location)
         if stats:
-            self._log(stats)
-            from datetime import datetime
             d = datetime.fromtimestamp(float(stats['st_mtime']))
             friendly_date = d.strftime("%A, %B %d, %Y")
             friendly_time = d.strftime("%I:%M%p")
@@ -145,14 +146,22 @@ class MarvinManagerAction(InterfaceAction, Logger):
             total_books, self.ios.device_name))
         ch = CommandHandler(self)
         ch.construct_general_command('backup')
-        ch.issue_command()
+
+        # ****** Force timeout *****
+        if True:
+            ch.issue_command(timeout_override=timeout)
+        else:
+            # Force a timeout error
+            ch.issue_command(timeout_override=2)
+
         self._busy_panel_teardown()
 
         if ch.results['code']:
             self._log("results: %s" % ch.results)
             title = "Backup unsuccessful"
-            msg = ('<p>Unable to create backup.</p>'
-                   '<p>Click <b>Show details</b> for more information.</p>')
+            msg = ('<p>Unable to create backup of {0}.</p>'
+                   '<p>Click <b>Show details</b> for more information.</p>').format(
+                   self.ios.device_name)
             det_msg = ch.results['details']
             MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg).exec_()
             return
@@ -160,26 +169,36 @@ class MarvinManagerAction(InterfaceAction, Logger):
         # Move backup to the specified location
         stats = self.ios.exists(backup_location)
         if stats:
+            dn = self.ios.device_name
+            d = datetime.fromtimestamp(float(stats['st_mtime']))
+            storage_name = "{0} {1}.backup".format(
+                self.ios.device_name, d.strftime("%Y-%m-%d"))
             destination_folder = str(QFileDialog.getExistingDirectory(
                 self.gui,
-                "Select destination folder for marvin.backup",
+                "Select destination folder for backup",
                 os.path.expanduser("~"),
                 QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks))
 
-            # Move from iDevice to destination_folder
-            move_operation = MoveBackup(self, backup_folder, destination_folder)
-            msg = '<p>Moving marvin.backup ({0:,} bytes)…</p>'.format(
-                   int(stats['st_size']))
-            self._busy_panel_setup(msg)
-            move_operation.start()
-            while not move_operation.isFinished():
-                Application.processEvents()
-            self._busy_panel_teardown()
+            if destination_folder:
+                # Move from iDevice to destination_folder
+                move_operation = MoveBackup(self, backup_folder, destination_folder, storage_name)
+                msg = '<p>Moving marvin.backup ({0:,} bytes)…</p>'.format(
+                       int(stats['st_size']))
+                self._busy_panel_setup(msg)
+                move_operation.start()
+                while not move_operation.isFinished():
+                    Application.processEvents()
+                self._busy_panel_teardown()
 
-            # Inform user backup operation is complete
-            title = "Backup operation complete"
-            msg = '<p>Marvin library has been backed up to {0}.</p>'.format(destination_folder)
-            MessageBox(MessageBox.INFO, title, msg).exec_()
+                # Inform user backup operation is complete
+                title = "Backup operation complete"
+                msg = '<p>Marvin library has been backed up to {0}.</p>'.format(destination_folder)
+                MessageBox(MessageBox.INFO, title, msg).exec_()
+            else:
+                # Inform user backup operation cancelled
+                title = "Backup operation cancelled"
+                msg = '<p>Backup operation cancelled.</p>'
+                MessageBox(MessageBox.WARNING, title, msg).exec_()
         else:
             self._log("No backup file found at {0}".format(backup_location))
 
@@ -913,17 +932,18 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
                 # Backup/restore
-                m.addSeparator()
-                #if self.connected_device.marvin_version >= (2, 7, 0):
-                action = 'Create backup'
-                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                ac = self.create_menu_item(m, action, image=icon)
-                ac.triggered.connect(partial(self.developer_utilities, action))
+                if hasattr(self.connected_device, 'local_db_path'):
+                    m.addSeparator()
+                    #if self.connected_device.marvin_version >= (2, 7, 0):
+                    action = 'Create backup'
+                    icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+                    ac = self.create_menu_item(m, action, image=icon)
+                    ac.triggered.connect(partial(self.developer_utilities, action))
 
-                action = 'Restore from backup'
-                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                ac = self.create_menu_item(m, action, image=icon)
-                ac.triggered.connect(partial(self.developer_utilities, action))
+                    action = 'Restore from backup'
+                    icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+                    ac = self.create_menu_item(m, action, image=icon)
+                    ac.triggered.connect(partial(self.developer_utilities, action))
 
             # Process Dropbox sync records automatically once only.
             if process_dropbox:
@@ -983,11 +1003,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self.gui,
             "Select Marvin backup file to restore",
             os.path.expanduser("~"),
-            "marvin.backup")
+            "*.backup")
         if source:
             copy_operation = RestoreBackup(self, source)
-            self._busy_panel_setup("Copying marvin.backup ({0:,} bytes)\nto {1}…".format(
-                copy_operation.src_size, self.ios.device_name))
+            self._busy_panel_setup("<p>Copying {0} ({1:,} bytes)<br/>to {2}…</p>".format(
+                os.path.basename(str(source)),
+                copy_operation.src_size,
+                self.ios.device_name))
             copy_operation.start()
             while not copy_operation.isFinished():
                 Application.processEvents()
