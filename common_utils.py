@@ -766,9 +766,9 @@ class CommandHandler(Logger):
         from 0.0 to 1.0 as command progresses.
         '''
 
-        msg = ''
+        msg = "timeout: {0}".format(self.WATCHDOG_TIMEOUT)
         if self.timeout_override:
-            msg = "using timeout_override %d" % self.timeout_override
+            msg = "timeout_override: {0}".format(self.timeout_override)
         self._log_location(msg)
 
         results = {'code': 0}

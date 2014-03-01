@@ -104,6 +104,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             estimated_time = "%d:%02d" % (m, s)
 
         # If this is going to take some time, warn the user
+        self._log("estimated time to backup {0} books: {1}".format(total_books, estimated_time))
         if timeout > CommandHandler.WATCHDOG_TIMEOUT:
             # Confirm that user wants to proceed given estimated time to completion
             book_descriptor = "books" if total_books > 1 else "book"
@@ -115,7 +116,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             dlg = MessageBox(MessageBox.QUESTION, title, msg,
                              show_copy_button=False)
             if not dlg.exec_():
-                self._log("user declined to proceed with estimated_time of %s" % estimated_time)
+                self._log("user cancelled backup")
                 return
         else:
             timeout = CommandHandler.WATCHDOG_TIMEOUT
@@ -196,9 +197,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 MessageBox(MessageBox.INFO, title, msg).exec_()
             else:
                 # Inform user backup operation cancelled
-                title = "Backup operation cancelled"
-                msg = '<p>Backup operation cancelled.</p>'
-                MessageBox(MessageBox.WARNING, title, msg).exec_()
+                title = "Backup cancelled"
+                msg = '<p>Backup of {0} cancelled.</p>'.format(self.ios.device_name)
+                MessageBox(MessageBox.WARNING, title, msg, show_copy_button=False).exec_()
         else:
             self._log("No backup file found at {0}".format(backup_location))
 
