@@ -147,14 +147,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             total_books, self.ios.device_name))
         ch = CommandHandler(self)
         ch.construct_general_command('backup')
-
-        # ****** Force timeout *****
-        if True:
-            ch.issue_command(timeout_override=timeout)
-        else:
-            # Force a timeout error
-            ch.issue_command(timeout_override=2)
-
+        ch.issue_command(timeout_override=timeout)
         self._busy_panel_teardown()
 
         if ch.results['code']:
@@ -181,8 +174,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks))
 
             if destination_folder:
+                # Qt apparently sometimes returns a file within the selected directory,
+                # rather than the directory itself. Validate destination_folder
+                if not os.path.isdir(destination_folder):
+                    destination_folder = os.path.dirname(destination_folder)
+
                 # Move from iDevice to destination_folder
-                move_operation = MoveBackup(self, backup_folder, destination_folder, storage_name)
+                move_operation = MoveBackup(self, backup_folder, destination_folder, storage_name, stats)
                 msg = '<p>Moving marvin.backup ({0:,} bytes)…</p>'.format(
                        int(stats['st_size']))
                 self._busy_panel_setup(msg)

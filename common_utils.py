@@ -534,26 +534,46 @@ class MoveBackup(QThread, Logger):
     '''
     Move a (potentially large) backup file from connected device to local fs
     '''
-    def __init__(self, parent, backup_folder, destination_folder, storage_name):
+    def __init__(self, parent, backup_folder, destination_folder, storage_name, src_stats):
         QThread.__init__(self, parent)
-        self.ios = parent.ios
         self.backup_folder = backup_folder
         self.destination_folder = destination_folder
-        self.src = "{0}/marvin.backup".format(backup_folder)
         self.dst = os.path.join(destination_folder, sanitize_file_name(storage_name))
+        self.ios = parent.ios
+        self.src = "{0}/marvin.backup".format(backup_folder)
+        self.src_stats = src_stats
+        self.success = None
 
     def run(self):
-        self._log_location()
-        try:
-            if os.path.isfile(self.dst):
-                os.remove(self.dst)
-            with open(self.dst, 'wb') as out:
-                self.ios.copy_from_idevice(self.src, out)
-            self.ios.remove(self.src)
-            self.ios.remove(self.backup_folder)
-        except:
-            import traceback
-            self._log(traceback.format_exc())
+        # Remove any older file of the same name at destination
+        if os.path.isfile(self.dst):
+            os.remove(self.dst)
+
+        # Copy from the iDevice to destination
+        with open(self.dst, 'wb') as out:
+            self.ios.copy_from_idevice(self.src, out)
+
+        # Validate transferred file sizes, do cleanup
+        self._verify()
+
+    def _cleanup(self):
+        self.ios.remove(self.src)
+        self.ios.remove(self.backup_folder)
+
+    def _verify(self):
+        '''
+        Confirm that the file was properly transferred
+        '''
+        src_size = int(self.src_stats['st_size'])
+        dst_size = os.stat(self.dst).st_size
+        self.success = (src_size == dst_size)
+        self._log_location('backup verified' if self.success else '')
+        if self.success:
+            self._cleanup()
+        else:
+            self._log("file sizes did not match:")
+            self._log("src_size: {0}".format(src_size))
+            self._log("dst_size: {0}".format(dst_size))
 
 
 class RestoreBackup(QThread):
@@ -563,19 +583,18 @@ class RestoreBackup(QThread):
     def __init__(self, parent, backup_image):
         QThread.__init__(self, parent)
         self.ios = parent.ios
-        #self.signal = SIGNAL("restore_backup_complete")
         self.src = backup_image
         self.src_size = os.stat(self.src).st_size
+        self.success = None
 
     def run(self):
         tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
         self.dst = b'/'.join(['/Documents', 'marvin.backup'])
         self.ios.copy_to_idevice(self.src, tmp)
         self.ios.rename(tmp, self.dst)
-        self.verify()
-        #self.emit(self.signal)
+        self._verify()
 
-    def verify(self):
+    def _verify(self):
         '''
         Confirm source size == dest size
         '''
@@ -585,7 +604,10 @@ class RestoreBackup(QThread):
             self.dst_size = -1
 
         if self.src_size != self.dst_size:
+            self.success = False
             self.ios.remove(self.dst)
+        else:
+            self.success = True
 
 
 class RowFlasher(QThread):
