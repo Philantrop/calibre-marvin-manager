@@ -989,7 +989,6 @@ class CommandHandler(Logger):
         self.operation_timed_out = True
 
 
-
 class CompileUI():
     '''
     Compile Qt Creator .ui files at runtime

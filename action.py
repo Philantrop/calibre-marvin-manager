@@ -75,6 +75,49 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         WORST_CASE_ARCHIVE_RATE = 4.0  # Books/second
         TIMEOUT_PADDING_FACTOR = 1.5
+        backup_folder = b'/'.join(['/Documents', 'Backup'])
+        backup_target = backup_folder + '/marvin.backup'
+        last_backup_folder = self.prefs.get('backup_folder', os.path.expanduser("~"))
+
+        def _confirm_overwrite():
+            '''
+            Check for existing backup before overwriting
+            stats['st_mtime'], stats['st_size']
+            Return True: continue
+            Return False: cancel
+            '''
+            stats = self.ios.exists(backup_target)
+            if stats:
+                d = datetime.fromtimestamp(float(stats['st_mtime']))
+                friendly_date = d.strftime("%A, %B %d, %Y")
+                friendly_time = d.strftime("%I:%M%p")
+
+                title = "A backup already exists!"
+                msg = ('<p>There is an existing backup created ' +
+                       '{0} at {1}.</p>'
+                       '<p>Proceeding with this backup will '
+                       'overwrite the existing backup.</p>'
+                       '<p>Proceed?</p>'.format(friendly_date, friendly_time))
+                dlg = MessageBox(MessageBox.QUESTION, title, msg,
+                                 show_copy_button=False)
+                return dlg.exec_()
+            return True
+
+        def _confirm_lengthy_backup():
+            '''
+            If this is going to take some time, warn the user
+            '''
+            self._log("estimated time to backup {0} books: {1}".format(total_books, estimated_time))
+            # Confirm that user wants to proceed given estimated time to completion
+            book_descriptor = "books" if total_books > 1 else "book"
+            title = "Estimated time to create backup"
+            msg = ("<p>Creating a backup of " +
+                   "{0} books ".format(total_books) +
+                   "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
+                   "<p>Proceed?</p>")
+            dlg = MessageBox(MessageBox.QUESTION, title, msg,
+                             show_copy_button=False)
+            return dlg.exec_()
 
         def _count_books():
             # Get a count of the books
@@ -89,60 +132,34 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 rows = cur.fetchall()
             return(len(rows))
 
+        def _estimate_time():
+            # Estimate worst-case time required to create backup
+            m, s = divmod(total_seconds, 60)
+            h, m = divmod(m, 60)
+            if h:
+                estimated_time = "%d:%02d:%02d" % (h, m, s)
+            else:
+                estimated_time = "%d:%02d" % (m, s)
+            return estimated_time
+
+        # ~~~ Entry point ~~~
         self._log_location()
         total_books = _count_books()
-
-        # Estimate worst-case time required to create backup
         total_seconds = int(total_books/WORST_CASE_ARCHIVE_RATE) + 1
         timeout = int(total_seconds * TIMEOUT_PADDING_FACTOR)
+        estimated_time = _estimate_time()
 
-        m, s = divmod(total_seconds, 60)
-        h, m = divmod(m, 60)
-        if h:
-            estimated_time = "%d:%02d:%02d" % (h, m, s)
-        else:
-            estimated_time = "%d:%02d" % (m, s)
-
-        # If this is going to take some time, warn the user
-        self._log("estimated time to backup {0} books: {1}".format(total_books, estimated_time))
         if timeout > CommandHandler.WATCHDOG_TIMEOUT:
-            # Confirm that user wants to proceed given estimated time to completion
-            book_descriptor = "books" if total_books > 1 else "book"
-            title = "Estimated time to create backup"
-            msg = ("<p>Creating a backup of " +
-                   "{0} books ".format(total_books) +
-                   "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
-                   "<p>Proceed?</p>")
-            dlg = MessageBox(MessageBox.QUESTION, title, msg,
-                             show_copy_button=False)
-            if not dlg.exec_():
-                self._log("user cancelled backup")
+            if not _confirm_lengthy_backup():
                 return
         else:
             timeout = CommandHandler.WATCHDOG_TIMEOUT
 
-        # Check for existing backup before overwriting
-        # stats['st_mtime'], stats['st_size']
-        backup_folder = b'/'.join(['/Documents', 'Backup'])
-        backup_location = b'/'.join(['/Documents', 'Backup', 'marvin.backup'])
-        stats = self.ios.exists(backup_location)
-        if stats:
-            d = datetime.fromtimestamp(float(stats['st_mtime']))
-            friendly_date = d.strftime("%A, %B %d, %Y")
-            friendly_time = d.strftime("%I:%M%p")
+        if not _confirm_overwrite():
+            self._log("user declined to overwrite existing backup")
+            return
 
-            title = "A backup already exists!"
-            msg = ('<p>There is an existing backup created ' +
-                   '{0} at {1}.</p>'
-                   '<p>Proceeding with this backup will '
-                   'overwrite the existing backup.</p>'
-                   '<p>Proceed?</p>'.format(friendly_date, friendly_time))
-            dlg = MessageBox(MessageBox.QUESTION, title, msg,
-                             show_copy_button=False)
-            if not dlg.exec_():
-                self._log("user declined to overwrite existing backup")
-                return
-
+        # Issue the command
         self._busy_panel_setup("Backing up {0:,} books from {1}…".format(
             total_books, self.ios.device_name))
         ch = CommandHandler(self)
@@ -161,7 +178,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             return
 
         # Move backup to the specified location
-        stats = self.ios.exists(backup_location)
+        stats = self.ios.exists(backup_target)
         if stats:
             dn = self.ios.device_name
             d = datetime.fromtimestamp(float(stats['st_mtime']))
@@ -170,7 +187,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             destination_folder = str(QFileDialog.getExistingDirectory(
                 self.gui,
                 "Select destination folder for backup",
-                os.path.expanduser("~"),
+                last_backup_folder,
                 QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks))
 
             if destination_folder:
@@ -193,13 +210,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 title = "Backup operation complete"
                 msg = '<p>Marvin library has been backed up to {0}.</p>'.format(destination_folder)
                 MessageBox(MessageBox.INFO, title, msg).exec_()
+
+                # Save the backup folder
+                self.prefs.set('backup_folder', destination_folder)
             else:
                 # Inform user backup operation cancelled
                 title = "Backup cancelled"
                 msg = '<p>Backup of {0} cancelled.</p>'.format(self.ios.device_name)
                 MessageBox(MessageBox.WARNING, title, msg, show_copy_button=False).exec_()
         else:
-            self._log("No backup file found at {0}".format(backup_location))
+            self._log("No backup file found at {0}".format(backup_target))
 
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
@@ -1001,9 +1021,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
         source = QFileDialog.getOpenFileName(
             self.gui,
             "Select Marvin backup file to restore",
-            os.path.expanduser("~"),
+            self.prefs.get('backup_folder', os.path.expanduser("~")),
             "*.backup")
         if source:
+            # Save the selected backup folder
+            self.prefs.set('backup_folder', os.path.dirname(str(source)))
+
             copy_operation = RestoreBackup(self, source)
             self._busy_panel_setup("<p>Copying {0} ({1:,} bytes)<br/>to {2}…</p>".format(
                 os.path.basename(str(source)),
