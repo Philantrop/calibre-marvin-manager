@@ -13,7 +13,7 @@ import atexit, cPickle as pickle, os, re, sqlite3, sys, threading
 from datetime import datetime
 from functools import partial
 from lxml import etree, html
-from zipfile import ZipFile
+from zipfile import ZipFile, is_zipfile
 
 from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QIcon,
                       QMenu, QTimer, QUrl,
@@ -1018,19 +1018,51 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self._log_location()
 
         # Get the backup file
-        source = QFileDialog.getOpenFileName(
+        source = unicode(QFileDialog.getOpenFileName(
             self.gui,
             "Select Marvin backup file to restore",
             self.prefs.get('backup_folder', os.path.expanduser("~")),
-            "*.backup")
+            "*.backup").toUtf8())
         if source:
+            # Analyze the candidate file
+            if not is_zipfile(source):
+                title = "Invalid backup file"
+                msg = "{0} is not a valid Marvin backup image.".format(source)
+                return MessageBox(MessageBox.WARNING, title, msg, show_copy_button=False).exec_()
+
+            archive = ZipFile(source, 'r')
+            archive_list = archive.infolist()
+            epub_count = 0
+            for f in archive_list:
+                if f.filename.lower().endswith('.epub'):
+                    epub_count += 1
+
+            backup_source = ''
+            components = re.match(r'(.*?) (\d{4}-\d{2}-\d{2})', os.path.basename(source))
+            if components:
+                backup_source = components.group(1)
+
+            ts = os.path.getmtime(source)
+            dt = datetime.fromtimestamp(ts)
+            backup_date = dt.strftime("%A, %b %e %Y")
+
+            # Confirm
+            title = "Confirm restore operation"
+            msg = "<p>This will restore a backup of <b>{0} books</b>".format(
+                epub_count)
+            if backup_source:
+                msg += ", from <b>{0}</b>,".format(backup_source)
+            msg += (" created {0}, to <b>{1}</b>.</p>"
+                    '<p>Proceed?</p>').format(backup_date, self.ios.device_name)
+            if not MessageBox(MessageBox.QUESTION, title, msg, show_copy_button=False).exec_():
+                return
+
             # Save the selected backup folder
-            self.prefs.set('backup_folder', os.path.dirname(str(source)))
+            self.prefs.set('backup_folder', os.path.dirname(source))
 
             copy_operation = RestoreBackup(self, source)
-            self._busy_panel_setup("<p>Copying {0} ({1:,} bytes)<br/>to {2}…</p>".format(
-                os.path.basename(str(source)),
-                copy_operation.src_size,
+            self._busy_panel_setup("<p>Restoring {0} books to {1}…</p>".format(
+                epub_count,
                 self.ios.device_name))
             copy_operation.start()
             while not copy_operation.isFinished():
