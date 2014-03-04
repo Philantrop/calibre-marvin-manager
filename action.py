@@ -142,8 +142,35 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 estimated_time = "%d:%02d" % (m, s)
             return estimated_time
 
+        def _estimate_size():
+            '''
+            Estimate uncompressed size of backup
+            backup.xml approximately 4kB
+            '''
+            SMALL_COVER_AVERAGE = 25000
+            LARGE_COVER_AVERAGE = 100000
+
+            estimated_size = 0
+
+            books_size = 0
+            for book in self.connected_device.cached_books:
+                books_size += self.connected_device.cached_books[book]['size']
+                books_size += SMALL_COVER_AVERAGE
+                books_size += LARGE_COVER_AVERAGE
+
+            estimated_size += books_size
+
+            # Add size of mainDb
+            mdbs = os.stat(self.connected_device.local_db_path).st_size
+            estimated_size += mdbs
+
+            self._log("estimated size of uncompressed backup: {:,}".format(estimated_size))
+            return estimated_size
+
         # ~~~ Entry point ~~~
         self._log_location()
+
+        estimated_size = _estimate_size()
         total_books = _count_books()
         total_seconds = int(total_books/WORST_CASE_ARCHIVE_RATE) + 1
         timeout = int(total_seconds * TIMEOUT_PADDING_FACTOR)
