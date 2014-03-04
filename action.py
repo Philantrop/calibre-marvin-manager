@@ -977,19 +977,23 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
-                # Backup/restore
-                if hasattr(self.connected_device, 'local_db_path'):
-                    m.addSeparator()
-                    #if self.connected_device.marvin_version >= (2, 7, 0):
-                    action = 'Create backup'
-                    icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                    ac = self.create_menu_item(m, action, image=icon)
-                    ac.triggered.connect(partial(self.developer_utilities, action))
+                # Backup/restore: Wait for jobs to init and complete before enabling
+                #if self.connected_device.marvin_version > (2, 7, 0):
 
-                    action = 'Restore from backup'
-                    icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                    ac = self.create_menu_item(m, action, image=icon)
-                    ac.triggered.connect(partial(self.developer_utilities, action))
+                enabled = (hasattr(self.connected_device, 'local_db_path') and
+                           not self.gui.job_manager.unfinished_jobs())
+                m.addSeparator()
+                action = 'Create backup'
+                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+                ac = self.create_menu_item(m, action, image=icon)
+                ac.triggered.connect(partial(self.developer_utilities, action))
+                ac.setEnabled(enabled)
+
+                action = 'Restore from backup'
+                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+                ac = self.create_menu_item(m, action, image=icon)
+                ac.triggered.connect(partial(self.developer_utilities, action))
+                ac.setEnabled(enabled)
 
             # Process Dropbox sync records automatically once only.
             if process_dropbox:
