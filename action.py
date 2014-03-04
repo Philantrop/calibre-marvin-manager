@@ -73,7 +73,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         iPad1:      500 books in 90 seconds - 5.5 books/second
         iPad Mini:  500 books in 64 seconds - 7.8 books/second
         '''
-        WORST_CASE_ARCHIVE_RATE = 4.0  # Books/second
+        WORST_CASE_ARCHIVE_RATE = 2000000   # MB/second
         TIMEOUT_PADDING_FACTOR = 1.5
         backup_folder = b'/'.join(['/Documents', 'Backup'])
         backup_target = backup_folder + '/marvin.backup'
@@ -172,7 +172,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
         estimated_size = _estimate_size()
         total_books = _count_books()
-        total_seconds = int(total_books/WORST_CASE_ARCHIVE_RATE) + 1
+        total_seconds = int(estimated_size/WORST_CASE_ARCHIVE_RATE)
         timeout = int(total_seconds * TIMEOUT_PADDING_FACTOR)
         estimated_time = _estimate_time()
 
