@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import atexit, cPickle as pickle, os, re, sqlite3, sys, threading
+import atexit, cPickle as pickle, os, re, shutil, sqlite3, sys, tempfile, threading
 
 from datetime import datetime
 from functools import partial
@@ -29,6 +29,7 @@ from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.library import current_library_name
+from calibre.ptempfile import PersistentTemporaryDirectory
 from calibre.utils.config import config_dir
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
@@ -223,19 +224,73 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 if not os.path.isdir(destination_folder):
                     destination_folder = os.path.dirname(destination_folder)
 
-                # Move from iDevice to destination_folder
-                move_operation = MoveBackup(self, backup_folder, destination_folder, storage_name, stats)
-                msg = '<p>Moving marvin.backup ({0:,} bytes)…</p>'.format(
-                       int(stats['st_size']))
+                # Display status
+                msg = '<p>Moving backup ({0:,}MB) to {1}…</p>'.format(
+                       int(int(stats['st_size'])/(1024*1024)), destination_folder)
                 self._busy_panel_setup(msg)
-                move_operation.start()
-                while not move_operation.isFinished():
-                    Application.processEvents()
+
+                if False:
+                    # Move from iDevice to destination_folder
+                    move_operation = MoveBackup(self, backup_folder, destination_folder,
+                        storage_name, stats)
+                    move_operation.start()
+                    while not move_operation.isFinished():
+                        Application.processEvents()
+                else:
+                    # Add in plugins/Marvin_XD_resources/GwR_iPhone_5s_cover_hashes.json,
+                    # /Library/calibre.mm/content_hashes.db,
+                    # self.installed_books (MXD state) if available
+                    # Move from iDevice to temporary file
+                    temp_dir = PersistentTemporaryDirectory()
+                    temp_zip = os.path.join(temp_dir, storage_name)
+                    move_operation = MoveBackup(self, backup_folder, temp_dir,
+                        storage_name, stats)
+                    move_operation.start()
+                    while not move_operation.isFinished():
+                        Application.processEvents()
+
+                    # Append MXD state
+                    zfa = ZipFile(temp_zip, mode='a')
+
+                    # Local calibre cover hashes
+                    device_cached_hashes = "{0}_cover_hashes.json".format(
+                        re.sub('\W', '_', self.ios.device_name))
+                    dch = os.path.join(self.resources_path, device_cached_hashes)
+                    if os.path.exists(dch):
+                        zfa.write(dch, arcname="mxd_cover_hashes.json")
+
+                    # Remote content hashes
+                    rhc = b'/'.join(['/Library', 'calibre.mm',
+                                     BookStatusDialog.HASH_CACHE_FS])
+                    if self.ios.exists(rhc):
+                        base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
+                        thc = os.path.join(temp_dir, base_name)
+                        with open(thc, 'wb') as out:
+                            self.ios.copy_from_idevice(rhc, out)
+                        zfa.write(thc, arcname=base_name)
+
+                    # self.installed_books
+                    if self.installed_books:
+                        base_name = "mxd_installed_books.pickle"
+                        tib = os.path.join(temp_dir, base_name)
+                        with open(tib, 'wb') as out:
+                            pickle.dump(self.installed_books, out, pickle.HIGHEST_PROTOCOL)
+                        zfa.write(tib, arcname=base_name)
+
+                    zfa.close()
+
+                    # Move temp_zip to destination folder
+                    destination_fs = os.path.join(destination_folder, storage_name)
+                    if os.path.exists(destination_fs):
+                        os.remove(destination_fs)
+                    shutil.move(temp_zip, destination_folder)
+
                 self._busy_panel_teardown()
+
 
                 # Inform user backup operation is complete
                 title = "Backup operation complete"
-                msg = '<p>Marvin library has been backed up to {0}.</p>'.format(destination_folder)
+                msg = '<p>Marvin library backed up to {0}.</p>'.format(destination_folder)
                 MessageBox(MessageBox.INFO, title, msg).exec_()
 
                 # Save the backup folder
@@ -1108,6 +1163,37 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 # Delete cached Marvin data
                 self.developer_utilities('Delete Marvin hashes')
 
+                # Recover cached Marvin data if available
+                try:
+                    cover_hash_data = archive.read('mxd_cover_hashes.json')
+                    device_cached_hashes = "{0}_cover_hashes.json".format(
+                        re.sub('\W', '_', self.ios.device_name))
+                    ch_dst = os.path.join(self.resources_path, device_cached_hashes)
+                    with open(ch_dst, 'w') as out:
+                        out.write(cover_hash_data)
+                except:
+                    self._log('MXD cover hashes not found in archive')
+
+                try:
+                    content_hash_data = archive.read("mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS))
+                    temp_dir = PersistentTemporaryDirectory()
+                    temp_ch = os.path.join(temp_dir, BookStatusDialog.HASH_CACHE_FS)
+                    with open(temp_ch, 'w') as lhc:
+                        lhc.write(content_hash_data)
+                    # Copy to iDevice
+                    rhc = b'/'.join([BookStatusDialog.REMOTE_CACHE_FOLDER,
+                                    BookStatusDialog.HASH_CACHE_FS])
+                    self.ios.remove(rhc)
+                    self.ios.copy_to_idevice(temp_ch, rhc)
+                except:
+                    self._log('MXD content hashes not found in archive')
+
+                try:
+                    self.installed_books = pickle.loads(archive.read("mxd_installed_books.pickle"))
+                except:
+                    self._log('MXD installed_books not found in archive')
+                    self.installed_books = None
+
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
                 # Display dialog detailing how to complete restore
                 title = "Restore Marvin from backup"
@@ -1120,6 +1206,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        '</ul>'
                        ).format(self.ios.device_name)
                 d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+
 
             else:
                 self._log("Backup does not verify: source {0:,} dest {1:,}".format(
