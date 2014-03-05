@@ -229,61 +229,35 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        int(int(stats['st_size'])/(1024*1024)), destination_folder)
                 self._busy_panel_setup(msg)
 
-                if False:
-                    # Move from iDevice to destination_folder
-                    move_operation = MoveBackup(self, backup_folder, destination_folder,
-                        storage_name, stats)
-                    move_operation.start()
-                    while not move_operation.isFinished():
-                        Application.processEvents()
-                else:
-                    # Add in plugins/Marvin_XD_resources/GwR_iPhone_5s_cover_hashes.json,
-                    # /Library/calibre.mm/content_hashes.db,
-                    # self.installed_books (MXD state) if available
-                    # Move from iDevice to temporary file
-                    temp_dir = PersistentTemporaryDirectory()
-                    temp_zip = os.path.join(temp_dir, storage_name)
-                    move_operation = MoveBackup(self, backup_folder, temp_dir,
-                        storage_name, stats)
-                    move_operation.start()
-                    while not move_operation.isFinished():
-                        Application.processEvents()
+                # Merge MXD state with backup image
+                temp_dir = PersistentTemporaryDirectory()
+                zip_dst = os.path.join(destination_folder, storage_name)
 
-                    # Append MXD state
-                    zfa = ZipFile(temp_zip, mode='a')
+                # Init the class
+                move_operation = MoveBackup(self, backup_folder, destination_folder,
+                    storage_name, stats)
 
-                    # Local calibre cover hashes
-                    device_cached_hashes = "{0}_cover_hashes.json".format(
-                        re.sub('\W', '_', self.ios.device_name))
-                    dch = os.path.join(self.resources_path, device_cached_hashes)
-                    if os.path.exists(dch):
-                        zfa.write(dch, arcname="mxd_cover_hashes.json")
+                # Device cached hashes
+                device_cached_hashes = "{0}_cover_hashes.json".format(
+                    re.sub('\W', '_', self.ios.device_name))
+                dch = os.path.join(self.resources_path, device_cached_hashes)
+                if os.path.exists(dch):
+                    move_operation.mxd_device_cached_hashes = dch
 
-                    # Remote content hashes
-                    rhc = b'/'.join(['/Library', 'calibre.mm',
-                                     BookStatusDialog.HASH_CACHE_FS])
-                    if self.ios.exists(rhc):
-                        base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
-                        thc = os.path.join(temp_dir, base_name)
-                        with open(thc, 'wb') as out:
-                            self.ios.copy_from_idevice(rhc, out)
-                        zfa.write(thc, arcname=base_name)
+                # Remote content hashes
+                rhc = b'/'.join(['/Library', 'calibre.mm',
+                                 BookStatusDialog.HASH_CACHE_FS])
+                if self.ios.exists(rhc):
+                    base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
+                    thc = os.path.join(temp_dir, base_name)
+                    with open(thc, 'wb') as out:
+                        self.ios.copy_from_idevice(rhc, out)
+                    move_operation.mxd_remote_content_hashes = thc
+                    move_operation.mxd_remote_hash_cache_fs = BookStatusDialog.HASH_CACHE_FS
 
-                    # self.installed_books
-                    if self.installed_books:
-                        base_name = "mxd_installed_books.pickle"
-                        tib = os.path.join(temp_dir, base_name)
-                        with open(tib, 'wb') as out:
-                            pickle.dump(self.installed_books, out, pickle.HIGHEST_PROTOCOL)
-                        zfa.write(tib, arcname=base_name)
-
-                    zfa.close()
-
-                    # Move temp_zip to destination folder
-                    destination_fs = os.path.join(destination_folder, storage_name)
-                    if os.path.exists(destination_fs):
-                        os.remove(destination_fs)
-                    shutil.move(temp_zip, destination_folder)
+                move_operation.start()
+                while not move_operation.isFinished():
+                    Application.processEvents()
 
                 self._busy_panel_teardown()
 
@@ -1171,6 +1145,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     ch_dst = os.path.join(self.resources_path, device_cached_hashes)
                     with open(ch_dst, 'w') as out:
                         out.write(cover_hash_data)
+                    self._log("cover hashes restored")
                 except:
                     self._log('MXD cover hashes not found in archive')
 
@@ -1185,14 +1160,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                                     BookStatusDialog.HASH_CACHE_FS])
                     self.ios.remove(rhc)
                     self.ios.copy_to_idevice(temp_ch, rhc)
+                    self._log("content hashes restored")
                 except:
                     self._log('MXD content hashes not found in archive')
-
-                try:
-                    self.installed_books = pickle.loads(archive.read("mxd_installed_books.pickle"))
-                except:
-                    self._log('MXD installed_books not found in archive')
-                    self.installed_books = None
 
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
                 # Display dialog detailing how to complete restore
@@ -1201,6 +1171,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        '<ul>'
                        '<li>Touch <b>Disconnect</b> on the calibre connector</li>'
                        '<li>Press the Home button to return to the Home screen</li>'
+                       '<li>Double-click the Home button to display running apps</li>'
                        '<li>Force-quit Marvin</li>'
                        '<li>Restart Marvin</li>'
                        '</ul>'

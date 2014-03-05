@@ -15,6 +15,7 @@ from datetime import datetime
 from lxml import etree
 from threading import Timer
 from time import sleep
+from zipfile import ZipFile
 
 from calibre import sanitize_file_name
 from calibre.constants import iswindows
@@ -540,11 +541,14 @@ class MoveBackup(QThread, Logger):
         self.destination_folder = destination_folder
         self.dst = os.path.join(destination_folder, sanitize_file_name(storage_name))
         self.ios = parent.ios
+        self.mxd_device_cached_hashes = None
+        self.mxd_remote_content_hashes = None
         self.src = "{0}/marvin.backup".format(backup_folder)
         self.src_stats = src_stats
         self.success = None
 
     def run(self):
+        self._log_location()
         # Remove any older file of the same name at destination
         if os.path.isfile(self.dst):
             os.remove(self.dst)
@@ -556,9 +560,39 @@ class MoveBackup(QThread, Logger):
         # Validate transferred file sizes, do cleanup
         self._verify()
 
+        # Append MXD components
+        self._append_mxd_components()
+
+    def _append_mxd_components(self):
+        self._log_location()
+        try:
+            if (self.mxd_device_cached_hashes or
+                self.mxd_remote_content_hashes):
+
+                zfa = ZipFile(self.dst, mode='a')
+
+                if self.mxd_device_cached_hashes:
+                    base_name = "mxd_cover_hashes.json"
+                    zfa.write(self.mxd_device_cached_hashes, arcname=base_name)
+
+                if self.mxd_remote_content_hashes:
+                    from calibre_plugins.marvin_manager.book_status import BookStatusDialog
+                    base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
+                    zfa.write(self.mxd_remote_content_hashes, arcname=base_name)
+
+                zfa.close()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
     def _cleanup(self):
-        self.ios.remove(self.src)
-        self.ios.remove(self.backup_folder)
+        self._log_location()
+        try:
+            self.ios.remove(self.src)
+            self.ios.remove(self.backup_folder)
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def _verify(self):
         '''
