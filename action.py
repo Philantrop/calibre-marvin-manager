@@ -261,7 +261,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 self._busy_panel_teardown()
 
-
                 # Inform user backup operation is complete
                 title = "Backup operation complete"
                 msg = '<p>Marvin library backed up to {0}.</p>'.format(destination_folder)
