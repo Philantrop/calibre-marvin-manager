@@ -5012,8 +5012,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             this_book.cover_file = row[b'CoverFile']
                             this_book.date_added = row[b'DateAdded']
                             this_book.date_opened = row[b'DateOpened']
-                            this_book.device_collections = _get_collections(cur, book_id)
                             this_book.deep_view_prepared = row[b'DeepViewPrepared']
+                            this_book.device_collections = _get_collections(cur, book_id)
                             this_book.flags = _get_flags(cur, row)
                             this_book.hash = hashes[row[b'FileName']]['hash']
                             this_book.highlights = _get_highlights(cur, book_id)
