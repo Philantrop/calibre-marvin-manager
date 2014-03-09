@@ -1225,7 +1225,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.developer_utilities('Delete Marvin hashes')
 
                 # Recover cached Marvin data if available
-                try:
+                if 'mxd_cover_hashes.json' in archive.namelist():
                     cover_hash_data = archive.read('mxd_cover_hashes.json')
                     device_cached_hashes = "{0}_cover_hashes.json".format(
                         re.sub('\W', '_', self.ios.device_name))
@@ -1233,10 +1233,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     with open(ch_dst, 'w') as out:
                         out.write(cover_hash_data)
                     self._log("cover hashes restored")
-                except:
+                else:
                     self._log('MXD cover hashes not found in archive')
 
-                try:
+                if 'mxd_{0}'.format(BookStatusDialog.HASH_CACHE_FS) in archive.namelist():
                     content_hash_data = archive.read("mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS))
                     temp_dir = PersistentTemporaryDirectory()
                     temp_ch = os.path.join(temp_dir, BookStatusDialog.HASH_CACHE_FS)
@@ -1248,17 +1248,18 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self.ios.remove(rhc)
                     self.ios.copy_to_idevice(temp_ch, rhc)
                     self._log("content hashes restored")
-                except:
+                else:
                     self._log('MXD content hashes not found in archive')
 
                 # Recover mainDb_profile, installed_books
-                try:
-                    stored_mainDb_profile = json.loads(archive.read("mxd_mainDb_profile.json"))
-                    dehydrated = json.loads(archive.read("mxd_installed_books.json"), object_hook=from_json)
+                if ('mxd_mainDb_profile.json' in archive.namelist() and
+                    'mxd_installed_books.json' in archive.namelist()):
+                    stored_mainDb_profile = json.loads(archive.read('mxd_mainDb_profile.json'))
+                    dehydrated = json.loads(archive.read('mxd_installed_books.json'), object_hook=from_json)
                     self._log("creating snapshot of installed_books from archive")
                     self.installed_books = self.rehydrate_installed_books(dehydrated)
                     self.snapshot_installed_books(stored_mainDb_profile)
-                except:
+                else:
                     self._log("installed_books snapshot not found in archive")
 
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
