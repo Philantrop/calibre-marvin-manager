@@ -4,6 +4,8 @@ A calibre plugin for managing Marvin, an iOS reader application.
 © 2013-2014 Gregory Riker
 
 Version history:
+1.2.1 [8 March 2014]
+ • Fixed typo in default CSS elements
 1.2.0 [7 March 2014]
  • Added new status colors: Light Gray, Dark Gray, Magenta
  • New config dialog option to mark books with updated content
