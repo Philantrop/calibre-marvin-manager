@@ -272,6 +272,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 # self.installed_books
                 move_operation.mxd_installed_books = json.dumps(
                     self.dehydrate_installed_books(self.installed_books),
+                    default=to_json,
                     indent=2, sort_keys=True)
 
                 move_operation.start()
@@ -1251,17 +1252,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self._log('MXD content hashes not found in archive')
 
                 # Recover mainDb_profile, installed_books
-                stored_mainDb_profile = None
                 try:
                     stored_mainDb_profile = json.loads(archive.read("mxd_mainDb_profile.json"))
-                    if self.compare_mainDb_profiles(stored_mainDb_profile):
-                        dehydrated = json.loads(archive.read("mxd_installed_books.json"))
-                        self._log("restoring self.installed_books from archive")
-                        self.installed_books = self.rehydrate_installed_books(dehydrated)
+                    dehydrated = json.loads(archive.read("mxd_installed_books.json"), object_hook=from_json)
+                    self._log("creating snapshot of installed_books from archive")
+                    self.installed_books = self.rehydrate_installed_books(dehydrated)
+                    self.snapshot_installed_books(stored_mainDb_profile)
                 except:
                     import traceback
                     self._log(traceback.format_exc())
-                    self._log("mxd_mainDb_profile.json not found in archive")
+                    self._log("unable to create installed_books snapshot from archive")
 
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
                 # Display dialog detailing how to complete restore
@@ -1276,7 +1276,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        '</ul>'
                        ).format(self.ios.device_name)
                 d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
-
 
             else:
                 self._log("Backup does not verify: source {0:,} dest {1:,}".format(
@@ -1313,7 +1312,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if 'mainDb_profile.json' in zfr.namelist():
                 stored_mainDb_profile = json.loads(zfr.read('mainDb_profile.json'))
             if 'installed_books.json' in zfr.namelist():
-                dehydrated = json.loads(zfr.read('installed_books.json'))
+                dehydrated = json.loads(zfr.read('installed_books.json'), object_hook=from_json)
 
         if self.compare_mainDb_profiles(stored_mainDb_profile):
             self._log("restoring self.installed_books from stored image")
@@ -1374,7 +1373,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             # Keep an in-memory snapshot of installed_books in case user reopens w/o disconnect
             self.installed_books = self.book_status_dialog.installed_books
 
-            self.snapshot_installed_books()
+            self.snapshot_installed_books(self.profile_db())
 
             # Restore the Device view if active before MXD window launched
             if restore_to:
@@ -1386,7 +1385,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def shutting_down(self):
         self._log_location()
 
-    def snapshot_installed_books(self):
+    def snapshot_installed_books(self, profile):
         '''
         Store a snapshot of the connected Marvin library, dehydrated installed_books
         Enables optimized reload after disconnect
@@ -1397,7 +1396,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         if self.validate_dehydrated_books(dehydrated):
             archive_path = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
             with ZipFile(archive_path, 'w', compression=ZIP_STORED) as zfw:
-                zfw.writestr("mainDb_profile.json", json.dumps(self.profile_db(), indent=2, sort_keys=True))
+                zfw.writestr("mainDb_profile.json", json.dumps(profile, indent=2, sort_keys=True))
                 zfw.writestr("installed_books.json", json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
 
     def start_library_indexing(self):
