@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import cStringIO, os, re, sys, time, traceback
+import cStringIO, json, os, re, sys, time, traceback
 
 from collections import defaultdict
 from datetime import datetime
@@ -113,11 +113,40 @@ class Book(Metadata):
     A simple class describing a book
     See ebooks.metadata.book.base #46
     '''
+    # 13 standard field keys from Metadata
+    mxd_standard_keys = ['author_sort', 'authors', 'comments', 'device_collections', 'pubdate',
+                         'publisher', 'rating', 'series', 'series_index', 'tags', 'title', 'title_sort', 'uuid']
+    # 19 private field keys
+    mxd_custom_keys = ['articles', 'cid', 'calibre_collections', 'cover_file', 'date_added', 'date_opened',
+                       'deep_view_prepared', 'flags', 'hash', 'highlights', 'match_quality',
+                       'metadata_mismatches', 'mid', 'on_device', 'path', 'pin', 'progress', 'vocabulary',
+                       'word_count']
+
     def __init__(self, title, author):
         if type(author) is list:
             Metadata.__init__(self, title, authors=author)
         else:
             Metadata.__init__(self, title, authors=[author])
+
+    def __eq__(self, other):
+        all_mxd_keys = self.mxd_standard_keys + self.mxd_custom_keys
+        for attr in all_mxd_keys:
+            v1, v2 = [getattr(obj, attr, object()) for obj in [self, other]]
+            if v1 is object() or v2 is object():
+                return False
+            elif v1 != v2:
+                return False
+        return True
+
+    def __ne__(self, other):
+        all_mxd_keys = self.mxd_standard_keys + self.mxd_custom_keys
+        for attr in all_mxd_keys:
+            v1, v2 = [getattr(obj, attr, object()) for obj in [self, other]]
+            if v1 is object() or v2 is object():
+                return True
+            elif v1 != v2:
+                return True
+        return False
 
     def title_sorter(self):
         return title_sort(self.title)
@@ -541,6 +570,7 @@ class MoveBackup(QThread, Logger):
         self.destination_folder = destination_folder
         self.dst = os.path.join(destination_folder, sanitize_file_name(storage_name))
         self.ios = parent.ios
+        self.mainDb_profile = None
         self.mxd_device_cached_hashes = None
         self.mxd_remote_content_hashes = None
         self.src = "{0}/marvin.backup".format(backup_folder)
@@ -566,10 +596,15 @@ class MoveBackup(QThread, Logger):
     def _append_mxd_components(self):
         self._log_location()
         try:
-            if (self.mxd_device_cached_hashes or
+            if (self.mainDb_profile or
+                self.mxd_device_cached_hashes or
                 self.mxd_remote_content_hashes):
 
                 zfa = ZipFile(self.dst, mode='a')
+
+                if self.mainDb_profile:
+                    zfa.writestr("mxd_mainDb_profile.json",
+                                 json.dumps(self.mainDb_profile, sort_keys=True))
 
                 if self.mxd_device_cached_hashes:
                     base_name = "mxd_cover_hashes.json"

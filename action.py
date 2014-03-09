@@ -8,7 +8,7 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import atexit, cPickle as pickle, os, re, shutil, sqlite3, sys, tempfile, threading
+import atexit, cPickle as pickle, hashlib, json, os, re, shutil, sqlite3, sys, tempfile, threading
 
 from datetime import datetime
 from functools import partial
@@ -30,13 +30,13 @@ from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.library import current_library_name
 from calibre.ptempfile import PersistentTemporaryDirectory
-from calibre.utils.config import config_dir
+from calibre.utils.config import config_dir, to_json, from_json
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
-    CommandHandler, CompileUI, IndexLibrary, Logger, MoveBackup, MyBlockingBusy,
+    Book, CommandHandler, CompileUI, IndexLibrary, Logger, MoveBackup, MyBlockingBusy,
     ProgressBar, RestoreBackup, Struct,
     get_icon, set_plugin_icon_resources, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
@@ -80,7 +80,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         backup_target = backup_folder + '/marvin.backup'
         last_backup_folder = self.prefs.get('backup_folder', os.path.expanduser("~"))
 
-        def _confirm_overwrite():
+        def _confirm_overwrite(backup_target):
             '''
             Check for existing backup before overwriting
             stats['st_mtime'], stats['st_size']
@@ -104,7 +104,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 return dlg.exec_()
             return True
 
-        def _confirm_lengthy_backup():
+        def _confirm_lengthy_backup(total_books, estimated_time):
             '''
             If this is going to take some time, warn the user
             '''
@@ -119,19 +119,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
             dlg = MessageBox(MessageBox.QUESTION, title, msg,
                              show_copy_button=False)
             return dlg.exec_()
-
-        def _count_books():
-            # Get a count of the books
-            con = sqlite3.connect(self.connected_device.local_db_path)
-            with con:
-                con.row_factory = sqlite3.Row
-                cur = con.cursor()
-                cur.execute('''SELECT
-                                title
-                               FROM Books
-                            ''')
-                rows = cur.fetchall()
-            return(len(rows))
 
         def _estimate_time():
             # Estimate worst-case time required to create backup
@@ -170,26 +157,25 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
         # ~~~ Entry point ~~~
         self._log_location()
-
+        mainDb_profile = self.profile_db()
         estimated_size = _estimate_size()
-        total_books = _count_books()
         total_seconds = int(estimated_size/WORST_CASE_ARCHIVE_RATE)
         timeout = int(total_seconds * TIMEOUT_PADDING_FACTOR)
         estimated_time = _estimate_time()
 
         if timeout > CommandHandler.WATCHDOG_TIMEOUT:
-            if not _confirm_lengthy_backup():
+            if not _confirm_lengthy_backup(mainDb_profile['Books'], estimated_time):
                 return
         else:
             timeout = CommandHandler.WATCHDOG_TIMEOUT
 
-        if not _confirm_overwrite():
+        if not _confirm_overwrite(backup_target):
             self._log("user declined to overwrite existing backup")
             return
 
         # Issue the command
         self._busy_panel_setup("Backing up {0:,} books from {1}…".format(
-            total_books, self.ios.device_name))
+            mainDb_profile['Books'], self.ios.device_name))
         ch = CommandHandler(self)
         ch.construct_general_command('backup')
         ch.issue_command(timeout_override=timeout)
@@ -255,6 +241,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     move_operation.mxd_remote_content_hashes = thc
                     move_operation.mxd_remote_hash_cache_fs = BookStatusDialog.HASH_CACHE_FS
 
+                # mainDb profile
+                move_operation.mainDb_profile = mainDb_profile
+
                 move_operation.start()
                 while not move_operation.isFinished():
                     Application.processEvents()
@@ -282,6 +271,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
             ac.setIcon(QIcon(image))
         m.addAction(ac)
         return ac
+
+    def dehydrate_installed_books(self):
+        '''
+        Convert self.installed_books to JSON-serializable format
+        '''
+        all_mxd_keys = sorted(Book.mxd_standard_keys + Book.mxd_custom_keys)
+        dehydrated = {}
+        for key in self.installed_books:
+            dehydrated[key] = {}
+            for mxd_attribute in all_mxd_keys:
+                dehydrated[key][mxd_attribute] = getattr(
+                    self.installed_books[key], mxd_attribute, None)
+        return dehydrated
 
     def developer_utilities(self, action):
         '''
@@ -927,6 +929,39 @@ class MarvinManagerAction(InterfaceAction, Logger):
         if updated:
             self.prefs.set('plugin_version', "%d.%d.%d" % self.interface_action_base_plugin.version)
 
+    def profile_db(self):
+        '''
+        Snapshot key aspects of mainDb
+        '''
+        profile = {'device': self.ios.device_name}
+
+        con = sqlite3.connect(self.connected_device.local_db_path)
+        with con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+
+            # Hash the titles and authors
+            m = hashlib.md5()
+            cur.execute('''SELECT Title, Author FROM Books''')
+            rows = cur.fetchall()
+            for row in rows:
+                m.update(row[b'Title'])
+                m.update(row[b'Author'])
+            profile['content_hash'] = m.hexdigest()
+
+            # Get the latest MetadataUpdated timestamp
+            cur.execute('''SELECT max(MetadataUpdated) FROM Books''')
+            row = cur.fetchone()
+            profile['max_MetadataUpdated'] = row[b'max(MetadataUpdated)']
+
+            # Get the table sizes
+            for table in ['BookCollections', 'Bookmarks', 'Books', 'Collections',
+                          'Highlights', 'PinnedArticles', 'Vocabulary']:
+                cur.execute('''SELECT * FROM '{0}' '''.format(table))
+                profile[table] = len(cur.fetchall())
+
+        return profile
+
     def rebuild_menus(self):
         self._log_location()
         with self.menus_lock:
@@ -1237,8 +1272,18 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log_location("{0} books".format(len(self.book_status_dialog.installed_books)))
             self.book_status_dialog.exec_()
 
-            # Keep a copy of installed_books in case user reopens w/o disconnect
+            # Keep an in-memory snapshot of installed_books in case user reopens w/o disconnect
             self.installed_books = self.book_status_dialog.installed_books
+
+            # Store a profile of the connected Marvin library
+            self.prefs.set('mainDb_profile', self.profile_db())
+
+            # Snapshot self.installed_books for optimized reload after disconnect
+            dehydrated = self.dehydrate_installed_books()
+            if dehydrated:
+                path = os.path.join(os.path.expanduser('~'), 'Desktop', 'json_test.json')
+                with open(path, 'wb') as out:
+                    out.write(json.dumps(dehydrated, default=to_json, sort_keys=True, indent=2))
 
             # Restore the Device view if active before MXD window launched
             if restore_to:
