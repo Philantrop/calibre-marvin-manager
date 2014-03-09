@@ -1259,9 +1259,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self.installed_books = self.rehydrate_installed_books(dehydrated)
                     self.snapshot_installed_books(stored_mainDb_profile)
                 except:
-                    import traceback
-                    self._log(traceback.format_exc())
-                    self._log("unable to create installed_books snapshot from archive")
+                    self._log("installed_books snapshot not found in archive")
 
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
                 # Display dialog detailing how to complete restore
