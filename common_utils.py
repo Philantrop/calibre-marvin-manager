@@ -8,14 +8,14 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import cStringIO, json, os, re, sys, time, traceback
+import base64, cStringIO, json, os, re, sys, time, traceback
 
 from collections import defaultdict
 from datetime import datetime
 from lxml import etree
 from threading import Timer
 from time import sleep
-from zipfile import ZipFile
+#from zipfile import ZipFile
 
 from calibre import sanitize_file_name
 from calibre.constants import iswindows
@@ -29,6 +29,7 @@ from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.library import current_library_name
 from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
+from calibre.utils.zipfile import ZipFile, ZIP_STORED
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
                       QCheckBox, QComboBox, QCursor, QDial, QDialog, QDialogButtonBox,
@@ -572,6 +573,7 @@ class MoveBackup(QThread, Logger):
         self.ios = parent.ios
         self.mainDb_profile = None
         self.mxd_device_cached_hashes = None
+        self.mxd_installed_books = None
         self.mxd_remote_content_hashes = None
         self.src = "{0}/marvin.backup".format(backup_folder)
         self.src_stats = src_stats
@@ -598,6 +600,7 @@ class MoveBackup(QThread, Logger):
         try:
             if (self.mainDb_profile or
                 self.mxd_device_cached_hashes or
+                self.mxd_installed_books or
                 self.mxd_remote_content_hashes):
 
                 zfa = ZipFile(self.dst, mode='a')
@@ -609,6 +612,10 @@ class MoveBackup(QThread, Logger):
                 if self.mxd_device_cached_hashes:
                     base_name = "mxd_cover_hashes.json"
                     zfa.write(self.mxd_device_cached_hashes, arcname=base_name)
+
+                if self.mxd_installed_books:
+                    base_name = "mxd_installed_books.json"
+                    zfa.writestr(base_name, self.mxd_installed_books)
 
                 if self.mxd_remote_content_hashes:
                     from calibre_plugins.marvin_manager.book_status import BookStatusDialog
@@ -1199,6 +1206,19 @@ def existing_annotations(parent, field, return_all=False):
     return annotation_map
 
 
+def from_json(obj):
+    '''
+    Models calibre.utils.config:from_json
+    uses local parse_date()
+    '''
+    if '__class__' in obj:
+        if obj['__class__'] == 'bytearray':
+            return bytearray(base64.standard_b64decode(obj['__value__']))
+        if obj['__class__'] == 'datetime.datetime':
+            return parse_date(obj['__value__'])
+    return obj
+
+
 def get_cc_mapping(cc_name, element, default=None):
     '''
     Return the element mapped to cc_name in prefs
@@ -1266,6 +1286,13 @@ def get_pixmap(icon_name):
         pixmap.loadFromData(plugin_icon_resources[icon_name])
         return pixmap
     return None
+
+
+def isoformat(date_time, sep='T'):
+    '''
+    Mocks calibre.utils.date:isoformat()
+    '''
+    return unicode(date_time.isoformat(str(sep)))
 
 
 def move_annotations(parent, annotation_map, old_destination_field, new_destination_field,
@@ -1532,6 +1559,17 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
     updateCalibreGUIView()
 
 
+def parse_date(date_string):
+    '''
+    Mocks calibre.utils.date:parse_date()
+    https://labix.org/python-dateutil#head-42a94eedcff96da7fb1f77096b5a3b519c859ba9
+    '''
+    UNDEFINED_DATE = datetime(101,1,1, tzinfo=None)
+    from dateutil.parser import parse
+    if not date_string:
+        return UNDEFINED_DATE
+    return parse(date_string, ignoretz=True)
+
 def inventory_controls(ui, dump_controls=False):
     '''
      Build an inventory of stateful controls
@@ -1650,6 +1688,20 @@ def set_plugin_icon_resources(name, resources):
     global plugin_icon_resources, plugin_name
     plugin_name = name
     plugin_icon_resources = resources
+
+
+def to_json(obj):
+    '''
+    Models calibre.utils.config:to_json
+    Uses local isoformat()
+    '''
+    if isinstance(obj, bytearray):
+        return {'__class__': 'bytearray',
+                '__value__': base64.standard_b64encode(bytes(obj))}
+    if isinstance(obj, datetime):
+        return {'__class__': 'datetime.datetime',
+                '__value__': isoformat(obj)}
+    raise TypeError(repr(obj) + ' is not JSON serializable')
 
 
 def updateCalibreGUIView():

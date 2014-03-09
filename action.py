@@ -13,7 +13,6 @@ import atexit, cPickle as pickle, hashlib, json, os, re, shutil, sqlite3, sys, t
 from datetime import datetime
 from functools import partial
 from lxml import etree, html
-from zipfile import ZipFile, is_zipfile
 
 from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QIcon,
                       QMenu, QTimer, QUrl,
@@ -30,7 +29,8 @@ from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.library import current_library_name
 from calibre.ptempfile import PersistentTemporaryDirectory
-from calibre.utils.config import config_dir, to_json, from_json
+from calibre.utils.config import config_dir
+from calibre.utils.zipfile import ZipFile, ZIP_STORED, is_zipfile
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
 from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
@@ -38,7 +38,7 @@ from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
     Book, CommandHandler, CompileUI, IndexLibrary, Logger, MoveBackup, MyBlockingBusy,
     ProgressBar, RestoreBackup, Struct,
-    get_icon, set_plugin_icon_resources, updateCalibreGUIView)
+    from_json, get_icon, set_plugin_icon_resources, to_json, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
 #from calibre_plugins.marvin_manager.dropbox import PullDropboxUpdates
 
@@ -47,6 +47,8 @@ import calibre_plugins.marvin_manager.config as cfg
 PLUGIN_ICONS = ['images/connected.png', 'images/disconnected.png']
 
 class MarvinManagerAction(InterfaceAction, Logger):
+
+    INSTALLED_BOOKS_SNAPSHOT = "installed_books.zip"
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -68,6 +70,29 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def about_to_show_menu(self):
         self.rebuild_menus()
+
+    def compare_mainDb_profiles(self, stored_mainDb_profile):
+        '''
+        '''
+        self._log_location()
+        current_mainDb_profile = self.profile_db()
+        matched = True
+        for key in sorted(current_mainDb_profile.keys()):
+            if current_mainDb_profile[key] != stored_mainDb_profile[key]:
+                matched = False
+                self._log("mainDb_profile does not match, self.installed_books not restored")
+                break
+
+        # Display mainDb_profile mismatch
+        if not matched:
+            self._log("current_mainDb_profile does not match stored_mainDb_profile:")
+            self._log("{0:20} {1:^32} {2:^32}".format('key', 'stored', 'current'))
+            self._log("{0:—^20} {1:—^32} {2:—^32}".format('', '', ''))
+            for key in sorted(current_mainDb_profile.keys()):
+                self._log("{0:20} {1:<32} {2:<32}".format(
+                    key, stored_mainDb_profile[key], current_mainDb_profile[key]))
+
+        return matched
 
     def create_backup(self):
         '''
@@ -244,6 +269,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 # mainDb profile
                 move_operation.mainDb_profile = mainDb_profile
 
+                # self.installed_books
+                move_operation.mxd_installed_books = json.dumps(
+                    self.dehydrate_installed_books(self.installed_books),
+                    indent=2, sort_keys=True)
+
                 move_operation.start()
                 while not move_operation.isFinished():
                     Application.processEvents()
@@ -272,17 +302,17 @@ class MarvinManagerAction(InterfaceAction, Logger):
         m.addAction(ac)
         return ac
 
-    def dehydrate_installed_books(self):
+    def dehydrate_installed_books(self, installed_books):
         '''
-        Convert self.installed_books to JSON-serializable format
+        Convert installed_books to JSON-serializable format
         '''
         all_mxd_keys = sorted(Book.mxd_standard_keys + Book.mxd_custom_keys)
         dehydrated = {}
-        for key in self.installed_books:
+        for key in installed_books:
             dehydrated[key] = {}
             for mxd_attribute in all_mxd_keys:
                 dehydrated[key][mxd_attribute] = getattr(
-                    self.installed_books[key], mxd_attribute, None)
+                    installed_books[key], mxd_attribute, None)
         return dehydrated
 
     def developer_utilities(self, action):
@@ -1063,6 +1093,28 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.process_dropbox_sync_records()
                 self.dropbox_processed = True
 
+    def rehydrate_installed_books(self, stored):
+        '''
+        Reconstruct self.installed_books from stored image
+        '''
+        self._log_location()
+        rehydrated = None
+        try:
+            all_mxd_keys = sorted(Book.mxd_standard_keys + Book.mxd_custom_keys)
+            for key in ['title', 'authors']:
+                all_mxd_keys.remove(key)
+
+            rehydrated = {}
+            for cid in stored:
+                rehydrated[int(cid)] = Book(stored[cid]['title'], stored[cid]['authors'])
+                for prop in all_mxd_keys:
+                    setattr(rehydrated[int(cid)], prop, stored[cid].get(prop))
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+            rehydrated = None
+        return rehydrated
+
     def remove_paths_from_hash_cache(self, paths):
         '''
         Remove cached hashes when iOSRA deletes books
@@ -1198,6 +1250,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 except:
                     self._log('MXD content hashes not found in archive')
 
+                # Recover mainDb_profile, installed_books
+                stored_mainDb_profile = None
+                try:
+                    stored_mainDb_profile = json.loads(archive.read("mxd_mainDb_profile.json"))
+                    if self.compare_mainDb_profiles(stored_mainDb_profile):
+                        dehydrated = json.loads(archive.read("mxd_installed_books.json"))
+                        self._log("restoring self.installed_books from archive")
+                        self.installed_books = self.rehydrate_installed_books(dehydrated)
+                except:
+                    import traceback
+                    self._log(traceback.format_exc())
+                    self._log("mxd_mainDb_profile.json not found in archive")
+
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
                 # Display dialog detailing how to complete restore
                 title = "Restore Marvin from backup"
@@ -1225,6 +1290,34 @@ class MarvinManagerAction(InterfaceAction, Logger):
                       ).format(s_size, d_size)
                 d = MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
                 self._log("Restore cancelled")
+
+    def restore_installed_books(self):
+        '''
+        Try to restore self.installed_books from stored image
+        if stored_mainDb_profile == current_mainDb_profile
+        '''
+        self._log_location()
+        # Do we already have a populated self.installed_books?
+        if self.installed_books:
+            self._log("self.installed_books already populated")
+            return
+
+        # Do we have a stored image?
+        archive_path = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
+        if not os.path.exists(archive_path):
+            return
+
+        stored_mainDb_profile = None
+        dehydrated = {}
+        with ZipFile(archive_path, 'r') as zfr:
+            if 'mainDb_profile.json' in zfr.namelist():
+                stored_mainDb_profile = json.loads(zfr.read('mainDb_profile.json'))
+            if 'installed_books.json' in zfr.namelist():
+                dehydrated = json.loads(zfr.read('installed_books.json'))
+
+        if self.compare_mainDb_profiles(stored_mainDb_profile):
+            self._log("restoring self.installed_books from stored image")
+            self.installed_books = self.rehydrate_installed_books(dehydrated)
 
     def show_configuration(self):
         self.interface_action_base_plugin.do_user_config(self.gui)
@@ -1267,23 +1360,21 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 restore_to = self.current_location
                 self.gui.location_selected('library')
 
+            # Try to restore previous snapshot of self.installed_books
+            self.restore_installed_books()
+
+            # Open MXD dialog
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
             self._log_location("{0} books".format(len(self.book_status_dialog.installed_books)))
             self.book_status_dialog.exec_()
 
+            # MXD dialog closed
+
             # Keep an in-memory snapshot of installed_books in case user reopens w/o disconnect
             self.installed_books = self.book_status_dialog.installed_books
 
-            # Store a profile of the connected Marvin library
-            self.prefs.set('mainDb_profile', self.profile_db())
-
-            # Snapshot self.installed_books for optimized reload after disconnect
-            dehydrated = self.dehydrate_installed_books()
-            if dehydrated:
-                path = os.path.join(os.path.expanduser('~'), 'Desktop', 'json_test.json')
-                with open(path, 'wb') as out:
-                    out.write(json.dumps(dehydrated, default=to_json, sort_keys=True, indent=2))
+            self.snapshot_installed_books()
 
             # Restore the Device view if active before MXD window launched
             if restore_to:
@@ -1295,10 +1386,44 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def shutting_down(self):
         self._log_location()
 
+    def snapshot_installed_books(self):
+        '''
+        Store a snapshot of the connected Marvin library, dehydrated installed_books
+        Enables optimized reload after disconnect
+        '''
+        self._log_location()
+
+        dehydrated = self.dehydrate_installed_books(self.installed_books)
+        if self.validate_dehydrated_books(dehydrated):
+            archive_path = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
+            with ZipFile(archive_path, 'w', compression=ZIP_STORED) as zfw:
+                zfw.writestr("mainDb_profile.json", json.dumps(self.profile_db(), indent=2, sort_keys=True))
+                zfw.writestr("installed_books.json", json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
+
     def start_library_indexing(self):
         self._log_location()
         self._busy_panel_setup("Indexing calibre library…")
         self.library_scanner.start()
+
+    def validate_dehydrated_books(self, dehydrated):
+        '''
+        A sanity test to confirm stored version of self.installed_books is legit
+        '''
+        self._log_location()
+        rehydrated = self.rehydrate_installed_books(dehydrated)
+        ans = None
+        if rehydrated == self.installed_books:
+            self._log("dehydrated matches self.installed")
+            ans = True
+        else:
+            self._log("mismatches")
+            """
+            for cid in sorted(rehydrated.keys()):
+                self._log("{0:>3} {1:30} {2}  |  {3}".format(cid, rehydrated[cid].title,
+                    rehydrated[cid].pubdate, self.installed_books[cid].pubdate))
+            """
+            ans = False
+        return ans
 
     def _busy_panel_setup(self, title, show_cancel=False):
         '''
