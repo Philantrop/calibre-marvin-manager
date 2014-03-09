@@ -33,7 +33,7 @@ default_timestamp = '%c'
 
 default_elements = [
                    {'ordinal':0,
-                       'name':'Timestamp',
+                       'name':'Location',
                         'css':"font-size:80%;\n" +
                               "font-weight:bold;\n" +
                               "margin:0;"
