@@ -28,7 +28,7 @@ from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.library import current_library_name
-from calibre.ptempfile import PersistentTemporaryDirectory
+from calibre.ptempfile import PersistentTemporaryDirectory, PersistentTemporaryFile, TemporaryDirectory
 from calibre.utils.config import config_dir
 from calibre.utils.zipfile import ZipFile, ZIP_STORED, is_zipfile
 
@@ -52,6 +52,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
+    REMOTE_CACHE_FOLDER = '/'.join(['/Library', 'calibre.mm'])
 
     icon = PLUGIN_ICONS[0]
     minimum_ios_driver_version = (1, 3, 5)
@@ -104,6 +106,20 @@ class MarvinManagerAction(InterfaceAction, Logger):
         backup_folder = b'/'.join(['/Documents', 'Backup'])
         backup_target = backup_folder + '/marvin.backup'
         last_backup_folder = self.prefs.get('backup_folder', os.path.expanduser("~"))
+
+        BACKUP_MSG_1 = ('<ol>'
+                        '<li style="margin-bottom:0.5em">Creating backup of {book_count:,} '
+                        'books on {device} …</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder to store backup</li>'
+                        '<li style="color:#bbb">Move backup from {device} to {destination}</li>'
+                        '</ol>')
+        BACKUP_MSG_2 = ('<ol>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Backup of {book_count:,} '
+                        'books completed</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Destination folder selected</li>'
+                        '<li>Moving backup ({backup_size:,} MB) '
+                        'from {device} to {destination} …</li>'
+                        '</ol>')
 
         def _confirm_overwrite(backup_target):
             '''
@@ -198,13 +214,24 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log("user declined to overwrite existing backup")
             return
 
+        # Inform the user what's going on
+        busy_panel_args = {'book_count': mainDb_profile['Books'],
+                           'destination': 'computer',
+                           'device': self.ios.device_name,
+                           'estimated_time': estimated_time}
+        self._busy_panel_setup(BACKUP_MSG_1.format(**busy_panel_args))
+#         pb = ProgressBar(parent=self.gui, window_title="Creating backup")
+#         pb.set_label(BACKUP_MSG_1.format(**busy_panel_args))
+#         pb.show()
+
         # Issue the command
-        self._busy_panel_setup("Backing up {0:,} books from {1}…".format(
-            mainDb_profile['Books'], self.ios.device_name))
         ch = CommandHandler(self)
         ch.construct_general_command('backup')
         ch.issue_command(timeout_override=timeout)
+
         self._busy_panel_teardown()
+#         pb.hide()
+#         del pb
 
         if ch.results['code']:
             self._log("results: %s" % ch.results)
@@ -225,7 +252,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.ios.device_name, d.strftime("%Y-%m-%d"))
             destination_folder = str(QFileDialog.getExistingDirectory(
                 self.gui,
-                "Select destination folder for backup",
+                "Select destination folder to store backup",
                 last_backup_folder,
                 QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks))
 
@@ -236,9 +263,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     destination_folder = os.path.dirname(destination_folder)
 
                 # Display status
-                msg = '<p>Moving backup ({0:,}MB) to {1}…</p>'.format(
-                       int(int(stats['st_size'])/(1024*1024)), destination_folder)
-                self._busy_panel_setup(msg)
+                busy_panel_args['backup_size'] = int(int(stats['st_size'])/(1024*1024))
+                #busy_panel_args['destination'] = "..{0}{1}".format(
+                #    os.path.sep, destination_folder.split(os.path.sep)[-1])
+                self._busy_panel_setup(BACKUP_MSG_2.format(**busy_panel_args))
 
                 # Merge MXD state with backup image
                 temp_dir = PersistentTemporaryDirectory()
@@ -267,13 +295,23 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     move_operation.mxd_remote_hash_cache_fs = BookStatusDialog.HASH_CACHE_FS
 
                 # mainDb profile
-                move_operation.mainDb_profile = mainDb_profile
+                move_operation.mxd_mainDb_profile = mainDb_profile
 
                 # self.installed_books
-                move_operation.mxd_installed_books = json.dumps(
-                    self.dehydrate_installed_books(self.installed_books),
-                    default=to_json,
-                    indent=2, sort_keys=True)
+                if self.installed_books:
+                    move_operation.mxd_installed_books = json.dumps(
+                        self.dehydrate_installed_books(self.installed_books),
+                        default=to_json,
+                        indent=2, sort_keys=True)
+
+                # iOSRA booklist.zip
+                archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
+                if self.ios.exists(archive_path):
+                    # Copy the stored booklist to a local temp file
+                    with PersistentTemporaryFile(suffix=".zip") as local:
+                        with open(local._name, 'w') as f:
+                            self.ios.copy_from_idevice(archive_path, f)
+                    move_operation.iosra_booklist = local
 
                 move_operation.start()
                 while not move_operation.isFinished():
@@ -319,15 +357,14 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def developer_utilities(self, action):
         '''
         'Delete calibre hashes', 'Delete Marvin hashes'
-        remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
+
         '''
         self._log_location(action)
         if action in ['Create backup', 'Delete calibre hashes', 'Delete Marvin hashes',
                       'Nuke annotations', 'Reset column widths',
                       'Restore from backup']:
             if action == 'Delete Marvin hashes':
-                remote_cache_folder = '/'.join(['/Library', 'calibre.mm'])
-                rhc = b'/'.join([remote_cache_folder, BookStatusDialog.HASH_CACHE_FS])
+                rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
 
                 if self.ios.exists(rhc):
                     self.ios.remove(rhc)
@@ -1121,8 +1158,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         Remove cached hashes when iOSRA deletes books
         '''
         self._log_location()
-        rhc = '/'.join([BookStatusDialog.REMOTE_CACHE_FOLDER,
-            BookStatusDialog.HASH_CACHE_FS])
+        rhc = '/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
 
         if self.ios.exists(rhc):
             # Copy remote hash_cache to local file
@@ -1243,8 +1279,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     with open(temp_ch, 'w') as lhc:
                         lhc.write(content_hash_data)
                     # Copy to iDevice
-                    rhc = b'/'.join([BookStatusDialog.REMOTE_CACHE_FOLDER,
-                                    BookStatusDialog.HASH_CACHE_FS])
+                    rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
                     self.ios.remove(rhc)
                     self.ios.copy_to_idevice(temp_ch, rhc)
                     self._log("content hashes restored")
@@ -1261,6 +1296,17 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self.snapshot_installed_books(stored_mainDb_profile)
                 else:
                     self._log("installed_books snapshot not found in archive")
+
+                # Recover iosra_booklist.zip, restore to connected device
+                if 'iosra_booklist.zip' in archive.namelist():
+                    with TemporaryDirectory() as tdir:
+                        basename = 'iosra_booklist.zip'
+                        archive.extract(basename, tdir)
+                        source = str(os.path.join(tdir, basename))
+                        destination = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
+                        self.ios.copy_to_idevice(source, destination)
+                else:
+                    self._log("iosra_booklist snapshot not found in archive")
 
                 self._log("Backup verifies: {0:,} bytes".format(s_size))
                 # Display dialog detailing how to complete restore

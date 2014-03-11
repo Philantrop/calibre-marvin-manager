@@ -33,7 +33,7 @@ from calibre.utils.zipfile import ZipFile, ZIP_STORED
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
                       QCheckBox, QComboBox, QCursor, QDial, QDialog, QDialogButtonBox,
-                      QDoubleSpinBox, QFont, QIcon,
+                      QDoubleSpinBox, QFont, QFrame, QIcon,
                       QKeySequence, QLabel, QLineEdit,
                       QPixmap, QProgressBar, QPushButton,
                       QRadioButton, QSizePolicy, QSlider, QSpinBox, QString,
@@ -335,6 +335,7 @@ class MyBlockingBusy(QDialog):
         sp.setHeightForWidth(False)
         self.msg.setSizePolicy(sp)
         self.msg.setMinimumHeight(self.font.pointSize() + 8)
+        #self.msg.setFrameStyle(QFrame.Panel | QFrame.Sunken)
 
         self._layout.addSpacing(15)
 
@@ -571,7 +572,8 @@ class MoveBackup(QThread, Logger):
         self.destination_folder = destination_folder
         self.dst = os.path.join(destination_folder, sanitize_file_name(storage_name))
         self.ios = parent.ios
-        self.mainDb_profile = None
+        self.iosra_booklist = None
+        self.mxd_mainDb_profile = None
         self.mxd_device_cached_hashes = None
         self.mxd_installed_books = None
         self.mxd_remote_content_hashes = None
@@ -580,7 +582,9 @@ class MoveBackup(QThread, Logger):
         self.success = None
 
     def run(self):
+        backup_size = "{:,} MB".format(int(int(self.src_stats['st_size'])/(1024*1024)))
         self._log_location()
+        self._log("moving {0} to '{1}'".format(backup_size, self.destination_folder))
         # Remove any older file of the same name at destination
         if os.path.isfile(self.dst):
             os.remove(self.dst)
@@ -598,14 +602,18 @@ class MoveBackup(QThread, Logger):
     def _append_mxd_components(self):
         self._log_location()
         try:
-            if (self.mainDb_profile or
+            if (self.iosra_booklist or
+                self.mxd_mainDb_profile or
                 self.mxd_device_cached_hashes or
                 self.mxd_installed_books or
                 self.mxd_remote_content_hashes):
 
                 zfa = ZipFile(self.dst, mode='a')
 
-                if self.mainDb_profile:
+                if self.iosra_booklist:
+                    zfa.write(self.iosra_booklist, arcname="iosra_booklist.zip")
+
+                if self.mxd_mainDb_profile:
                     zfa.writestr("mxd_mainDb_profile.json",
                                  json.dumps(self.mainDb_profile, sort_keys=True))
 
@@ -621,6 +629,7 @@ class MoveBackup(QThread, Logger):
                     from calibre_plugins.marvin_manager.book_status import BookStatusDialog
                     base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
                     zfa.write(self.mxd_remote_content_hashes, arcname=base_name)
+
 
                 zfa.close()
         except:
@@ -1569,6 +1578,7 @@ def parse_date(date_string):
     if not date_string:
         return UNDEFINED_DATE
     return parse(date_string, ignoretz=True)
+
 
 def inventory_controls(ui, dump_controls=False):
     '''

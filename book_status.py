@@ -932,7 +932,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     MATH_TIMES = u" \u00d7 "
     MAX_BOOKS_BEFORE_SPINNER = 4
     MAX_ELEMENT_DEPTH = 6
-    REMOTE_CACHE_FOLDER = '/'.join(['/Library', 'calibre.mm'])
     UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
     UTF_8_BOM = r'\xef\xbb\xbf'
 
@@ -5220,7 +5219,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Existing hash cache?
         lhc = os.path.join(self.local_cache_folder, self.HASH_CACHE_FS)
-        rhc = '/'.join([self.REMOTE_CACHE_FOLDER, self.HASH_CACHE_FS])
+        rhc = '/'.join([self.parent.REMOTE_CACHE_FOLDER, self.HASH_CACHE_FS])
 
         cache_exists = (self.ios.exists(rhc) and
                         not self.opts.prefs.get('hash_caching_disabled'))
@@ -5239,10 +5238,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         else:
             # Confirm path to remote folder is valid store point
-            folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
+            folder_exists = self.ios.exists(self.parent.REMOTE_CACHE_FOLDER)
             if not folder_exists:
-                self._log("creating remote_cache_folder %s" % repr(self.REMOTE_CACHE_FOLDER))
-                self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
+                self._log("creating remote_cache_folder %s" % repr(self.parent.REMOTE_CACHE_FOLDER))
+                self.ios.mkdir(self.parent.REMOTE_CACHE_FOLDER)
 
             # Create a local cache
             with open(lhc, 'wb') as hcf:
