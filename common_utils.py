@@ -382,7 +382,8 @@ class MyBlockingBusy(QDialog):
 
 class ProgressBar(QDialog, Logger):
     def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
-                 label='Label goes here', frameless=True, on_top=False):
+                 label='Label goes here', frameless=True, on_top=False,
+                 alignment=Qt.AlignHCenter):
         if on_top:
             _flags = Qt.WindowStaysOnTopHint
             if frameless:
@@ -400,9 +401,16 @@ class ProgressBar(QDialog, Logger):
         self.l = QVBoxLayout(self)
         self.setLayout(self.l)
 
+        self.l.addSpacing(15)
+
         self.label = QLabel(label)
-        self.label.setAlignment(Qt.AlignHCenter)
+        self.label.setAlignment(alignment)
+        self.font = QFont()
+        self.font.setPointSize(self.font.pointSize() + 2)
+        self.label.setFont(self.font)
         self.l.addWidget(self.label)
+
+        self.l.addSpacing(15)
 
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0, max_items)
@@ -411,6 +419,8 @@ class ProgressBar(QDialog, Logger):
         self.progressBar.setValue(0)
         self.l.addWidget(self.progressBar)
 
+        self.l.addSpacing(15)
+
         self.close_requested = False
 
     def closeEvent(self, event):
@@ -418,8 +428,14 @@ class ProgressBar(QDialog, Logger):
         self.close_requested = True
 
     def increment(self):
-        self.progressBar.setValue(self.progressBar.value() + 1)
-        self.refresh()
+        try:
+            if self.progressBar.value() < self.progressBar.maximum():
+                self.progressBar.setValue(self.progressBar.value() + 1)
+                self.refresh()
+        except:
+            self._log_location()
+            import traceback
+            self._log(traceback.format_exc())
 
     def refresh(self):
         self.application.processEvents()
@@ -431,6 +447,10 @@ class ProgressBar(QDialog, Logger):
 
     def set_maximum(self, value):
         self.progressBar.setMaximum(value)
+        self.refresh()
+
+    def set_range(self, min, max):
+        self.progressBar.setRange(min, max)
         self.refresh()
 
     def set_value(self, value):
@@ -566,56 +586,77 @@ class MoveBackup(QThread, Logger):
     '''
     Move a (potentially large) backup file from connected device to local fs
     '''
-    def __init__(self, parent, backup_folder, destination_folder, storage_name, src_stats):
-        QThread.__init__(self, parent)
-        self.backup_folder = backup_folder
-        self.destination_folder = destination_folder
-        self.dst = os.path.join(destination_folder, sanitize_file_name(storage_name))
-        self.ios = parent.ios
-        self.iosra_booklist = None
-        self.mxd_mainDb_profile = None
-        self.mxd_device_cached_hashes = None
-        self.mxd_installed_books = None
-        self.mxd_remote_content_hashes = None
-        self.src = "{0}/marvin.backup".format(backup_folder)
-        self.src_stats = src_stats
-        self.success = None
+    IOS_TRANSFER_RATE = 7000000  # ~7 MB/second
+    TIMER_TICK = 0.25
+
+    def __init__(self, **kwargs):
+        '''
+        kwargs: {'backup_folder', 'destination_folder', 'ios', 'parent', 'pb',
+                 'storage_name', 'stats', total_seconds}
+        '''
+        self._log_location()
+        try:
+            for key in kwargs:
+                setattr(self, key, kwargs.get(key))
+            QThread.__init__(self, self.parent)
+
+            for prop in ['iosra_booklist', 'mxd_mainDb_profile', 'mxd_device_cached_hashes',
+                         'mxd_installed_books', 'mxd_remote_content_hashes', 'success',
+                         'timer']:
+                setattr(self, prop, None)
+
+            self.dst = os.path.join(self.destination_folder,
+                                    sanitize_file_name(self.storage_name))
+            self.src = "{0}/marvin.backup".format(self.backup_folder)
+            self.total_seconds *= 1.25   # allow for MXD component processing
+            self._init_pb()
+
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
 
     def run(self):
-        backup_size = "{:,} MB".format(int(int(self.src_stats['st_size'])/(1024*1024)))
-        self._log_location()
-        self._log("moving {0} to '{1}'".format(backup_size, self.destination_folder))
-        # Remove any older file of the same name at destination
-        if os.path.isfile(self.dst):
-            os.remove(self.dst)
+        try:
+            backup_size = "{:,} MB".format(int(int(self.src_stats['st_size'])/(1024*1024)))
+            self._log_location()
+            self._log("moving {0} to '{1}'".format(backup_size, self.destination_folder))
+            # Remove any older file of the same name at destination
+            if os.path.isfile(self.dst):
+                os.remove(self.dst)
 
-        # Copy from the iDevice to destination
-        with open(self.dst, 'wb') as out:
-            self.ios.copy_from_idevice(self.src, out)
+            # Copy from the iDevice to destination
+            with open(self.dst, 'wb') as out:
+                self.ios.copy_from_idevice(self.src, out)
 
-        # Validate transferred file sizes, do cleanup
-        self._verify()
+            # Validate transferred file sizes, do cleanup
+            self._verify()
 
-        # Append MXD components
-        self._append_mxd_components()
+            # Append MXD components
+            self._append_mxd_components()
+
+            self.pb.set_value(self.total_seconds)
+            self._cleanup()
+
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def _append_mxd_components(self):
         self._log_location()
-        try:
-            if (self.iosra_booklist or
-                self.mxd_mainDb_profile or
-                self.mxd_device_cached_hashes or
-                self.mxd_installed_books or
-                self.mxd_remote_content_hashes):
+        if (self.iosra_booklist or
+            self.mxd_mainDb_profile or
+            self.mxd_device_cached_hashes or
+            self.mxd_installed_books or
+            self.mxd_remote_content_hashes):
 
-                zfa = ZipFile(self.dst, mode='a')
-
+            with ZipFile(self.dst, mode='a') as zfa:
                 if self.iosra_booklist:
                     zfa.write(self.iosra_booklist, arcname="iosra_booklist.zip")
 
                 if self.mxd_mainDb_profile:
                     zfa.writestr("mxd_mainDb_profile.json",
-                                 json.dumps(self.mainDb_profile, sort_keys=True))
+                                 json.dumps(self.mxd_mainDb_profile, sort_keys=True))
 
                 if self.mxd_device_cached_hashes:
                     base_name = "mxd_cover_hashes.json"
@@ -630,17 +671,37 @@ class MoveBackup(QThread, Logger):
                     base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
                     zfa.write(self.mxd_remote_content_hashes, arcname=base_name)
 
-
-                zfa.close()
-        except:
-            import traceback
-            self._log(traceback.format_exc())
-
     def _cleanup(self):
         self._log_location()
         try:
             self.ios.remove(self.src)
             self.ios.remove(self.backup_folder)
+            self.timer.cancel()
+            self.pb.hide()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _init_pb(self):
+        self._log_location()
+        try:
+            max = int(self.total_seconds/self.TIMER_TICK) + 1
+            self.pb.set_maximum(max)
+            self.pb.set_range(0, max)
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _ticked(self):
+        '''
+        Increment the progress bar, restart the timer
+        '''
+        try:
+            self.pb.increment()
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
         except:
             import traceback
             self._log(traceback.format_exc())
@@ -653,36 +714,90 @@ class MoveBackup(QThread, Logger):
         dst_size = os.stat(self.dst).st_size
         self.success = (src_size == dst_size)
         self._log_location('backup verified' if self.success else '')
-        if self.success:
-            self._cleanup()
-        else:
+        if not self.success:
             self._log("file sizes did not match:")
             self._log("src_size: {0}".format(src_size))
             self._log("dst_size: {0}".format(dst_size))
 
 
-class RestoreBackup(QThread):
+class RestoreBackup(QThread, Logger):
     '''
     Copy a (potentially large) backup file from local fs to connected device
+    ProgressBar needs to be created from main GUI thread
     '''
-    def __init__(self, parent, backup_image):
-        QThread.__init__(self, parent)
-        self.ios = parent.ios
-        self.src = backup_image
-        self.src_size = os.stat(self.src).st_size
-        self.success = None
+    IOS_TRANSFER_RATE = 7000000  # ~7 MB/second
+    TIMER_TICK = 0.25
+
+    def __init__(self, **kwargs):
+        '''
+        kwargs: {'backup_image', 'ios', 'msg', 'parent', 'pb', 'total_seconds'}
+        '''
+        self._log_location()
+        try:
+            for key in kwargs:
+                setattr(self, key, kwargs.get(key))
+            QThread.__init__(self, self.parent)
+            self.src_size = os.stat(self.backup_image).st_size
+            self.success = None
+            self.timer = None
+            self._init_pb()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def run(self):
-        tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
-        self.dst = b'/'.join(['/Documents', 'marvin.backup'])
-        self.ios.copy_to_idevice(self.src, tmp)
-        self.ios.rename(tmp, self.dst)
-        self._verify()
+        self._log_location()
+        try:
+            self._log("moving {0:,} bytes to '/Documents'".format(self.src_size))
+            tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
+            self.dst = b'/'.join(['/Documents', 'marvin.backup'])
+            self.ios.copy_to_idevice(self.backup_image, tmp)
+            self.ios.rename(tmp, self.dst)
+            self._verify()
+            self.pb.set_value(self.total_seconds)
+            self._cleanup()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _cleanup(self):
+        self._log_location()
+        try:
+            self.timer.cancel()
+            self.pb.hide()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _init_pb(self):
+        self._log_location()
+        try:
+            max = int(self.total_seconds/self.TIMER_TICK)
+            self.pb.set_maximum(max)
+            self.pb.set_range(0, max)
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _ticked(self):
+        '''
+        Increment the progress bar, restart the timer
+        '''
+        try:
+            self.pb.increment()
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def _verify(self):
         '''
         Confirm source size == dest size
         '''
+        self._log_location()
         try:
             self.dst_size = int(self.ios.exists(self.dst)['st_size'])
         except:
@@ -693,7 +808,6 @@ class RestoreBackup(QThread):
             self.ios.remove(self.dst)
         else:
             self.success = True
-
 
 class RowFlasher(QThread):
     '''
@@ -767,6 +881,7 @@ class CommandHandler(Logger):
         self.ios = parent.ios
         self.marvin_cancellation_required = False
         self.operation_timed_out = False
+        self.pb = None
         self.prefs = parent.prefs
         self.results = None
         self.timeout_override = None
@@ -788,6 +903,16 @@ class CommandHandler(Logger):
         self.command_name = cmd_name
         self.command_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
             cmd_element, time.mktime(time.localtime())))
+
+    def init_pb(self, total_seconds):
+        self._log_location()
+        try:
+            max = int(total_seconds/self.POLLING_DELAY)
+            self.pb.set_maximum(max)
+            self.pb.set_range(0, max)
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def issue_command(self, get_response=None, timeout_override=None):
         '''
@@ -909,6 +1034,8 @@ class CommandHandler(Logger):
                             }
                         break
                     Application.processEvents()
+                    if self.pb:
+                        self.pb.increment()
                     time.sleep(self.POLLING_DELAY)
 
                 else:
@@ -977,6 +1104,8 @@ class CommandHandler(Logger):
                                 self.watchdog.start()
 
                             Application.processEvents()
+                            if self.pb:
+                                self.pb.increment()
                             time.sleep(self.POLLING_DELAY)
 
                         except:

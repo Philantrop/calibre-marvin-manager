@@ -1070,7 +1070,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     title = "View collections"
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
-                               show_copy_button=False).exec_()
+                               parent=self.opts.gui, show_copy_button=False).exec_()
 
             elif button.objectName() == 'refresh_custom_columns_button':
                 self.refresh_custom_columns()
@@ -1086,7 +1086,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     title = "View metadata"
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
-                               show_copy_button=False).exec_()
+                               parent=self.opts.gui, show_copy_button=False).exec_()
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
             self._delete_books()
@@ -1156,7 +1156,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    "<p>Click <b>Show details</b> for affected books</p>")
 
             MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def dispatch_double_click(self, index):
         '''
@@ -1197,7 +1197,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Flag options"
             msg = "<p>Right-click in the Flags column for flag management options.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
         elif column == self.LOCKED_COL:
             self._toggle_locked_status(row)
@@ -1549,7 +1549,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 msg = "<p>%s refreshed for %s.</p>" % (refreshed,
                                                "1 book" if len(rows_to_refresh) == 1 else
                                                "%d books" % len(rows_to_refresh))
-                MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+                MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                           parent=self.opts.gui, show_copy_button=False).exec_()
 
         else:
             # No rows selected, inform user how the feature works
@@ -1557,7 +1558,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             msg = ('No books selected.\n' +
                     'To refresh custom columns, select one or more books, ' +
                     "then click the 'Refresh custom columns' button.")
-            MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
+            MessageBox(MessageBox.WARNING, title, msg, det_msg='',
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def show_add_collections_dialog(self):
         '''
@@ -1969,7 +1971,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Manage collections"
             msg = "<p>No collections to manage.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def show_view_collections_dialog(self, row):
         '''
@@ -1989,7 +1991,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = self.installed_books[book_id].title
             msg = "<p>This book is not assigned to any collections.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
         else:
             klass = os.path.join(dialog_resources_path, 'view_collections.py')
             if os.path.exists(klass):
@@ -2877,7 +2879,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Word count"
             msg = ("<p>Select one or more books to calculate word count.</p>")
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
         #self._log(stats)
         return stats
@@ -3498,7 +3500,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    '<p><b><font style="color:#FF0000; ">{0}</font></b></p>'.format(title))
             det_msg = '\n'.join(books_to_delete)
             d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
-                           show_copy_button=False)
+                           parent=self.opts.gui, show_copy_button=False)
             if d.exec_():
                 model = self.parent.gui.memory_view.model()
                 paths_to_delete = [btd[b]['path'] for b in btd]
@@ -3593,7 +3595,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "No selected books"
             msg = "<p>Select one or more books to delete.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _dump_hash_map(self, library_hash_map):
         '''
@@ -3655,7 +3657,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 title = 'Annotations refreshed'
                 msg = ("<p>Annotations refreshed for %s.</p>" %
                     ("1 book" if updated == 1 else "%d books" % updated))
-                MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+                MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                           parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _fetch_deep_view_status(self, book_ids):
         '''
@@ -3941,7 +3944,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                        "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
                        "<p>Proceed?</p>")
                 dlg = MessageBox(MessageBox.QUESTION, title, msg,
-                                 show_copy_button=False)
+                                 parent=self.opts.gui, show_copy_button=False)
                 if not dlg.exec_():
                     self._log("user declined to proceed with estimated_time of %s" % estimated_time)
                     # Update local_db anyway, as it has updated word counts
@@ -5062,7 +5065,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 title = "Damaged database"
                 msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
                 MessageBox(MessageBox.ERROR, title, msg,
-                           show_copy_button=False).exec_()
+                           parent=self.opts.gui, show_copy_button=False).exec_()
 
         return installed_books
 
@@ -5344,7 +5347,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    marker_msg +
                    '<p>Click <b>Show details</b> to display duplicates.</p>')
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
-                       show_copy_button=True).exec_()
+                       parent=self.opts.gui, show_copy_button=True).exec_()
 
     def _report_content_updates(self):
         '''
@@ -5399,7 +5402,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 details += 'Books updated in Marvin:\n' + marvin_updates
 
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
-                       show_copy_button=True).exec_()
+                       parent=self.opts.gui, show_copy_button=True).exec_()
 
     def _save_column_widths(self):
         '''
@@ -5829,7 +5832,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Rating"
             msg = ("<p>Select one or more books to apply rating to.</p>")
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _show_command_error(self, command, results):
         '''
@@ -5841,7 +5844,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                "<p>Click <b>Show details</b> for more information.</p>")
         details = results['details']
         MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
-                   show_copy_button=False).exec_()
+                   parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _synchronize_flags(self):
         '''
@@ -6140,7 +6143,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 title = "Update collections"
                 msg = ("<p>{0}: not implemented</p>".format(action))
                 MessageBox(MessageBox.INFO, title, msg,
-                           show_copy_button=False).exec_()
+                           parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _update_device_flags(self, book_id, path, updated_flags):
         '''
@@ -6184,12 +6187,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Update flags"
             msg = ("<p>{0}: not implemented</p>".format(action))
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
         title = 'Flags updated'
         msg = ("<p>Flags updated for {0}.</p>".format(
             "1 book" if rows_to_refresh == 1 else "{0} books".format(rows_to_refresh)))
-        MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+        MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                   parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _update_global_collections(self, details, update_local_db=True):
         '''
@@ -6708,7 +6712,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 msg = ("<p>'{0}' is a duplicate.</p>".format(self.installed_books[book_id].title) +
                        "<p>Remove duplicates before updating metadata.</p>")
                 return MessageBox(MessageBox.WARNING, title, msg,
-                                  show_copy_button=False).exec_()
+                                  parent=self.opts.gui, show_copy_button=False).exec_()
 
         total_books = len(selected_books)
         self._busy_status_setup(show_cancel=total_books > 1)

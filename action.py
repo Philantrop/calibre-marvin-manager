@@ -82,17 +82,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
         for key in sorted(current_mainDb_profile.keys()):
             if current_mainDb_profile[key] != stored_mainDb_profile[key]:
                 matched = False
+                self._log("{0} does not match".format(key))
                 self._log("mainDb_profile does not match, self.installed_books not restored")
                 break
 
         # Display mainDb_profile mismatch
         if not matched:
-            self._log("current_mainDb_profile does not match stored_mainDb_profile:")
-            self._log("{0:20} {1:^32} {2:^32}".format('key', 'stored', 'current'))
-            self._log("{0:—^20} {1:—^32} {2:—^32}".format('', '', ''))
+            self._log("{0:20} {1:34} {2:34}".format('key', 'stored', 'current'))
+            self._log("{0:—^20} {1:—^34} {2:—^34}".format('', '', ''))
             for key in sorted(current_mainDb_profile.keys()):
-                self._log("{0:20} {1:<32} {2:<32}".format(
-                    key, stored_mainDb_profile[key], current_mainDb_profile[key]))
+                self._log("{0:20} {1:<34} {2:<34}".format(
+                    key,
+                    repr(stored_mainDb_profile[key]),
+                    repr(current_mainDb_profile[key])))
 
         return matched
 
@@ -107,13 +109,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
         backup_target = backup_folder + '/marvin.backup'
         last_backup_folder = self.prefs.get('backup_folder', os.path.expanduser("~"))
 
-        BACKUP_MSG_1 = ('<ol>'
+        BACKUP_MSG_1 = ('<ol style="margin-right:1.5em">'
                         '<li style="margin-bottom:0.5em">Creating backup of {book_count:,} '
                         'books on {device} …</li>'
                         '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder to store backup</li>'
                         '<li style="color:#bbb">Move backup from {device} to {destination}</li>'
                         '</ol>')
-        BACKUP_MSG_2 = ('<ol>'
+        BACKUP_MSG_2 = ('<ol style="margin-right:1.5em">'
                         '<li style="color:#bbb;margin-bottom:0.5em">Backup of {book_count:,} '
                         'books completed</li>'
                         '<li style="color:#bbb;margin-bottom:0.5em">Destination folder selected</li>'
@@ -132,16 +134,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if stats:
                 d = datetime.fromtimestamp(float(stats['st_mtime']))
                 friendly_date = d.strftime("%A, %B %d, %Y")
-                friendly_time = d.strftime("%I:%M%p")
+                friendly_time = d.strftime("%I:%M %p")
 
                 title = "A backup already exists!"
-                msg = ('<p>There is an existing backup created ' +
-                       '{0} at {1}.</p>'
+                msg = ('<p>There is an existing backup of your Marvin library '
+                        'created {0} at {1}.</p>'
                        '<p>Proceeding with this backup will '
                        'overwrite the existing backup.</p>'
                        '<p>Proceed?</p>'.format(friendly_date, friendly_time))
                 dlg = MessageBox(MessageBox.QUESTION, title, msg,
-                                 show_copy_button=False)
+                                 parent=self.gui, show_copy_button=False)
                 return dlg.exec_()
             return True
 
@@ -154,11 +156,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
             book_descriptor = "books" if total_books > 1 else "book"
             title = "Estimated time to create backup"
             msg = ("<p>Creating a backup of " +
-                   "{0} books ".format(total_books) +
+                   "{0} books in your Marvin library ".format(total_books) +
                    "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
                    "<p>Proceed?</p>")
             dlg = MessageBox(MessageBox.QUESTION, title, msg,
-                             show_copy_button=False)
+                             parent=self.gui, show_copy_button=False)
             return dlg.exec_()
 
         def _estimate_time():
@@ -214,24 +216,23 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log("user declined to overwrite existing backup")
             return
 
-        # Inform the user what's going on
+        # Construct the ProgressBar
         busy_panel_args = {'book_count': mainDb_profile['Books'],
-                           'destination': 'computer',
+                           'destination': 'destination folder',
                            'device': self.ios.device_name,
                            'estimated_time': estimated_time}
-        self._busy_panel_setup(BACKUP_MSG_1.format(**busy_panel_args))
-#         pb = ProgressBar(parent=self.gui, window_title="Creating backup")
-#         pb.set_label(BACKUP_MSG_1.format(**busy_panel_args))
-#         pb.show()
+        pb = ProgressBar(parent=self.gui, alignment=Qt.AlignLeft)
+        pb.set_label(BACKUP_MSG_1.format(**busy_panel_args))
 
         # Issue the command
         ch = CommandHandler(self)
+        ch.pb = pb
+        ch.init_pb(total_seconds)
         ch.construct_general_command('backup')
+        pb.show()
         ch.issue_command(timeout_override=timeout)
-
-        self._busy_panel_teardown()
-#         pb.hide()
-#         del pb
+        pb.hide()
+        del pb
 
         if ch.results['code']:
             self._log("results: %s" % ch.results)
@@ -240,7 +241,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                    '<p>Click <b>Show details</b> for more information.</p>').format(
                    self.ios.device_name)
             det_msg = ch.results['details']
-            MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg).exec_()
+            MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg,
+                       parent=self.gui).exec_()
             return
 
         # Move backup to the specified location
@@ -266,15 +268,28 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 busy_panel_args['backup_size'] = int(int(stats['st_size'])/(1024*1024))
                 #busy_panel_args['destination'] = "..{0}{1}".format(
                 #    os.path.sep, destination_folder.split(os.path.sep)[-1])
-                self._busy_panel_setup(BACKUP_MSG_2.format(**busy_panel_args))
+
+                # Create the ProgressBar in the main GUI thread
+                pb = ProgressBar(parent=self.gui, window_title="Restoring backup",
+                                 alignment=Qt.AlignLeft)
+                pb.set_label(BACKUP_MSG_2.format(**busy_panel_args))
 
                 # Merge MXD state with backup image
                 temp_dir = PersistentTemporaryDirectory()
                 zip_dst = os.path.join(destination_folder, storage_name)
 
                 # Init the class
-                move_operation = MoveBackup(self, backup_folder, destination_folder,
-                    storage_name, stats)
+                kwargs = {
+                          'backup_folder': backup_folder,
+                          'destination_folder': destination_folder,
+                          'ios': self.ios,
+                          'parent': self,
+                          'pb': pb,
+                          'storage_name': storage_name,
+                          'src_stats': stats,
+                          'total_seconds': total_seconds
+                         }
+                move_operation = MoveBackup(**kwargs)
 
                 # Device cached hashes
                 device_cached_hashes = "{0}_cover_hashes.json".format(
@@ -311,26 +326,27 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     with PersistentTemporaryFile(suffix=".zip") as local:
                         with open(local._name, 'w') as f:
                             self.ios.copy_from_idevice(archive_path, f)
-                    move_operation.iosra_booklist = local
+                    move_operation.iosra_booklist = local._name
 
+                pb.show()
                 move_operation.start()
                 while not move_operation.isFinished():
                     Application.processEvents()
-
-                self._busy_panel_teardown()
+                local.close()
 
                 # Inform user backup operation is complete
                 title = "Backup operation complete"
-                msg = '<p>Marvin library backed up to {0}.</p>'.format(destination_folder)
-                MessageBox(MessageBox.INFO, title, msg).exec_()
+                msg = '<p>Marvin library backed up to {0}</p>'.format(destination_folder)
+                MessageBox(MessageBox.INFO, title, msg, parent=self.gui).exec_()
 
                 # Save the backup folder
                 self.prefs.set('backup_folder', destination_folder)
             else:
                 # Inform user backup operation cancelled
                 title = "Backup cancelled"
-                msg = '<p>Backup of {0} cancelled.</p>'.format(self.ios.device_name)
-                MessageBox(MessageBox.WARNING, title, msg, show_copy_button=False).exec_()
+                msg = '<p>Backup of {0} cancelled</p>'.format(self.ios.device_name)
+                MessageBox(MessageBox.WARNING, title, msg, parent=self.gui,
+                           show_copy_button=False).exec_()
         else:
             self._log("No backup file found at {0}".format(backup_target))
 
@@ -439,7 +455,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                    '<a href="http://www.mobileread.com/forums/showthread.php?t=221357">' +
                    'Marvin XD support</a></p>')
         if msg:
-            MessageBox(MessageBox.WARNING, status, msg, det_msg='', show_copy_button=False).exec_()
+            MessageBox(MessageBox.WARNING, status, msg, det_msg='',
+                       parent=self.gui, show_copy_button=False).exec_()
 
         return status
 
@@ -776,6 +793,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                "<p>Proceed?</p>")
         d = MessageBox(MessageBox.QUESTION,
                        title, msg,
+                       parent=self.gui,
                        show_copy_button=False)
         if not d.exec_():
             return
@@ -1198,65 +1216,105 @@ class MarvinManagerAction(InterfaceAction, Logger):
         Invoke RestoreBackup() in a separate thread
         Display a dialog telling user how to complete restore
         '''
+        IOS_TRANSFER_RATE = 7000000  # ~7 MB/second
+        RESTORE_MSG_1 = ('<ol style="margin-right:1.5em">'
+                         '<li style="margin-bottom:0.5em">Transferring backup of '
+                         '{book_count:,} books to {device} …</li>'
+                         '<li style="color:#bbb">Complete restore process</li>'
+                         '</ol>')
+
+        def _format_time(total_seconds):
+            # Estimate worst-case time required to create backup
+            m, s = divmod(total_seconds, 60)
+            h, m = divmod(m, 60)
+            if h:
+                formatted = "%d:%02d:%02d" % (h, m, s)
+            else:
+                formatted = "%d:%02d" % (m, s)
+            return formatted
+
         self._log_location()
 
         # Get the backup file
-        source = unicode(QFileDialog.getOpenFileName(
+        backup_image = unicode(QFileDialog.getOpenFileName(
             self.gui,
             "Select Marvin backup file to restore",
             self.prefs.get('backup_folder', os.path.expanduser("~")),
             "*.backup").toUtf8())
-        if source:
+        if backup_image:
             # Analyze the candidate file
-            if not is_zipfile(source):
+            if not is_zipfile(backup_image):
                 title = "Invalid backup file"
-                msg = "{0} is not a valid Marvin backup image.".format(source)
-                return MessageBox(MessageBox.WARNING, title, msg, show_copy_button=False).exec_()
+                msg = "{0} is not a valid Marvin backup image.".format(backup_image)
+                return MessageBox(MessageBox.WARNING, title, msg,
+                                  parent=self.gui, show_copy_button=False).exec_()
 
-            archive = ZipFile(source, 'r')
+            archive = ZipFile(backup_image, 'r')
             archive_list = archive.infolist()
             epub_count = 0
             for f in archive_list:
                 if f.filename.lower().endswith('.epub'):
                     epub_count += 1
 
+            src_size = os.stat(backup_image).st_size
+
             backup_source = ''
-            components = re.match(r'(.*?) (\d{4}-\d{2}-\d{2})', os.path.basename(source))
+            components = re.match(r'(.*?) (\d{4}-\d{2}-\d{2})', os.path.basename(backup_image))
             if components:
                 backup_source = components.group(1)
 
-            ts = os.path.getmtime(source)
+            ts = os.path.getmtime(backup_image)
             dt = datetime.fromtimestamp(ts)
             backup_date = dt.strftime("%A, %b %e %Y")
 
+            # Estimate transfer time @ IOS_TRANSFER_RATE
+            total_seconds = int(src_size / IOS_TRANSFER_RATE) + 1
+            formatted_time = _format_time(total_seconds)
+            self._log("estimated_time: {0}".format(formatted_time))
+
             # Confirm
+
             title = "Confirm restore operation"
-            msg = "<p>This will restore a backup of <b>{0} books</b>".format(
-                epub_count)
+            msg = "<p>This will restore a backup of <b>{0} books</b>".format(epub_count)
             if backup_source:
                 msg += ", from <b>{0}</b>,".format(backup_source)
-            msg += (" created {0}, to <b>{1}</b>.</p>"
-                    '<p>Proceed?</p>').format(backup_date, self.ios.device_name)
-            if not MessageBox(MessageBox.QUESTION, title, msg, show_copy_button=False).exec_():
+            msg += (' created {0}, to <b>{1}</b>.</p>'
+                    '<p>It should take about {2} to restore {3:,} MB.</p>'
+                    '<p>Proceed?</p>').format(backup_date, self.ios.device_name,
+                                              formatted_time, int(src_size/(1024*1024)))
+            if not MessageBox(MessageBox.QUESTION, title, msg, parent=self.gui,
+                              show_copy_button=False).exec_():
                 return
 
             # Save the selected backup folder
-            self.prefs.set('backup_folder', os.path.dirname(source))
+            self.prefs.set('backup_folder', os.path.dirname(backup_image))
 
-            copy_operation = RestoreBackup(self, source)
-            self._busy_panel_setup("<p>Restoring {0} books to {1}…</p>".format(
-                epub_count,
-                self.ios.device_name))
+            # Create the ProgressBar in the main GUI thread
+            busy_panel_args = {'book_count': epub_count,
+                               'device': self.ios.device_name,
+                               'estimated_time': formatted_time}
+            pb = ProgressBar(parent=self.gui, window_title="Restoring backup",
+                             alignment=Qt.AlignLeft)
+            pb.set_label(RESTORE_MSG_1.format(**busy_panel_args))
+
+            kwargs = {
+                      'backup_image': backup_image,
+                      'ios': self.ios,
+                      'msg': RESTORE_MSG_1.format(**busy_panel_args),
+                      'parent': self,
+                      'pb': pb,
+                      'total_seconds': total_seconds
+                     }
+            copy_operation = RestoreBackup(**kwargs)
+            pb.show()
+
+            # Start the copy operation
             copy_operation.start()
             while not copy_operation.isFinished():
                 Application.processEvents()
-            self._busy_panel_teardown()
-
-            s_size = copy_operation.src_size
-            d_size = copy_operation.dst_size
 
             # Verify transferred size
-            if s_size == d_size:
+            if copy_operation.success:
                 # Delete cached Marvin data
                 self.developer_utilities('Delete Marvin hashes')
 
@@ -1308,31 +1366,35 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 else:
                     self._log("iosra_booklist snapshot not found in archive")
 
-                self._log("Backup verifies: {0:,} bytes".format(s_size))
+                self._log("Backup verifies: {0:,} bytes".format(copy_operation.src_size))
                 # Display dialog detailing how to complete restore
-                title = "Restore Marvin from backup"
-                msg = ('<p>To complete the restore process on {0}:</p>'
-                       '<ul>'
+                title = "Complete restore process"
+                msg = ('<p>To complete the restore process of your Marvin library:</p>'
+                       '<ol>'
                        '<li>Touch <b>Disconnect</b> on the calibre connector</li>'
                        '<li>Press the Home button to return to the Home screen</li>'
                        '<li>Double-click the Home button to display running apps</li>'
                        '<li>Force-quit Marvin</li>'
                        '<li>Restart Marvin</li>'
-                       '</ul>'
-                       ).format(self.ios.device_name)
-                d = MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+                       '<li>Wait until restore finishes in Marvin</li>'
+                       '<li>Restart the calibre connector</li>'
+                       '</ol>'
+                       )
+                d = MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                               parent=self.gui, show_copy_button=False).exec_()
 
             else:
                 self._log("Backup does not verify: source {0:,} dest {1:,}".format(
-                    s_size, d_size))
+                    copy_operation.src_size, copy_operation.dst_size))
                 title = "Restore unsuccessful"
                 msg = ('<p>Backup does not verify.</p>'
                        '<p>'
                        '<tt>Src: {0:,}</tt><br/>'
                        '<tt>Dst: {1:,}</tt></p>'
                        '<p>Restore cancelled.</p>'
-                      ).format(s_size, d_size)
-                d = MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
+                      ).format(copy_operation.src_size, copy_operation.dst_size)
+                d = MessageBox(MessageBox.WARNING, title, msg, det_msg='',
+                               parent=self.gui, show_copy_button=False).exec_()
                 self._log("Restore cancelled")
 
     def restore_installed_books(self):
@@ -1374,7 +1436,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                'support thread at MobileRead’s Calibre forum.</p>')
         text = get_resources('about.txt')
         text = text.decode('utf-8')
-        d = MessageBox(MessageBox.INFO, title, msg, det_msg=text, show_copy_button=False)
+        d = MessageBox(MessageBox.INFO, title, msg, det_msg=text,
+                       parent=self.gui, show_copy_button=False)
         d.exec_()
 
     def show_help(self):
@@ -1394,7 +1457,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.minimum_ios_driver_version[0],
                 self.minimum_ios_driver_version[1],
                 self.minimum_ios_driver_version[2])
-            MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+            MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                       parent=self.gui, show_copy_button=False).exec_()
         else:
             self.launch_library_scanner()
 
