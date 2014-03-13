@@ -8,7 +8,8 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import atexit, cPickle as pickle, hashlib, json, os, re, shutil, sqlite3, sys, tempfile, threading
+import atexit, cPickle as pickle, hashlib, json, os, re, shutil, sqlite3, sys
+import tempfile, threading, time
 
 from datetime import datetime
 from functools import partial
@@ -102,26 +103,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         iPad1:      500 books in 90 seconds - 5.5 books/second
         iPad Mini:  500 books in 64 seconds - 7.8 books/second
+        1) Issue backup command to Marvin
+        2) Get destination directory
+        3) Move generated backup from /Documents/Backup to local storage
         '''
-        WORST_CASE_ARCHIVE_RATE = 2000000   # MB/second
+        IOS_TRANSFER_RATE = 7000000  # ~7 MB/second
         TIMEOUT_PADDING_FACTOR = 1.5
+        WORST_CASE_ARCHIVE_RATE = 1800000   # MB/second
         backup_folder = b'/'.join(['/Documents', 'Backup'])
         backup_target = backup_folder + '/marvin.backup'
         last_backup_folder = self.prefs.get('backup_folder', os.path.expanduser("~"))
-
-        BACKUP_MSG_1 = ('<ol style="margin-right:1.5em">'
-                        '<li style="margin-bottom:0.5em">Creating backup of {book_count:,} '
-                        'books on {device} …</li>'
-                        '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder to store backup</li>'
-                        '<li style="color:#bbb">Move backup from {device} to {destination}</li>'
-                        '</ol>')
-        BACKUP_MSG_2 = ('<ol style="margin-right:1.5em">'
-                        '<li style="color:#bbb;margin-bottom:0.5em">Backup of {book_count:,} '
-                        'books completed</li>'
-                        '<li style="color:#bbb;margin-bottom:0.5em">Destination folder selected</li>'
-                        '<li>Moving backup ({backup_size:,} MB) '
-                        'from {device} to {destination} …</li>'
-                        '</ol>')
 
         def _confirm_overwrite(backup_target):
             '''
@@ -147,31 +138,24 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 return dlg.exec_()
             return True
 
-        def _confirm_lengthy_backup(total_books, estimated_time):
+        def _confirm_lengthy_backup(total_books, total_seconds):
             '''
             If this is going to take some time, warn the user
             '''
-            self._log("estimated time to backup {0} books: {1}".format(total_books, estimated_time))
+            estimated_time = self.format_time(total_seconds, show_fractional=False)
+            self._log("estimated time to backup {0} books: {1}".format(
+                total_books, estimated_time))
+
             # Confirm that user wants to proceed given estimated time to completion
             book_descriptor = "books" if total_books > 1 else "book"
             title = "Estimated time to create backup"
             msg = ("<p>Creating a backup of " +
-                   "{0} books in your Marvin library ".format(total_books) +
+                   "{0} {1} in your Marvin library ".format(total_books, book_descriptor) +
                    "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
                    "<p>Proceed?</p>")
             dlg = MessageBox(MessageBox.QUESTION, title, msg,
                              parent=self.gui, show_copy_button=False)
             return dlg.exec_()
-
-        def _estimate_time():
-            # Estimate worst-case time required to create backup
-            m, s = divmod(total_seconds, 60)
-            h, m = divmod(m, 60)
-            if h:
-                estimated_time = "%d:%02d:%02d" % (h, m, s)
-            else:
-                estimated_time = "%d:%02d" % (m, s)
-            return estimated_time
 
         def _estimate_size():
             '''
@@ -204,10 +188,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
         estimated_size = _estimate_size()
         total_seconds = int(estimated_size/WORST_CASE_ARCHIVE_RATE)
         timeout = int(total_seconds * TIMEOUT_PADDING_FACTOR)
-        estimated_time = _estimate_time()
+        estimated_time = self.format_time(total_seconds)
 
         if timeout > CommandHandler.WATCHDOG_TIMEOUT:
-            if not _confirm_lengthy_backup(mainDb_profile['Books'], estimated_time):
+            if not _confirm_lengthy_backup(mainDb_profile['Books'], total_seconds):
                 return
         else:
             timeout = CommandHandler.WATCHDOG_TIMEOUT
@@ -216,22 +200,48 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log("user declined to overwrite existing backup")
             return
 
-        # Construct the ProgressBar
+        # Construct the phase 1 ProgressBar
         busy_panel_args = {'book_count': mainDb_profile['Books'],
                            'destination': 'destination folder',
                            'device': self.ios.device_name,
                            'estimated_time': estimated_time}
-        pb = ProgressBar(parent=self.gui, alignment=Qt.AlignLeft)
-        pb.set_label(BACKUP_MSG_1.format(**busy_panel_args))
+        BACKUP_MSG_1 = ('<ol style="margin-right:1.5em">'
+                        '<li style="margin-bottom:0.5em">Creating backup of {book_count:,} '
+                        'books on {device} …</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder to store backup</li>'
+                        '<li style="color:#bbb">Move backup from {device} to {destination}</li>'
+                        '</ol>')
+        pb = ProgressBar(alignment=Qt.AlignLeft,
+                         label=BACKUP_MSG_1.format(**busy_panel_args),
+                         parent=self.gui)
 
-        # Issue the command
-        ch = CommandHandler(self)
-        ch.pb = pb
+        # Init the command handler
+        ch = CommandHandler(self, pb=pb)
         ch.init_pb(total_seconds)
         ch.construct_general_command('backup')
+
+        if self.prefs.get('log_backup_operations'):
+            start_time = time.time()
+
+        # Dispatch the command
         pb.show()
         ch.issue_command(timeout_override=timeout)
         pb.hide()
+        if self.prefs.get('log_backup_operations'):
+            actual_time = time.time() - start_time
+            self._log(('\n'
+                       '1. estimated_size: {0:,}\n'
+                       '       book_count: {1:,}\n'
+                       '   estimated_time: {2}\n'
+                       '      actual_time: {3}\n'
+                       '     pct_complete: {4}%\n'
+                       '     archive rate: {5:,.0f} bytes/second').format(
+                       estimated_size,
+                       mainDb_profile['Books'],
+                       self.format_time(total_seconds),
+                       self.format_time(actual_time),
+                       pb.get_pct_complete(),
+                       estimated_size/actual_time))
         del pb
 
         if ch.results['code']:
@@ -269,16 +279,25 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 #busy_panel_args['destination'] = "..{0}{1}".format(
                 #    os.path.sep, destination_folder.split(os.path.sep)[-1])
 
+                BACKUP_MSG_3 = ('<ol style="margin-right:1.5em">'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Backup of {book_count:,} '
+                                'books completed</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Destination folder selected</li>'
+                                '<li>Moving backup ({backup_size:,} MB) '
+                                'from {device} to {destination} …</li>'
+                                '</ol>')
+
                 # Create the ProgressBar in the main GUI thread
                 pb = ProgressBar(parent=self.gui, window_title="Restoring backup",
                                  alignment=Qt.AlignLeft)
-                pb.set_label(BACKUP_MSG_2.format(**busy_panel_args))
+                pb.set_label(BACKUP_MSG_3.format(**busy_panel_args))
 
                 # Merge MXD state with backup image
                 temp_dir = PersistentTemporaryDirectory()
                 zip_dst = os.path.join(destination_folder, storage_name)
 
                 # Init the class
+                total_seconds = int(stats['st_size']) / IOS_TRANSFER_RATE
                 kwargs = {
                           'backup_folder': backup_folder,
                           'destination_folder': destination_folder,
@@ -328,10 +347,29 @@ class MarvinManagerAction(InterfaceAction, Logger):
                             self.ios.copy_from_idevice(archive_path, f)
                     move_operation.iosra_booklist = local._name
 
+                if self.prefs.get('log_backup_operations'):
+                    start_time = time.time()
+
                 pb.show()
                 move_operation.start()
                 while not move_operation.isFinished():
                     Application.processEvents()
+
+                if self.prefs.get('log_backup_operations'):
+                    actual_size = int(stats['st_size'])
+                    actual_time = time.time() - start_time
+                    self._log(('\n'
+                               '3.    actual_size: {0:,}\n'
+                               '   estimated_time: {1}\n'
+                               '      actual_time: {2}\n'
+                               '     pct_complete: {3}%\n'
+                               '    transfer rate: {4:,.0f} bytes/sec').format(
+                               actual_size,
+                               self.format_time(move_operation.total_seconds),
+                               self.format_time(actual_time),
+                               pb.get_pct_complete(),
+                               actual_size/actual_time))
+
                 local.close()
 
                 # Inform user backup operation is complete
@@ -459,6 +497,21 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        parent=self.gui, show_copy_button=False).exec_()
 
         return status
+
+    def format_time(self, total_seconds, show_fractional=True):
+        m, s = divmod(total_seconds, 60)
+        h, m = divmod(m, 60)
+        if show_fractional:
+            if h:
+                formatted = "%d:%02d:%05.2f" % (h, m, s)
+            else:
+                formatted = "%d:%05.2f" % (m, s)
+        else:
+            if h:
+                formatted = "%d:%02d:%02.0f" % (h, m, s)
+            else:
+                formatted = "%d:%02.0f" % (m, s)
+        return formatted
 
     # subclass override
     def genesis(self):
@@ -1223,16 +1276,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                          '<li style="color:#bbb">Complete restore process</li>'
                          '</ol>')
 
-        def _format_time(total_seconds):
-            # Estimate worst-case time required to create backup
-            m, s = divmod(total_seconds, 60)
-            h, m = divmod(m, 60)
-            if h:
-                formatted = "%d:%02d:%02d" % (h, m, s)
-            else:
-                formatted = "%d:%02d" % (m, s)
-            return formatted
-
         self._log_location()
 
         # Get the backup file
@@ -1269,8 +1312,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             # Estimate transfer time @ IOS_TRANSFER_RATE
             total_seconds = int(src_size / IOS_TRANSFER_RATE) + 1
-            formatted_time = _format_time(total_seconds)
-            self._log("estimated_time: {0}".format(formatted_time))
+            estimated_time = self.format_time(total_seconds)
+            self._log("estimated_time: {0}".format(estimated_time))
 
             # Confirm
 
@@ -1279,9 +1322,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if backup_source:
                 msg += ", from <b>{0}</b>,".format(backup_source)
             msg += (' created {0}, to <b>{1}</b>.</p>'
-                    '<p>It should take about {2} to restore {3:,} MB.</p>'
-                    '<p>Proceed?</p>').format(backup_date, self.ios.device_name,
-                                              formatted_time, int(src_size/(1024*1024)))
+                    '<p>It should take about {2} to restore the {3:,} MB '
+                    'backup image.</p>'
+                    '<p>Proceed?</p>').format(
+                        backup_date,
+                        self.ios.device_name,
+                        self.format_time(total_seconds, show_fractional=False),
+                        int(src_size/(1024*1024)))
             if not MessageBox(MessageBox.QUESTION, title, msg, parent=self.gui,
                               show_copy_button=False).exec_():
                 return
@@ -1292,7 +1339,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             # Create the ProgressBar in the main GUI thread
             busy_panel_args = {'book_count': epub_count,
                                'device': self.ios.device_name,
-                               'estimated_time': formatted_time}
+                               'estimated_time': estimated_time}
             pb = ProgressBar(parent=self.gui, window_title="Restoring backup",
                              alignment=Qt.AlignLeft)
             pb.set_label(RESTORE_MSG_1.format(**busy_panel_args))
@@ -1306,12 +1353,31 @@ class MarvinManagerAction(InterfaceAction, Logger):
                       'total_seconds': total_seconds
                      }
             copy_operation = RestoreBackup(**kwargs)
+
+            if self.prefs.get('log_backup_operations'):
+                start_time = time.time()
+
             pb.show()
 
             # Start the copy operation
             copy_operation.start()
             while not copy_operation.isFinished():
                 Application.processEvents()
+
+            if self.prefs.get('log_backup_operations'):
+                actual_size = src_size
+                actual_time = time.time() - start_time
+                self._log(('\n'
+                           '      actual_size: {0:,}\n'
+                           '   estimated_time: {1}\n'
+                           '      actual_time: {2}\n'
+                           '     pct_complete: {3}%\n'
+                           '    transfer rate: {4:,.0f} bytes/sec').format(
+                           actual_size,
+                           estimated_time,
+                           self.format_time(actual_time),
+                           pb.get_pct_complete(),
+                           actual_size/actual_time))
 
             # Verify transferred size
             if copy_operation.success:

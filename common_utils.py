@@ -381,9 +381,10 @@ class MyBlockingBusy(QDialog):
 
 
 class ProgressBar(QDialog, Logger):
-    def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
-                 label='Label goes here', frameless=True, on_top=False,
-                 alignment=Qt.AlignHCenter):
+    def __init__(self,
+                 alignment=Qt.AlignHCenter, frameless=True, label='Label goes here',
+                 max_items=100, on_top=False, parent=None, window_title='Progress Bar'
+                 ):
         if on_top:
             _flags = Qt.WindowStaysOnTopHint
             if frameless:
@@ -426,6 +427,10 @@ class ProgressBar(QDialog, Logger):
     def closeEvent(self, event):
         self._log_location()
         self.close_requested = True
+
+    def get_pct_complete(self):
+        pct_complete = float(self.progressBar.value() / self.progressBar.maximum())
+        return int(pct_complete * 100)
 
     def increment(self):
         try:
@@ -615,7 +620,6 @@ class MoveBackup(QThread, Logger):
             import traceback
             self._log(traceback.format_exc())
 
-
     def run(self):
         try:
             backup_size = "{:,} MB".format(int(int(self.src_stats['st_size'])/(1024*1024)))
@@ -635,7 +639,6 @@ class MoveBackup(QThread, Logger):
             # Append MXD components
             self._append_mxd_components()
 
-            self.pb.set_value(self.total_seconds)
             self._cleanup()
 
         except:
@@ -748,13 +751,11 @@ class RestoreBackup(QThread, Logger):
     def run(self):
         self._log_location()
         try:
-            self._log("moving {0:,} bytes to '/Documents'".format(self.src_size))
             tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
             self.dst = b'/'.join(['/Documents', 'marvin.backup'])
             self.ios.copy_to_idevice(self.backup_image, tmp)
             self.ios.rename(tmp, self.dst)
             self._verify()
-            self.pb.set_value(self.total_seconds)
             self._cleanup()
         except:
             import traceback
@@ -808,6 +809,7 @@ class RestoreBackup(QThread, Logger):
             self.ios.remove(self.dst)
         else:
             self.success = True
+
 
 class RowFlasher(QThread):
     '''
@@ -871,7 +873,7 @@ class CommandHandler(Logger):
     </manifest>
     </{0}>'''
 
-    def __init__(self, parent):
+    def __init__(self, parent, pb=None):
         self._log_location()
         self.busy_cancel_requested = False
         self.command_name = None
@@ -881,7 +883,7 @@ class CommandHandler(Logger):
         self.ios = parent.ios
         self.marvin_cancellation_required = False
         self.operation_timed_out = False
-        self.pb = None
+        self.pb = pb
         self.prefs = parent.prefs
         self.results = None
         self.timeout_override = None
