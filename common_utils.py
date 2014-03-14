@@ -591,13 +591,12 @@ class MoveBackup(QThread, Logger):
     '''
     Move a (potentially large) backup file from connected device to local fs
     '''
-    IOS_TRANSFER_RATE = 7000000  # ~7 MB/second
     TIMER_TICK = 0.25
 
     def __init__(self, **kwargs):
         '''
-        kwargs: {'backup_folder', 'destination_folder', 'ios', 'parent', 'pb',
-                 'storage_name', 'stats', total_seconds}
+        kwargs: {'backup_folder', 'destination_folder', 'ios',
+                 'parent', 'pb', 'storage_name', 'stats', total_seconds}
         '''
         self._log_location()
         try:
@@ -613,7 +612,7 @@ class MoveBackup(QThread, Logger):
             self.dst = os.path.join(self.destination_folder,
                                     sanitize_file_name(self.storage_name))
             self.src = "{0}/marvin.backup".format(self.backup_folder)
-            self.total_seconds *= 1.25   # allow for MXD component processing
+            self.total_seconds
             self._init_pb()
 
         except:
@@ -625,6 +624,10 @@ class MoveBackup(QThread, Logger):
             backup_size = "{:,} MB".format(int(int(self.src_stats['st_size'])/(1024*1024)))
             self._log_location()
             self._log("moving {0} to '{1}'".format(backup_size, self.destination_folder))
+
+            if self.parent.prefs.get('log_backup_operations'):
+                start_time = time.time()
+
             # Remove any older file of the same name at destination
             if os.path.isfile(self.dst):
                 os.remove(self.dst)
@@ -635,6 +638,9 @@ class MoveBackup(QThread, Logger):
 
             # Validate transferred file sizes, do cleanup
             self._verify()
+
+            if self.parent.prefs.get('log_backup_operations'):
+                self.transfer_time = time.time() - start_time
 
             # Append MXD components
             self._append_mxd_components()
@@ -647,11 +653,15 @@ class MoveBackup(QThread, Logger):
 
     def _append_mxd_components(self):
         self._log_location()
+
         if (self.iosra_booklist or
             self.mxd_mainDb_profile or
             self.mxd_device_cached_hashes or
             self.mxd_installed_books or
             self.mxd_remote_content_hashes):
+
+            if self.parent.prefs.get('log_backup_operations'):
+                start_time = time.time()
 
             with ZipFile(self.dst, mode='a') as zfa:
                 if self.iosra_booklist:
@@ -673,6 +683,9 @@ class MoveBackup(QThread, Logger):
                     from calibre_plugins.marvin_manager.book_status import BookStatusDialog
                     base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
                     zfa.write(self.mxd_remote_content_hashes, arcname=base_name)
+
+            if self.parent.prefs.get('log_backup_operations'):
+                self.sidecar_time = time.time() - start_time
 
     def _cleanup(self):
         self._log_location()
@@ -728,7 +741,6 @@ class RestoreBackup(QThread, Logger):
     Copy a (potentially large) backup file from local fs to connected device
     ProgressBar needs to be created from main GUI thread
     '''
-    IOS_TRANSFER_RATE = 7000000  # ~7 MB/second
     TIMER_TICK = 0.25
 
     def __init__(self, **kwargs):
