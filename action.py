@@ -1356,9 +1356,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if avg_book_size < 500 * 1024:
                 IOS_WRITE_RATE = 5000000
             elif avg_book_size < 2 * 1024 * 1024:
-                IOS_WRITE_RATE = 6800000
+                IOS_WRITE_RATE = 6500000
             else:
-                IOS_WRITE_RATE = 7300000
+                IOS_WRITE_RATE = 7000000
 
             total_seconds = int(src_size / IOS_WRITE_RATE) + 1
             estimated_time = self.format_time(total_seconds)

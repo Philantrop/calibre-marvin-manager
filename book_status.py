@@ -3384,7 +3384,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location()
         self.tm = MarkupTableModel(self, centered_columns=self.CENTERED_COLUMNS,
                                    right_aligned_columns=self.RIGHT_ALIGNED_COLUMNS)
-
         self.tv.setModel(self.tm)
         self.tv.setShowGrid(False)
         if self.parent.prefs.get('use_monospace_font', False):
@@ -3432,9 +3431,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if saved_column_widths[col] == 0:
                     columns_to_hide.append(col)
 
-        # Set column width to fit contents
-        self.tv.resizeColumnsToContents()
-
         # Hide hidden columns
         for index in sorted(columns_to_hide):
             #self._log("hiding %s" % index)
@@ -3453,6 +3449,21 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
         else:
+            # Set column width to fit contents. A potentially lengthy operation.
+            self.tv.resizeColumnsToContents()
+
+            # Hide hidden columns
+            for index in sorted(columns_to_hide):
+                #self._log("hiding %s" % index)
+                self.tv.hideColumn(index)
+
+            # Set horizontal self.header props
+            #self.tv.horizontalHeader().setStretchLastSection(True)
+
+            # Clip Author, Title to 250
+            self.tv.setColumnWidth(self.TITLE_COL, 250)
+            self.tv.setColumnWidth(self.AUTHOR_COL, 250)
+
             # Set narrow cols to width of FLAGS
             fixed_width = self.tv.columnWidth(self.LAST_OPENED_COL)
             if not fixed_width:
@@ -3479,6 +3490,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         sort_order = self.opts.prefs.get('marvin_library_sort_order',
                                          Qt.DescendingOrder)
         self.tv.sortByColumn(sort_column, sort_order)
+
 
     def _delete_books(self):
         '''
