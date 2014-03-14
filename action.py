@@ -84,20 +84,25 @@ class MarvinManagerAction(InterfaceAction, Logger):
         for key in sorted(current_mainDb_profile.keys()):
             if current_mainDb_profile[key] != stored_mainDb_profile[key]:
                 matched = False
-                self._log("{0} does not match".format(key))
-                self._log("mainDb_profile does not match, self.installed_books not restored")
-                break
+                self._log("'{0}' does not match".format(key))
 
         # Display mainDb_profile mismatch
         if not matched:
-            self._log("{0:20} {1:34} {2:34}".format('key', 'stored', 'current'))
-            self._log("{0:—^20} {1:—^34} {2:—^34}".format('', '', ''))
-            for key in sorted(current_mainDb_profile.keys()):
-                self._log("{0:20} {1:<34} {2:<34}".format(
+            self._log("   {0:20} {1:37} {2:37}".format('key', 'stored', 'current'))
+            self._log("{0:—^23} {1:—^37} {2:—^37}".format('', '', ''))
+            self._log("{0}  {1:20} {2:<37} {3:<37}".format(
+                'x' if stored_mainDb_profile['device'] != current_mainDb_profile['device'] else ' ',
+                'device',
+                stored_mainDb_profile['device'],
+                current_mainDb_profile['device']))
+            keys = current_mainDb_profile.keys()
+            keys.pop('device')
+            for key in sorted(keys):
+                self._log("{0}  {1:20} {2:<37} {3:<37}".format(
+                    'x' if stored_mainDb_profile[key] != current_mainDb_profile[key] else ' ',
                     key,
                     repr(stored_mainDb_profile[key]),
                     repr(current_mainDb_profile[key])))
-
         return matched
 
     def create_backup(self):
@@ -108,7 +113,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         2) Get destination directory
         3) Move generated backup from /Documents/Backup to local storage
         '''
-        IOS_READ_RATE = 11500000  # 11.8 - 16 MB/sec
+        IOS_READ_RATE = 7500000  # 11.8 - 16 MB/sec OS X, Windows 6.6MB
         TIMEOUT_PADDING_FACTOR = 1.5
         WORST_CASE_ARCHIVE_RATE = 1800000   # MB/second
 
@@ -223,30 +228,28 @@ class MarvinManagerAction(InterfaceAction, Logger):
         ch.init_pb(total_seconds)
         ch.construct_general_command('backup')
 
-        if self.prefs.get('log_backup_operations'):
-            start_time = time.time()
+        start_time = time.time()
 
         # Dispatch the command
         pb.show()
         ch.issue_command(timeout_override=timeout)
         pb.hide()
-        if self.prefs.get('log_backup_operations'):
-            actual_time = time.time() - start_time
-            args = {'estimated_size': estimated_size,
-                    'book_count': mainDb_profile['Books'],
-                    'estimated_time': self.format_time(total_seconds),
-                    'actual_time': self.format_time(actual_time),
-                    'pct_complete': pb.get_pct_complete(),
-                    'archive_rate': estimated_size/actual_time}
-            analytics.append((
-                '1. Preparing backup analytics:\n'
-                '   estimated size: {estimated_size:,}\n'
-                '   book count: {book_count:,}\n'
-                '   estimated time: {estimated_time}\n'
-                '   actual time: {actual_time} ({pct_complete}%)\n'
-                '   archive rate: {archive_rate:,.0f} bytes/second'
-                ).format(**args))
-            self._log("\n{0}".format(analytics[0]))
+
+        actual_time = time.time() - start_time
+        args = {'estimated_size': estimated_size,
+                'book_count': mainDb_profile['Books'],
+                'estimated_time': self.format_time(total_seconds),
+                'actual_time': self.format_time(actual_time),
+                'pct_complete': pb.get_pct_complete(),
+                'archive_rate': estimated_size/actual_time}
+        analytics.append((
+            '1. Preparing backup:\n'
+            '   estimated size: {estimated_size:,}\n'
+            '   book count: {book_count:,}\n'
+            '   estimated time: {estimated_time}\n'
+            '   actual time: {actual_time} ({pct_complete}%)\n'
+            '   archive rate: {archive_rate:,.0f} bytes/second'
+            ).format(**args))
         del pb
 
         if ch.results['code']:
@@ -286,7 +289,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 BACKUP_MSG_3 = ('<ol style="margin-right:1.5em">'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Backup of {book_count:,} '
-                                'books created</li>'
+                                'books prepared</li>'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Destination folder selected</li>'
                                 '<li>Moving backup ({backup_size:,} MB) '
                                 'from {device} to {destination} …</li>'
@@ -359,53 +362,53 @@ class MarvinManagerAction(InterfaceAction, Logger):
                             self.ios.copy_from_idevice(archive_path, f)
                     move_operation.iosra_booklist = local._name
 
-                if self.prefs.get('log_backup_operations'):
-                    start_time = time.time()
+                start_time = time.time()
 
                 pb.show()
                 move_operation.start()
                 while not move_operation.isFinished():
                     Application.processEvents()
 
-                if self.prefs.get('log_backup_operations'):
-                    transfer_size = int(stats['st_size'])
-                    total_actual = time.time() - start_time
+                transfer_size = int(stats['st_size'])
+                total_actual = time.time() - start_time
 
-                    args = {
-                            'IOS_READ_RATE': IOS_READ_RATE,
-                            'pct_complete': pb.get_pct_complete(),
-                            'sidecar_actual': self.format_time(move_operation.sidecar_time),
-                            'sidecar_estimate': self.format_time(SIDECAR_ESTIMATE),
-                            'total_actual': self.format_time(total_actual),
-                            'total_estimate': self.format_time(SIDECAR_ESTIMATE + transfer_estimate),
-                            'transfer_actual': self.format_time(move_operation.transfer_time),
-                            'transfer_estimate': self.format_time(transfer_estimate),
-                            'transfer_rate': transfer_size/move_operation.transfer_time,
-                            'transfer_size': transfer_size
-                            }
-                    analytics.append((
-                        '3. Transferring backup analytics:\n'
-                        '   backup image size: {transfer_size:,}\n'
-                        '   transfer estimate: {transfer_estimate}\n'
-                        '   transfer actual: {transfer_actual}\n'
-                        '   sidecar estimate: {sidecar_estimate}\n'
-                        '   sidecar actual: {sidecar_actual}\n'
-                        '   total estimate: {total_estimate}\n'
-                        '   total actual: {total_actual} ({pct_complete}%)\n'
-                        '   estimated transfer rate: {IOS_READ_RATE:,}\n'
-                        '   actual transfer rate: {transfer_rate:,.0f}'
-                        ).format(**args))
+                analytics.append((
+                    '2. Destination folder:\n'
+                    '   {0}').format(destination_folder))
 
-                    self._log("\n{0}".format(analytics[1]))
+                args = {
+                        'IOS_READ_RATE': IOS_READ_RATE,
+                        'pct_complete': pb.get_pct_complete(),
+                        'sidecar_actual': self.format_time(move_operation.sidecar_time),
+                        'sidecar_estimate': self.format_time(SIDECAR_ESTIMATE),
+                        'total_actual': self.format_time(total_actual),
+                        'total_estimate': self.format_time(SIDECAR_ESTIMATE + transfer_estimate),
+                        'transfer_actual': self.format_time(move_operation.transfer_time),
+                        'transfer_estimate': self.format_time(transfer_estimate),
+                        'transfer_rate': transfer_size/move_operation.transfer_time,
+                        'transfer_size': transfer_size
+                        }
+                analytics.append((
+                    '3. Transferring backup:\n'
+                    '   backup image size: {transfer_size:,}\n'
+                    '   transfer estimate: {transfer_estimate}\n'
+                    '   transfer actual: {transfer_actual}\n'
+                    '   sidecar estimate: {sidecar_estimate}\n'
+                    '   sidecar actual: {sidecar_actual}\n'
+                    '   total estimate: {total_estimate}\n'
+                    '   total actual: {total_actual} ({pct_complete}%)\n'
+                    '   estimated transfer rate: {IOS_READ_RATE:,}\n'
+                    '   actual transfer rate: {transfer_rate:,.0f}'
+                    ).format(**args))
 
                 local.close()
+
+                pb.hide()
 
                 # Inform user backup operation is complete
                 title = "Backup operation complete"
                 msg = '<p>Marvin library backed up to {0}</p>'.format(destination_folder)
-                det_msg = ''
-                if analytics:
-                    det_msg = '\n'.join(analytics)
+                det_msg = '\n'.join(analytics)
                 MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg, parent=self.gui).exec_()
 
                 # Save the backup folder
@@ -419,6 +422,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     det_msg = '\n'.join(analytics)
                 MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg, parent=self.gui,
                            show_copy_button=False).exec_()
+
+            self._log("\nBackup metrics:\n{0}".format("\n".join(analytics)))
 
         else:
             self._log("No backup file found at {0}".format(backup_target))
@@ -1187,6 +1192,25 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             m.addSeparator()
 
+            # Backup/restore: Wait for jobs to init and complete before enabling
+            #if self.connected_device.marvin_version > (2, 7, 0):
+
+            enabled = (hasattr(self.connected_device, 'local_db_path') and
+                       not self.gui.job_manager.unfinished_jobs())
+            action = 'Create backup'
+            icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+            ac = self.create_menu_item(m, action, image=icon)
+            ac.triggered.connect(partial(self.developer_utilities, action))
+            ac.setEnabled(enabled)
+
+            action = 'Restore from backup'
+            icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+            ac = self.create_menu_item(m, action, image=icon)
+            ac.triggered.connect(partial(self.developer_utilities, action))
+            ac.setEnabled(enabled)
+
+            m.addSeparator()
+
             # Add 'Help'
             ac = self.create_menu_item(m, 'Help', image=I('help.png'))
             ac.triggered.connect(self.show_help)
@@ -1213,24 +1237,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 action = 'Reset column widths'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
-
-                # Backup/restore: Wait for jobs to init and complete before enabling
-                #if self.connected_device.marvin_version > (2, 7, 0):
-
-                enabled = (hasattr(self.connected_device, 'local_db_path') and
-                           not self.gui.job_manager.unfinished_jobs())
-                m.addSeparator()
-                action = 'Create backup'
-                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                ac = self.create_menu_item(m, action, image=icon)
-                ac.triggered.connect(partial(self.developer_utilities, action))
-                ac.setEnabled(enabled)
-
-                action = 'Restore from backup'
-                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
-                ac = self.create_menu_item(m, action, image=icon)
-                ac.triggered.connect(partial(self.developer_utilities, action))
-                ac.setEnabled(enabled)
 
             # Process Dropbox sync records automatically once only.
             if process_dropbox:
@@ -1307,7 +1313,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         RESTORE_MSG_1 = ('<ol style="margin-right:1.5em">'
                          '<li style="margin-bottom:0.5em">Transferring backup of '
                          '{book_count:,} books to {device} …</li>'
-                         '<li style="color:#bbb">Complete restore process</li>'
+                         '<li style="color:#bbb">Complete restore process in Marvin</li>'
                          '</ol>')
 
         self._log_location()
@@ -1342,12 +1348,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             ts = os.path.getmtime(backup_image)
             dt = datetime.fromtimestamp(ts)
-            backup_date = dt.strftime("%A, %b %e %Y")
+            #backup_date = dt.strftime("%A, %b %e %Y")  # Windows chokes on this
+            backup_date = components.group(2)
 
             # Estimate transfer time @ IOS_WRITE_RATE
             avg_book_size = src_size/epub_count
             if avg_book_size < 500 * 1024:
-                IOS_WRITE_RATE = 5800000
+                IOS_WRITE_RATE = 5000000
             elif avg_book_size < 2 * 1024 * 1024:
                 IOS_WRITE_RATE = 6800000
             else:
@@ -1358,12 +1365,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log("estimated_time: {0}".format(estimated_time))
 
             # Confirm
-
             title = "Confirm restore operation"
-            msg = "<p>This will restore a backup of <b>{0} books</b>".format(epub_count)
+            msg = "<p>This will restore a backup of {0} books".format(epub_count)
             if backup_source:
-                msg += ", from <b>{0}</b>,".format(backup_source)
-            msg += (' created {0}, to <b>{1}</b>.</p>'
+                msg += ", from {0},".format(backup_source)
+            msg += (' created {0}, to {1}.</p>'
                     '<p>It should take about {2} to restore the {3:,} MB '
                     'backup image.</p>'
                     '<p>Proceed?</p>').format(
@@ -1396,8 +1402,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                      }
             copy_operation = RestoreBackup(**kwargs)
 
-            if self.prefs.get('log_backup_operations'):
-                start_time = time.time()
+            start_time = time.time()
 
             pb.show()
 
@@ -1407,32 +1412,31 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 Application.processEvents()
 
             analytics = []
-            if self.prefs.get('log_backup_operations'):
-                actual_size = src_size
-                actual_time = time.time() - start_time
-                args = {'actual_size': actual_size,
-                        'actual_time': self.format_time(actual_time),
-                        'avg_book_size': avg_book_size,
-                        'epub_count': epub_count,
-                        'estimated_time': estimated_time,
-                        'IOS_WRITE_RATE': IOS_WRITE_RATE,
-                        'pct_complete': pb.get_pct_complete(),
-                        'transfer_rate': actual_size/actual_time}
-                analytics.append((
-                    '1. Restore analytics:\n'
-                    '   number of books: {epub_count}\n'
-                    '   backup image size: {actual_size:,}\n'
-                    '   average book size: {avg_book_size:,.0f}\n'
-                    '   estimated time: {estimated_time}\n'
-                    '   actual time: {actual_time} ({pct_complete}%)\n'
-                    '   estimated transfer rate: {IOS_WRITE_RATE:,}\n'
-                    '   actual transfer rate: {transfer_rate:,.0f}'
-                    ).format(**args))
-
-                self._log("\n{0}".format(analytics[0]))
+            actual_size = src_size
+            actual_time = time.time() - start_time
+            args = {'actual_size': actual_size,
+                    'actual_time': self.format_time(actual_time),
+                    'avg_book_size': avg_book_size,
+                    'epub_count': epub_count,
+                    'estimated_time': estimated_time,
+                    'IOS_WRITE_RATE': IOS_WRITE_RATE,
+                    'pct_complete': pb.get_pct_complete(),
+                    'transfer_rate': actual_size/actual_time}
+            analytics.append((
+                '1. Restore from backup:\n'
+                '   number of books: {epub_count}\n'
+                '   backup image size: {actual_size:,}\n'
+                '   average book size: {avg_book_size:,.0f}\n'
+                '   estimated time: {estimated_time}\n'
+                '   actual time: {actual_time} ({pct_complete}%)\n'
+                '   estimated transfer rate: {IOS_WRITE_RATE:,}\n'
+                '   actual transfer rate: {transfer_rate:,.0f}'
+                ).format(**args))
 
             # Verify transferred size
             if copy_operation.success:
+                start_time = time.time()
+
                 # Delete cached Marvin data
                 self.developer_utilities('Delete Marvin hashes')
 
@@ -1484,6 +1488,14 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 else:
                     self._log("iosra_booklist snapshot not found in archive")
 
+                actual_time = time.time() - start_time
+                analytics.append((
+                    '2. Recover MXD components:\n'
+                    '   {0}'
+                    ).format(self.format_time(actual_time)))
+
+                pb.hide()
+
                 self._log("Backup verifies: {0:,} bytes".format(copy_operation.src_size))
                 # Display dialog detailing how to complete restore
                 title = "Complete restore process"
@@ -1492,19 +1504,20 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        '<li>Touch <b>Disconnect</b> on the calibre connector</li>'
                        '<li>Press the Home button to return to the Home screen</li>'
                        '<li>Double-click the Home button to display running apps</li>'
-                       '<li>Force-quit Marvin</li>'
-                       '<li>Restart Marvin</li>'
+                       '<li>Force-quit and restart Marvin</li>'
                        '<li>Wait until restore finishes in Marvin</li>'
                        '<li>Restart the calibre connector</li>'
                        '</ol>'
                        )
-                det_msg = ''
-                if analytics:
-                    det_msg = '\n'.join(analytics)
+                det_msg = '\n'.join(analytics)
                 d = MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
-                               parent=self.gui, show_copy_button=False).exec_()
+                               parent=self.gui).exec_()
+
+                self._log("\nRestore analytics\n{0}".format('\n'.join(analytics)))
 
             else:
+                pb.hide()
+
                 self._log("Backup does not verify: source {0:,} dest {1:,}".format(
                     copy_operation.src_size, copy_operation.dst_size))
                 title = "Restore unsuccessful"

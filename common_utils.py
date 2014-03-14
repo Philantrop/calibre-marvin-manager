@@ -611,8 +611,7 @@ class MoveBackup(QThread, Logger):
 
             self.dst = os.path.join(self.destination_folder,
                                     sanitize_file_name(self.storage_name))
-            self.src = "{0}/marvin.backup".format(self.backup_folder)
-            self.total_seconds
+            self.src = b"{0}/marvin.backup".format(self.backup_folder)
             self._init_pb()
 
         except:
@@ -625,8 +624,7 @@ class MoveBackup(QThread, Logger):
             self._log_location()
             self._log("moving {0} to '{1}'".format(backup_size, self.destination_folder))
 
-            if self.parent.prefs.get('log_backup_operations'):
-                start_time = time.time()
+            start_time = time.time()
 
             # Remove any older file of the same name at destination
             if os.path.isfile(self.dst):
@@ -639,8 +637,7 @@ class MoveBackup(QThread, Logger):
             # Validate transferred file sizes, do cleanup
             self._verify()
 
-            if self.parent.prefs.get('log_backup_operations'):
-                self.transfer_time = time.time() - start_time
+            self.transfer_time = time.time() - start_time
 
             # Append MXD components
             self._append_mxd_components()
@@ -648,6 +645,7 @@ class MoveBackup(QThread, Logger):
             self._cleanup()
 
         except:
+            self.pb.close()
             import traceback
             self._log(traceback.format_exc())
 
@@ -660,8 +658,7 @@ class MoveBackup(QThread, Logger):
             self.mxd_installed_books or
             self.mxd_remote_content_hashes):
 
-            if self.parent.prefs.get('log_backup_operations'):
-                start_time = time.time()
+            start_time = time.time()
 
             with ZipFile(self.dst, mode='a') as zfa:
                 if self.iosra_booklist:
@@ -684,8 +681,9 @@ class MoveBackup(QThread, Logger):
                     base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
                     zfa.write(self.mxd_remote_content_hashes, arcname=base_name)
 
-            if self.parent.prefs.get('log_backup_operations'):
-                self.sidecar_time = time.time() - start_time
+            self.sidecar_time = time.time() - start_time
+        else:
+            self.sidecar_time = 0
 
     def _cleanup(self):
         self._log_location()
@@ -693,7 +691,6 @@ class MoveBackup(QThread, Logger):
             self.ios.remove(self.src)
             self.ios.remove(self.backup_folder)
             self.timer.cancel()
-            self.pb.hide()
         except:
             import traceback
             self._log(traceback.format_exc())
@@ -713,9 +710,11 @@ class MoveBackup(QThread, Logger):
     def _ticked(self):
         '''
         Increment the progress bar, restart the timer
+        Don't let it get to 100%
         '''
         try:
-            self.pb.increment()
+            if self.pb.progressBar.value() < self.pb.progressBar.maximum() - 1:
+                self.pb.increment()
             self.timer = Timer(self.TIMER_TICK, self._ticked)
             self.timer.start()
         except:
@@ -777,7 +776,6 @@ class RestoreBackup(QThread, Logger):
         self._log_location()
         try:
             self.timer.cancel()
-            self.pb.hide()
         except:
             import traceback
             self._log(traceback.format_exc())
@@ -797,9 +795,11 @@ class RestoreBackup(QThread, Logger):
     def _ticked(self):
         '''
         Increment the progress bar, restart the timer
+        Don't let it get to 100%
         '''
         try:
-            self.pb.increment()
+            if self.pb.progressBar.value() < self.pb.progressBar.maximum() - 1:
+                self.pb.increment()
             self.timer = Timer(self.TIMER_TICK, self._ticked)
             self.timer.start()
         except:
