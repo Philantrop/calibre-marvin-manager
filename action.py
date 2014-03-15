@@ -468,18 +468,17 @@ class MarvinManagerAction(InterfaceAction, Logger):
         total_steps += 2    # backup.xml, mainDb.sqlite
 
         # Set up the progress panel
-        busy_panel_args = {'book_count': len(epubs),
+        busy_panel_args = {'book_count': "{:,}".format(len(epubs)),
                            'destination': 'destination folder',
                            'device': self.ios.device_name,
-                           'large_covers': len(large_covers),
-                           'small_covers': len(small_covers)
+                           'large_covers': "{:,}".format(len(large_covers)),
+                           'small_covers': "{:,}".format(len(small_covers))
                            }
         BACKUP_MSG_1 = (
                         '<ol style="margin-right:1.5em">'
                         '<li style="margin-bottom:0.5em">Preparing backup …</li>'
                         '<li style="color:#bbb;margin-bottom:0.5em">Archive {book_count} ePubs</li>'
-                        '<li style="color:#bbb;margin-bottom:0.5em">Archive covers</li>'
-                        '<li style="color:#bbb;margin-bottom:0.5em">Archive thumbnails</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Archive {large_covers} covers</li>'
                         '<li style="color:#bbb">Select destination folder to store backup</li>'
                         '</ol>')
         pb = ProgressBar(alignment=Qt.AlignLeft,
@@ -554,10 +553,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self._log("archiving {:,} epubs".format(len(epubs)))
                 BACKUP_MSG_2 = (
                                 '<ol style="margin-right:1.5em">'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Backup prepared</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Backup image initialized</li>'
                                 '<li style="margin-bottom:0.5em">Archiving {book_count} ePubs …</li>'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Archive covers</li>'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Archive thumbnails</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Archive {large_covers} covers</li>'
                                 '<li style="color:#bbb">Select destination folder to store backup</li>'
                                 '</ol>')
 
@@ -576,14 +574,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                             self._log(traceback.format_exc())
                         pb.increment()
 
-                # Large covers
+                # Large and small covers with one step
                 self._log("archiving {:,} large covers".format(len(large_covers)))
                 BACKUP_MSG_3 = (
                                 '<ol style="margin-right:1.5em">'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Backup prepared</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Backup image initialized</li>'
                                 '<li style="color:#bbb;margin-bottom:0.5em">{book_count} ePubs archived</li>'
-                                '<li style="margin-bottom:0.5em">Archiving covers …</li>'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Archive thumbnails</li>'
+                                '<li style="margin-bottom:0.5em">Archiving {large_covers} covers …</li>'
                                 '<li style="color:#bbb">Select destination folder to store backup</li>'
                                 '</ol>')
                 pb.set_label(BACKUP_MSG_3.format(**busy_panel_args))
@@ -602,16 +599,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 # Small covers
                 self._log("archiving {:,} small covers".format(len(small_covers)))
-                BACKUP_MSG_4 = (
-                                '<ol style="margin-right:1.5em">'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Backup prepared</li>'
-                                '<li style="color:#bbb;margin-bottom:0.5em">{book_count} ePubs archived</li>'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Covers archived</li>'
-                                '<li style="margin-bottom:0.5em">Archiving thumbnails …</li>'
-                                '<li style="color:#bbb">Select destination folder to store backup</li>'
-                                '</ol>')
-                pb.set_label(BACKUP_MSG_4.format(**busy_panel_args))
-
                 for path in small_covers:
                     # Get a local copy of the small cover
                     rcp = b'/'.join([small_covers_path, path])
