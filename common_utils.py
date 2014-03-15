@@ -156,6 +156,7 @@ class Logger():
         '''
         pass
 
+
 class Book(Metadata):
     '''
     A simple class describing a book
