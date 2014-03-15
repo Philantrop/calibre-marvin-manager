@@ -29,7 +29,8 @@ from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.library import current_library_name
-from calibre.ptempfile import PersistentTemporaryDirectory, PersistentTemporaryFile, TemporaryDirectory
+from calibre.ptempfile import (PersistentTemporaryDirectory, PersistentTemporaryFile,
+    TemporaryDirectory, TemporaryFile)
 from calibre.utils.config import config_dir
 from calibre.utils.zipfile import ZipFile, ZIP_STORED, is_zipfile
 
@@ -214,14 +215,15 @@ class MarvinManagerAction(InterfaceAction, Logger):
                            'device': self.ios.device_name,
                            'estimated_time': estimated_time}
         BACKUP_MSG_1 = ('<ol style="margin-right:1.5em">'
-                        '<li style="margin-bottom:0.5em">Preparing backup of {device} '
-                        '({book_count:,} books) …</li>'
+                        '<li style="margin-bottom:0.5em">Preparing backup of '
+                        '{book_count:,} books …</li>'
                         '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder to store backup</li>'
                         '<li style="color:#bbb">Move backup from {device} to {destination}</li>'
                         '</ol>')
         pb = ProgressBar(alignment=Qt.AlignLeft,
                          label=BACKUP_MSG_1.format(**busy_panel_args),
-                         parent=self.gui)
+                         parent=self.gui,
+                         window_title="Creating backup of {0}".format(self.ios.device_name))
 
         # Init the command handler
         ch = CommandHandler(self, pb=pb)
@@ -296,7 +298,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                                 '</ol>')
 
                 # Create the ProgressBar in the main GUI thread
-                pb = ProgressBar(parent=self.gui, window_title="Restoring backup",
+                pb = ProgressBar(parent=self.gui, window_title="Moving backup",
                                  alignment=Qt.AlignLeft)
                 pb.set_label(BACKUP_MSG_3.format(**busy_panel_args))
 
@@ -428,6 +430,243 @@ class MarvinManagerAction(InterfaceAction, Logger):
         else:
             self._log("No backup file found at {0}".format(backup_target))
 
+    def create_local_backup(self):
+        '''
+        Build a backup image locally
+        '''
+        self._log_location()
+
+        epubs_path = b'/Documents'
+        dir_contents = self.ios.listdir(epubs_path, get_stats=False)
+        epubs = []
+        for f in dir_contents:
+            if f.lower().endswith('.epub'):
+                epubs.append(f)
+            else:
+                self._log("ignoring {0}/{1}".format(epubs_path, f))
+
+        small_covers_path = self.connected_device._cover_subpath(size="small")
+        dir_contents = self.ios.listdir(small_covers_path, get_stats=False)
+        small_covers = []
+        for f in dir_contents:
+            if f.lower().endswith('.jpg'):
+                small_covers.append(f)
+            else:
+                self._log("ignoring {0}/{1}".format(small_covers_path, f))
+
+        large_covers_path = self.connected_device._cover_subpath(size="large")
+        dir_contents = self.ios.listdir(large_covers_path, get_stats=False)
+        large_covers = []
+        for f in dir_contents:
+            if f.lower().endswith('.jpg'):
+                large_covers.append(f)
+            else:
+                self._log("ignoring {0}/{1}".format(large_covers_path, f))
+
+        total_steps = len(epubs) + len(small_covers) + len(large_covers)
+        total_steps += 5    # MXD components
+        total_steps += 2    # backup.xml, mainDb.sqlite
+
+        # Set up the progress panel
+        busy_panel_args = {'book_count': len(epubs),
+                           'destination': 'destination folder',
+                           'device': self.ios.device_name,
+                           'large_covers': len(large_covers),
+                           'small_covers': len(small_covers)
+                           }
+        BACKUP_MSG_1 = (
+                        '<ol style="margin-right:1.5em">'
+                        '<li style="margin-bottom:0.5em">Preparing backup …</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Archive {book_count} ePubs</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Archive covers</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Archive thumbnails</li>'
+                        '<li style="color:#bbb">Select destination folder to store backup</li>'
+                        '</ol>')
+        pb = ProgressBar(alignment=Qt.AlignLeft,
+                         label=BACKUP_MSG_1.format(**busy_panel_args),
+                         parent=self.gui,
+                         window_title="Creating backup of {0}".format(self.ios.device_name))
+        pb.set_range(0, total_steps)
+        pb.set_maximum(total_steps)
+        pb.show()
+
+        with TemporaryFile(suffix=".zip") as local_backup:
+            with ZipFile(local_backup, 'w') as zfw:
+
+                # Device cached hashes
+                device_cached_hashes = "{0}_cover_hashes.json".format(
+                    re.sub('\W', '_', self.ios.device_name))
+                dch = os.path.join(self.resources_path, device_cached_hashes)
+                if os.path.exists(dch):
+                    base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
+                    zfw.write(dch, arcname=base_name)
+                pb.increment()
+
+                # Remote content hashes
+                rhc = b'/'.join(['/Library', 'calibre.mm',
+                                 BookStatusDialog.HASH_CACHE_FS])
+                if self.ios.exists(rhc):
+                    with TemporaryFile() as lhc:
+                        try:
+                            with open(lhc, 'wb') as local_copy:
+                                self.ios.copy_from_idevice(rhc, local_copy)
+                            base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
+                            zfw.write(local_copy.name, arcname=base_name)
+                        except:
+                            import traceback
+                            self._log(traceback.format_exc())
+                pb.increment()
+
+                # mainDb profile
+                zfw.writestr("mxd_mainDb_profile.json",
+                             json.dumps(self.profile_db(), sort_keys=True))
+                pb.increment()
+
+                # self.installed_books
+                if self.installed_books:
+                    base_name = "mxd_installed_books.json"
+                    zfw.writestr(base_name, json.dumps(
+                        self.dehydrate_installed_books(self.installed_books),
+                        default=to_json,
+                        indent=2, sort_keys=True))
+                pb.increment()
+
+                # iOSRA booklist.zip
+                archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
+                if self.ios.exists(archive_path):
+                    # Copy the stored booklist to a local temp file
+                    with PersistentTemporaryFile(suffix=".zip") as local:
+                        with open(local._name, 'w') as f:
+                            self.ios.copy_from_idevice(archive_path, f)
+                    zfw.write(local._name, arcname="iosra_booklist.zip")
+                pb.increment()
+
+                # backup.xml
+                zfw.write(os.path.join(os.path.expanduser('~'), 'Desktop', 'backup.xml'),
+                          arcname='backup.xml')
+                pb.increment()
+
+                # mainDb
+                zfw.write(self.connected_device.local_db_path, arcname='mainDb.sqlite')
+                pb.increment()
+
+                # ePubs
+                self._log("archiving {:,} epubs".format(len(epubs)))
+                BACKUP_MSG_2 = (
+                                '<ol style="margin-right:1.5em">'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Backup prepared</li>'
+                                '<li style="margin-bottom:0.5em">Archiving {book_count} ePubs …</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Archive covers</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Archive thumbnails</li>'
+                                '<li style="color:#bbb">Select destination folder to store backup</li>'
+                                '</ol>')
+
+                pb.set_label(BACKUP_MSG_2.format(**busy_panel_args))
+
+                for path in epubs:
+                    # Get a local copy of the book
+                    rbp = '/'.join(['/Documents', path])
+                    with TemporaryFile() as lbp:
+                        try:
+                            with open(lbp, 'wb') as local_copy:
+                                self.ios.copy_from_idevice(str(rbp), local_copy)
+                            zfw.write(local_copy.name, arcname=path)
+                        except:
+                            import traceback
+                            self._log(traceback.format_exc())
+                        pb.increment()
+
+                # Large covers
+                self._log("archiving {:,} large covers".format(len(large_covers)))
+                BACKUP_MSG_3 = (
+                                '<ol style="margin-right:1.5em">'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Backup prepared</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">{book_count} ePubs archived</li>'
+                                '<li style="margin-bottom:0.5em">Archiving covers …</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Archive thumbnails</li>'
+                                '<li style="color:#bbb">Select destination folder to store backup</li>'
+                                '</ol>')
+                pb.set_label(BACKUP_MSG_3.format(**busy_panel_args))
+                for path in large_covers:
+                    # Get a local copy of the large cover
+                    rcp = b'/'.join([large_covers_path, path])
+                    with TemporaryFile() as lcp:
+                        try:
+                            with open(lcp, 'wb') as local_copy:
+                                self.ios.copy_from_idevice(rcp, local_copy)
+                            zfw.write(local_copy.name, arcname="L-{0}".format(path))
+                        except:
+                            import traceback
+                            self._log(traceback.format_exc())
+                        pb.increment()
+
+                # Small covers
+                self._log("archiving {:,} small covers".format(len(small_covers)))
+                BACKUP_MSG_4 = (
+                                '<ol style="margin-right:1.5em">'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Backup prepared</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">{book_count} ePubs archived</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Covers archived</li>'
+                                '<li style="margin-bottom:0.5em">Archiving thumbnails …</li>'
+                                '<li style="color:#bbb">Select destination folder to store backup</li>'
+                                '</ol>')
+                pb.set_label(BACKUP_MSG_4.format(**busy_panel_args))
+
+                for path in small_covers:
+                    # Get a local copy of the small cover
+                    rcp = b'/'.join([small_covers_path, path])
+                    with TemporaryFile() as lcp:
+                        try:
+                            with open(lcp, 'wb') as local_copy:
+                                self.ios.copy_from_idevice(str(rcp), local_copy)
+                            zfw.write(local_copy.name, arcname="S-{0}".format(path))
+                        except:
+                            import traceback
+                            self._log(traceback.format_exc())
+                        pb.increment()
+
+            pb.hide()
+
+            # Get the destination folder
+            d = datetime.now()
+            storage_name = "{0} {1}.backup".format(
+                self.ios.device_name, d.strftime("%Y-%m-%d"))
+            destination_folder = str(QFileDialog.getExistingDirectory(
+                self.gui,
+                "Select destination folder to store backup",
+                self.prefs.get('backup_folder', os.path.expanduser("~")),
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks))
+
+            if destination_folder:
+                # Qt apparently sometimes returns a file within the selected directory,
+                # rather than the directory itself. Validate destination_folder
+                if not os.path.isdir(destination_folder):
+                    destination_folder = os.path.dirname(destination_folder)
+
+                # Copy local_backup to destination folder
+                shutil.copy(local_backup, os.path.join(destination_folder, storage_name))
+
+                # Inform user backup operation is complete
+                title = "Backup operation complete"
+                msg = '<p>Marvin library backed up to {0}</p>'.format(destination_folder)
+                MessageBox(MessageBox.INFO, title, msg, parent=self.gui,
+                           show_copy_button=False).exec_()
+
+                # Save the backup folder
+                self.prefs.set('backup_folder', destination_folder)
+            else:
+                # Inform user backup operation cancelled
+                title = "Backup cancelled"
+                try:
+                    msg = '<p>Backup of {0} cancelled</p>'.format(self.ios.device_name)
+                except:
+                    msg = '<p>Backup cancelled</p>'
+                det_msg = ''
+                MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg, parent=self.gui,
+                           show_copy_button=False).exec_()
+
+        self._log("backup archive created")
+
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
         if image:
@@ -454,8 +693,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
         '''
         self._log_location(action)
-        if action in ['Create backup', 'Delete calibre hashes', 'Delete Marvin hashes',
-                      'Nuke annotations', 'Reset column widths',
+        if action in ['Create backup', 'Create local backup', 'Delete calibre hashes',
+                      'Delete Marvin hashes', 'Nuke annotations', 'Reset column widths',
                       'Restore from backup']:
             if action == 'Delete Marvin hashes':
                 rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
@@ -489,11 +728,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.prefs.commit()
             elif action == 'Create backup':
                 self.create_backup()
+            elif action == 'Create local backup':
+                self.create_local_backup()
             elif action == 'Restore from backup':
                 self.restore_from_backup()
 
         else:
-            self._log("unrecognized action")
+            self._log("unsupported action '{0}'".format(action))
 
     def discover_iosra_status(self):
         '''
@@ -1238,6 +1479,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
+                m.addSeparator()
+                action = 'Create local backup'
+                icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
+                ac = self.create_menu_item(self.developer_menu, action, image=icon)
+                ac.triggered.connect(partial(self.developer_utilities, action))
+
             # Process Dropbox sync records automatically once only.
             if process_dropbox:
                 self.process_dropbox_sync_records()
@@ -1312,7 +1559,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         RESTORE_MSG_1 = ('<ol style="margin-right:1.5em">'
                          '<li style="margin-bottom:0.5em">Transferring backup of '
-                         '{book_count:,} books to {device} …</li>'
+                         '{book_count:,} books to Marvin …</li>'
                          '<li style="color:#bbb">Complete restore process in Marvin</li>'
                          '</ol>')
 
@@ -1388,8 +1635,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
             busy_panel_args = {'book_count': epub_count,
                                'device': self.ios.device_name,
                                'estimated_time': estimated_time}
-            pb = ProgressBar(parent=self.gui, window_title="Restoring backup",
-                             alignment=Qt.AlignLeft)
+            pb = ProgressBar(parent=self.gui,
+                             alignment=Qt.AlignLeft,
+                             window_title="Restoring backup to {0}".format(self.ios.device_name))
             pb.set_label(RESTORE_MSG_1.format(**busy_panel_args))
 
             kwargs = {

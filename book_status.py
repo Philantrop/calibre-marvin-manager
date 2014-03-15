@@ -5001,7 +5001,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                     rows = cur.fetchall()
 
-                    pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 2 of 2")
+                    pb = ProgressBar(parent=self.opts.gui, window_title='')
                     book_count = len(rows)
                     pb.set_maximum(book_count)
                     pb.set_value(0)
@@ -5440,7 +5440,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             os.remove(path)
             return hash
 
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning calibre library")
+        pb = ProgressBar(parent=self.opts.gui, window_title='')
         pb.set_label('{:^100}'.format("Waiting for library scan to complete…"))
         pb.set_value(0)
         pb.show()
@@ -5559,7 +5559,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.hash_cache = self._localize_hash_cache(cached_books)
 
         # Set up the progress bar
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 1 of 2")
+        pb = ProgressBar(parent=self.opts.gui, window_title='')
         total_books = len(cached_books)
         pb.set_maximum(total_books)
         pb.set_value(0)

@@ -450,7 +450,21 @@ class ProgressBar(QDialog, Logger):
         self.l = QVBoxLayout(self)
         self.setLayout(self.l)
 
-        self.l.addSpacing(15)
+        if frameless and window_title:
+            # Add a label with window title
+            self.title = QLabel(window_title)
+            self.title.setAlignment(Qt.AlignHCenter)
+            self.font = QFont()
+            self.font.setPointSize(self.font.pointSize() + 2)
+            self.font.setBold(True)
+            self.title.setFont(self.font)
+            self.l.addWidget(self.title)
+            self.hl = QFrame()
+            self.hl.setFrameShape(QFrame.HLine)
+            self.hl.setFrameShadow(QFrame.Sunken)
+            self.l.addWidget(self.hl)
+        else:
+            self.setWindowTitle(window_title)
 
         self.label = QLabel(label)
         self.label.setAlignment(alignment)
