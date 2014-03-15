@@ -75,28 +75,70 @@ FULL_STAR = u'\u2605'
 '''     Base classes    '''
 
 class Logger():
+    '''
+    A self-modifying class to print debug statements.
+    If disabled in prefs, methods are neutered at first call for performance optimization
+    '''
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
     def _log(self, msg=None):
         '''
-        Print msg to console
+        Upon first call, switch to appropriate method
         '''
         from calibre_plugins.marvin_manager.config import plugin_prefs
         if not plugin_prefs.get('debug_plugin', False):
-            return
+            # Neuter the method
+            self._log = self.__null
+            self._log_location = self.__null
+        else:
+            # Log the message, then switch to real method
+            if msg:
+                debug_print(" {0}".format(str(msg)))
+            else:
+                debug_print()
 
+            self._log = self.__log
+            self._log_location = self.__log_location
+
+    def __log(self, msg=None):
+        '''
+        The real method
+        '''
         if msg:
-            debug_print(" %s" % str(msg))
+            debug_print(" {0}".format(str(msg)))
         else:
             debug_print()
 
     def _log_location(self, *args):
         '''
-        Print location, args to console
+        Upon first call, switch to appropriate method
         '''
         from calibre_plugins.marvin_manager.config import plugin_prefs
         if not plugin_prefs.get('debug_plugin', False):
-            return
+            # Neuter the method
+            self._log = self.__null
+            self._log_location = self.__null
+        else:
+            # Log the message from here so stack trace is valid
+            arg1 = arg2 = ''
 
+            if len(args) > 0:
+                arg1 = str(args[0])
+            if len(args) > 1:
+                arg2 = str(args[1])
+
+            debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
+                        func=sys._getframe(1).f_code.co_name,
+                        arg1=arg1, arg2=arg2))
+
+            # Switch to real method
+            self._log = self.__log
+            self._log_location = self.__log_location
+
+    def __log_location(self, *args):
+        '''
+        The real method
+        '''
         arg1 = arg2 = ''
 
         if len(args) > 0:
@@ -108,6 +150,11 @@ class Logger():
                     func=sys._getframe(1).f_code.co_name,
                     arg1=arg1, arg2=arg2))
 
+    def __null(self, *args, **kwargs):
+        '''
+        Optimized method when logger is silent
+        '''
+        pass
 
 class Book(Metadata):
     '''

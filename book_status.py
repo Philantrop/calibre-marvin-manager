@@ -3491,7 +3491,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                                          Qt.DescendingOrder)
         self.tv.sortByColumn(sort_column, sort_order)
 
-
     def _delete_books(self):
         '''
         '''
