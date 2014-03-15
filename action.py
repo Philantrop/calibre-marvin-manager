@@ -477,8 +477,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
         BACKUP_MSG_1 = (
                         '<ol style="margin-right:1.5em">'
                         '<li style="margin-bottom:0.5em">Preparing backup …</li>'
-                        '<li style="color:#bbb;margin-bottom:0.5em">Archive {book_count} ePubs</li>'
-                        '<li style="color:#bbb;margin-bottom:0.5em">Archive {large_covers} covers</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Add {book_count} ePubs to archive</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Add {large_covers} covers to archive</li>'
                         '<li style="color:#bbb">Select destination folder to store backup</li>'
                         '</ol>')
         pb = ProgressBar(alignment=Qt.AlignLeft,
@@ -488,6 +488,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         pb.set_range(0, total_steps)
         pb.set_maximum(total_steps)
         pb.show()
+        start_time = time.time()
 
         with TemporaryFile(suffix=".zip") as local_backup:
             with ZipFile(local_backup, 'w') as zfw:
@@ -555,7 +556,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                                 '<ol style="margin-right:1.5em">'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Backup image initialized</li>'
                                 '<li style="margin-bottom:0.5em">Archiving {book_count} ePubs …</li>'
-                                '<li style="color:#bbb;margin-bottom:0.5em">Archive {large_covers} covers</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Add {large_covers} covers to archive</li>'
                                 '<li style="color:#bbb">Select destination folder to store backup</li>'
                                 '</ol>')
 
@@ -613,6 +614,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         pb.increment()
 
             pb.hide()
+            actual_time = time.time() - start_time
+            self._log("archive created in {0}".format(self.format_time(actual_time)))
 
             # Get the destination folder
             d = datetime.now()
@@ -652,7 +655,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg, parent=self.gui,
                            show_copy_button=False).exec_()
 
-        self._log("backup archive created")
 
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
