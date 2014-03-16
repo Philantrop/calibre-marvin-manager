@@ -15,7 +15,7 @@ from datetime import datetime
 from functools import partial
 from lxml import etree, html
 
-from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QIcon,
+from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QFont, QIcon,
                       QMenu, QTimer, QUrl,
                       pyqtSignal)
 
@@ -24,7 +24,7 @@ from calibre.customize.ui import device_plugins, disabled_device_plugins
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup
-from calibre.gui2 import Application, open_url
+from calibre.gui2 import Application, info_dialog, open_url
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
@@ -1349,25 +1349,74 @@ class MarvinManagerAction(InterfaceAction, Logger):
         Return a formatted profile of key device info
         '''
         self._log_location()
-        marvin_version = self.connected_device.marvin_version
+
         device_profile = self.connected_device.device_profile.copy()
+        marvin_version = self.connected_device.marvin_version
         device_profile['MarvinVersion'] = "{0}.{1}.{2}".format(
             marvin_version[0], marvin_version[1], marvin_version[2])
         device_profile['InstalledBooks'] = len(self.connected_device.cached_books)
         device_profile['MarvinAppID'] = self.connected_device.app_id
         for key in ['FSFreeBytes', 'FSTotalBytes']:
             device_profile[key] = int(device_profile[key])
+
+        # Separators
+        device_profile['MarvinDetails'] = " Marvin "
+        device_profile['SystemDetails'] = " System "
+        device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
+        separator_width = len(device_profile['DeviceName']) + 30
+        device_profile['SeparatorWidth'] = separator_width
+
+        # Cribbed from calibre.debug:print_basic_debug_info()
+        import platform
+        from calibre.constants import (__appname__, get_version, isportable, isosx,
+                                       isfrozen, is64bit, iswindows)
+        calibre_profile = "{0} {1} {2} isfrozen: {3} is64bit: {4}".format(
+            __appname__, get_version(),
+            'Portable' if isportable else '', isfrozen, is64bit)
+        device_profile['CalibreProfile'] = calibre_profile
+
+        platform_profile = "{0} {1} {2}".format(
+            platform.platform(), platform.system(), platform.architecture())
+        device_profile['PlatformProfile'] = platform_profile
+
+        try:
+            if iswindows:
+                os_profile = "Windows {0}".format(platform.win32_ver())
+                if not is64bit:
+                    try:
+                        import win32process
+                        if win32process.IsWow64Process():
+                            os_profile += " 32bit process running on 64bit windows"
+                    except:
+                        pass
+
+            elif isosx:
+                os_profile = "OS X {0}".format(platform.mac_ver()[0])
+            else:
+                os_profile = "Linux {0}".format(platform.linux_distribution())
+            self._log(os_profile)
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+            os_profile = "unknown"
+        device_profile['OSProfile'] = os_profile
+
         DEVICE_PROFILE = (
-            'Device name: {DeviceName}\n'
-            'Type: {ProductType}\n'
-            'Model: {ModelNumber}\n'
-            'iOS: {ProductVersion}\n'
-            'Password: {PasswordProtected}\n'
-            'FSTotalBytes: {FSTotalBytes:,}\n'
-            'FSFreeBytes: {FSFreeBytes:,}\n'
-            'Marvin app: {MarvinAppID}\n'
-            'Marvin version: {MarvinVersion}\n'
-            'Marvin installed books: {InstalledBooks}\n'
+            '{DeviceName:-^{SeparatorWidth}}\n'
+            '           Type: {ProductType}\n'
+            '          Model: {ModelNumber}\n'
+            '            iOS: {ProductVersion}\n'
+            '       Password: {PasswordProtected}\n'
+            '   FSTotalBytes: {FSTotalBytes:,}\n'
+            '    FSFreeBytes: {FSFreeBytes:,}\n'
+            '\n{MarvinDetails:-^{SeparatorWidth}}\n'
+            '            app: {MarvinAppID}\n'
+            '        version: {MarvinVersion}\n'
+            'installed books: {InstalledBooks}\n'
+            '\n{SystemDetails:-^{SeparatorWidth}}\n'
+            '{CalibreProfile}\n'
+            '{PlatformProfile}\n'
+            '{OSProfile}\n'
             )
 
         # Display connected device profile
@@ -1377,7 +1426,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                '<p>Click <b>Show details</b> for more information.</p>'
               ).format(self.ios.device_name, device_profile['MarvinVersion'])
         det_msg = DEVICE_PROFILE.format(**device_profile)
-        MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg, parent=self.gui).exec_()
+
+        # Set dialog det_msg to monospace
+        dialog = info_dialog(self.gui, title, msg, det_msg=det_msg)
+        font = QFont('monospace')
+        font.setFixedPitch(True)
+        dialog.det_msg.setFont(font)
+        dialog.exec_()
 
     def profile_db(self):
         '''
@@ -1622,7 +1677,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 if f.filename.lower().endswith('.epub'):
                     epub_count += 1
 
+            # Confirm space available on device
             src_size = os.stat(backup_image).st_size
+            space_required = src_size * 2
+            fs_free_bytes = int(self.connected_device.device_profile['FSFreeBytes'])
+            if fs_free_bytes < space_required:
+                title = "Insufficient space available"
+                msg = ("<p>Not enough space available on {0} to restore backup.</p>"
+                       "<p>{1:,} bytes required<br/>{2:,} bytes available.</p>".format(
+                        self.ios.device_name,
+                        space_required,
+                        fs_free_bytes))
+                return MessageBox(MessageBox.WARNING, title, msg,
+                                  parent=self.gui, show_copy_button=False).exec_()
 
             backup_source = ''
             components = re.match(r'(.*?) (\d{4}-\d{2}-\d{2})', os.path.basename(backup_image))
