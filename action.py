@@ -687,7 +687,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location(action)
         if action in ['Create backup', 'Create local backup', 'Delete calibre hashes',
-                      'Delete Marvin hashes', 'Nuke annotations', 'Profile connected device',
+                      'Delete Marvin hashes', 'Delete iOSRA booklist.zip',
+                      'Nuke annotations', 'Profile connected device',
                       'Reset column widths', 'Restore from backup']:
             if action == 'Delete Marvin hashes':
                 rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
@@ -705,6 +706,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self._log("cover hashes at {0} deleted".format(dch))
                 else:
                     self._log("no cover hashes found at {0}".format(dch))
+
+            elif action == 'Delete iOSRA booklist.zip':
+                rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
+                if self.ios.exists(rhc):
+                    self.ios.remove(rhc)
+                    self._log("iOSRA booklist.zip deleted")
 
             elif action == 'Create backup':
                 self.create_backup()
@@ -1359,6 +1366,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
         for key in ['FSFreeBytes', 'FSTotalBytes']:
             device_profile[key] = int(device_profile[key])
 
+        local_db_path = self.connected_device.local_db_path
+        device_profile['MarvinMainDbSize'] = os.stat(local_db_path).st_size
+
         # Separators
         device_profile['MarvinDetails'] = " Marvin "
         device_profile['SystemDetails'] = " System "
@@ -1413,6 +1423,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             '            app: {MarvinAppID}\n'
             '        version: {MarvinVersion}\n'
             'installed books: {InstalledBooks}\n'
+            '         mainDb: {MarvinMainDbSize:,}\n'
             '\n{SystemDetails:-^{SeparatorWidth}}\n'
             '{CalibreProfile}\n'
             '{PlatformProfile}\n'
@@ -1556,6 +1567,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(marvin_connected)
 
+                action = 'Delete iOSRA booklist.zip'
+                ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
+                ac.triggered.connect(partial(self.developer_utilities, action))
+                ac.setEnabled(enabled)
+
                 action = 'Nuke annotations'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
@@ -1564,12 +1580,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
+                self.developer_menu.addSeparator()
                 action = 'Profile connected device'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('dialog_information.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(enabled)
 
-                m.addSeparator()
+                self.developer_menu.addSeparator()
                 action = 'Create local backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
                 ac = self.create_menu_item(self.developer_menu, action, image=icon)
