@@ -463,7 +463,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             else:
                 self._log("ignoring {0}/{1}".format(large_covers_path, f))
 
-        total_steps = len(epubs) + len(small_covers) + len(large_covers)
+        total_steps = len(epubs) + len(large_covers)
         total_steps += 5    # MXD components
         total_steps += 2    # backup.xml, mainDb.sqlite
 
@@ -542,8 +542,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 pb.increment()
 
                 # backup.xml
-                zfw.write(os.path.join(os.path.expanduser('~'), 'Desktop', 'backup.xml'),
-                          arcname='backup.xml')
+                temp_backup_xml = os.path.join(os.path.expanduser('~'), 'Desktop', 'backup.xml')
+                if os.path.exists(temp_backup_xml):
+                    zfw.write(temp_backup_xml, arcname='backup.xml')
+                else:
+                    self._log("!!! backup.xml not available, not included in image !!!")
                 pb.increment()
 
                 # mainDb
@@ -576,7 +579,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         pb.increment()
 
                 # Large and small covers with one step
-                self._log("archiving {:,} large covers".format(len(large_covers)))
+                self._log("archiving {:,} covers and thumbs".format(len(large_covers)))
                 BACKUP_MSG_3 = (
                                 '<ol style="margin-right:1.5em">'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Backup image initialized</li>'
@@ -585,8 +588,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
                                 '<li style="color:#bbb">Select destination folder to store backup</li>'
                                 '</ol>')
                 pb.set_label(BACKUP_MSG_3.format(**busy_panel_args))
-                for path in large_covers:
+
+                # Process large and small covers at the same time
+                # Assumes that len(large_covers) == len(small_covers)
+                for x in range(len(large_covers)):
                     # Get a local copy of the large cover
+                    path = large_covers[x]
                     rcp = b'/'.join([large_covers_path, path])
                     with TemporaryFile() as lcp:
                         try:
@@ -596,12 +603,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         except:
                             import traceback
                             self._log(traceback.format_exc())
-                        pb.increment()
 
-                # Small covers
-                self._log("archiving {:,} small covers".format(len(small_covers)))
-                for path in small_covers:
                     # Get a local copy of the small cover
+                    path = small_covers[x]
                     rcp = b'/'.join([small_covers_path, path])
                     with TemporaryFile() as lcp:
                         try:
@@ -611,11 +615,14 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         except:
                             import traceback
                             self._log(traceback.format_exc())
-                        pb.increment()
+
+                    pb.increment()
 
             pb.hide()
             actual_time = time.time() - start_time
-            self._log("archive created in {0}".format(self.format_time(actual_time)))
+            self._log("archive created in {0} ({1:,.0f} bytes/second)".format(
+                self.format_time(actual_time),
+                os.stat(local_backup).st_size/actual_time))
 
             # Get the destination folder
             d = datetime.now()
@@ -655,7 +662,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg, parent=self.gui,
                            show_copy_button=False).exec_()
 
-
     def create_menu_item(self, m, menu_text, image=None, tooltip=None, shortcut=None):
         ac = self.create_action(spec=(menu_text, None, tooltip, shortcut), attr=menu_text)
         if image:
@@ -678,13 +684,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def developer_utilities(self, action):
         '''
-        'Delete calibre hashes', 'Delete Marvin hashes'
-
         '''
         self._log_location(action)
         if action in ['Create backup', 'Create local backup', 'Delete calibre hashes',
-                      'Delete Marvin hashes', 'Nuke annotations', 'Reset column widths',
-                      'Restore from backup']:
+                      'Delete Marvin hashes', 'Nuke annotations', 'Profile connected device',
+                      'Reset column widths', 'Restore from backup']:
             if action == 'Delete Marvin hashes':
                 rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
 
@@ -702,6 +706,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 else:
                     self._log("no cover hashes found at {0}".format(dch))
 
+            elif action == 'Create backup':
+                self.create_backup()
+            elif action == 'Create local backup':
+                self.create_local_backup()
             elif action == 'Delete calibre hashes':
                 self.gui.current_db.delete_all_custom_book_data('epub_hash')
                 self._log("cached epub hashes deleted")
@@ -711,14 +719,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         self.library_scanner.hash_map = None
             elif action == 'Nuke annotations':
                 self.nuke_annotations()
+            elif action == 'Profile connected device':
+                self.profile_connected_device()
             elif action == 'Reset column widths':
                 self._log("deleting marvin_library_column_widths")
                 self.prefs.pop('marvin_library_column_widths')
                 self.prefs.commit()
-            elif action == 'Create backup':
-                self.create_backup()
-            elif action == 'Create local backup':
-                self.create_local_backup()
             elif action == 'Restore from backup':
                 self.restore_from_backup()
 
@@ -1338,6 +1344,41 @@ class MarvinManagerAction(InterfaceAction, Logger):
         if updated:
             self.prefs.set('plugin_version', "%d.%d.%d" % self.interface_action_base_plugin.version)
 
+    def profile_connected_device(self):
+        '''
+        Return a formatted profile of key device info
+        '''
+        self._log_location()
+        marvin_version = self.connected_device.marvin_version
+        device_profile = self.connected_device.device_profile.copy()
+        device_profile['MarvinVersion'] = "{0}.{1}.{2}".format(
+            marvin_version[0], marvin_version[1], marvin_version[2])
+        device_profile['InstalledBooks'] = len(self.connected_device.cached_books)
+        device_profile['MarvinAppID'] = self.connected_device.app_id
+        for key in ['FSFreeBytes', 'FSTotalBytes']:
+            device_profile[key] = int(device_profile[key])
+        DEVICE_PROFILE = (
+            'Device name: {DeviceName}\n'
+            'Type: {ProductType}\n'
+            'Model: {ModelNumber}\n'
+            'iOS: {ProductVersion}\n'
+            'Password: {PasswordProtected}\n'
+            'FSTotalBytes: {FSTotalBytes:,}\n'
+            'FSFreeBytes: {FSFreeBytes:,}\n'
+            'Marvin app: {MarvinAppID}\n'
+            'Marvin version: {MarvinVersion}\n'
+            'Marvin installed books: {InstalledBooks}\n'
+            )
+
+        # Display connected device profile
+        title = "Connected device profile"
+        msg = (
+               '<p>{0}<br/>Marvin v{1}</p>'
+               '<p>Click <b>Show details</b> for more information.</p>'
+              ).format(self.ios.device_name, device_profile['MarvinVersion'])
+        det_msg = DEVICE_PROFILE.format(**device_profile)
+        MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg, parent=self.gui).exec_()
+
     def profile_db(self):
         '''
         Snapshot key aspects of mainDb
@@ -1468,11 +1509,17 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
+                action = 'Profile connected device'
+                ac = self.create_menu_item(self.developer_menu, action, image=I('dialog_information.png'))
+                ac.triggered.connect(partial(self.developer_utilities, action))
+                ac.setEnabled(enabled)
+
                 m.addSeparator()
                 action = 'Create local backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
                 ac = self.create_menu_item(self.developer_menu, action, image=icon)
                 ac.triggered.connect(partial(self.developer_utilities, action))
+                ac.setEnabled(enabled)
 
             # Process Dropbox sync records automatically once only.
             if process_dropbox:
