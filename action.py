@@ -158,7 +158,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             book_descriptor = "books" if total_books > 1 else "book"
             title = "Estimated time to create backup"
             msg = ("<p>Creating a backup of " +
-                   "{0} {1} in your Marvin library ".format(total_books, book_descriptor) +
+                   "{0:,} {1} in your Marvin library ".format(total_books, book_descriptor) +
                    "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
                    "<p>Proceed?</p>")
             dlg = MessageBox(MessageBox.QUESTION, title, msg,
@@ -243,14 +243,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 'estimated_time': self.format_time(total_seconds),
                 'actual_time': self.format_time(actual_time),
                 'pct_complete': pb.get_pct_complete(),
-                'archive_rate': estimated_size/actual_time}
+                'archive_rate': estimated_size/actual_time,
+                'estimated_archive_rate': WORST_CASE_ARCHIVE_RATE}
         analytics.append((
-            '1. Preparing backup:\n'
-            '   estimated size: {estimated_size:,}\n'
-            '   book count: {book_count:,}\n'
-            '   estimated time: {estimated_time}\n'
-            '   actual time: {actual_time} ({pct_complete}%)\n'
-            '   archive rate: {archive_rate:,.0f} bytes/second'
+            '1. Preparing backup\n'
+            '         estimated size: {estimated_size:,}\n'
+            '             book count: {book_count:,}\n'
+            '         estimated time: {estimated_time}\n'
+            '            actual time: {actual_time} ({pct_complete}%)\n'
+            '      est. archive rate: {estimated_archive_rate:,}\n'
+            '    actual archive rate: {archive_rate:,.0f} bytes/second\n'
             ).format(**args))
         del pb
 
@@ -286,8 +288,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 # Display status
                 busy_panel_args['backup_size'] = int(int(stats['st_size'])/(1024*1024))
-                #busy_panel_args['destination'] = "..{0}{1}".format(
-                #    os.path.sep, destination_folder.split(os.path.sep)[-1])
+                busy_panel_args['destination'] = "{0}{1}".format(
+                    os.path.sep, destination_folder.split(os.path.sep)[-1])
 
                 BACKUP_MSG_3 = ('<ol style="margin-right:1.5em">'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Backup of {book_count:,} '
@@ -375,8 +377,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 total_actual = time.time() - start_time
 
                 analytics.append((
-                    '2. Destination folder:\n'
-                    '   {0}').format(destination_folder))
+                    '2. Destination folder\n'
+                    '   {0}\n').format(destination_folder))
 
                 args = {
                         'IOS_READ_RATE': IOS_READ_RATE,
@@ -391,27 +393,51 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         'transfer_size': transfer_size
                         }
                 analytics.append((
-                    '3. Transferring backup:\n'
-                    '   backup image size: {transfer_size:,}\n'
-                    '   transfer estimate: {transfer_estimate}\n'
-                    '   transfer actual: {transfer_actual}\n'
-                    '   sidecar estimate: {sidecar_estimate}\n'
-                    '   sidecar actual: {sidecar_actual}\n'
-                    '   total estimate: {total_estimate}\n'
-                    '   total actual: {total_actual} ({pct_complete}%)\n'
-                    '   estimated transfer rate: {IOS_READ_RATE:,}\n'
-                    '   actual transfer rate: {transfer_rate:,.0f}'
+                    '3. Transferring backup\n'
+                    '      backup image size: {transfer_size:,}\n'
+                    '     est. transfer time: {transfer_estimate}\n'
+                    '   actual transfer time: {transfer_actual}\n'
+                    '      est. sidecar time: {sidecar_estimate}\n'
+                    '    actual sidecar time: {sidecar_actual}\n'
+                    '        est. total time: {total_estimate}\n'
+                    '      actual total time: {total_actual} ({pct_complete}%)\n'
+                    '     est. transfer rate: {IOS_READ_RATE:,} bytes/sec\n'
+                    '   actual transfer rate: {transfer_rate:,.0f} bytes/sec\n'
                     ).format(**args))
 
                 local.close()
+
+                # Add the environment details to analytics
+                device_profile = self.profile_connected_device()
+                device_profile['SystemDetails'] = " System "
+                device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
+                separator_width = len(device_profile['DeviceName']) + 30
+                device_profile['SeparatorWidth'] = separator_width
+                DEVICE_PROFILE = (
+                    '{DeviceName:-^{SeparatorWidth}}\n'
+                    '  Type: {ProductType}\n'
+                    ' Model: {ModelNumber}\n'
+                    '   iOS: {ProductVersion}\n'
+                    '\n{SystemDetails:-^{SeparatorWidth}}\n'
+                    ' {CalibreProfile}\n'
+                    ' {PlatformProfile}\n'
+                    ' {OSProfile}\n'
+                    )
+                analytics.append(DEVICE_PROFILE.format(**device_profile))
 
                 pb.hide()
 
                 # Inform user backup operation is complete
                 title = "Backup operation complete"
-                msg = '<p>Marvin library backed up to {0}</p>'.format(destination_folder)
+                msg = '<p>Marvin library archived to<br/>{0}</p>'.format(zip_dst)
                 det_msg = '\n'.join(analytics)
-                MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg, parent=self.gui).exec_()
+
+                # Set dialog det_msg to monospace
+                dialog = info_dialog(self.gui, title, msg, det_msg=det_msg)
+                font = QFont('monospace')
+                font.setFixedPitch(True)
+                dialog.det_msg.setFont(font)
+                dialog.exec_()
 
                 # Save the backup folder
                 self.prefs.set('backup_folder', destination_folder)
@@ -424,9 +450,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     det_msg = '\n'.join(analytics)
                 MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg, parent=self.gui,
                            show_copy_button=False).exec_()
-
-            self._log("\nBackup metrics:\n{0}".format("\n".join(analytics)))
-
         else:
             self._log("No backup file found at {0}".format(backup_target))
 
@@ -686,9 +709,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         '''
         self._log_location(action)
-        if action in ['Create backup', 'Create local backup', 'Delete calibre hashes',
-                      'Delete Marvin hashes', 'Delete iOSRA booklist.zip',
-                      'Nuke annotations', 'Profile connected device',
+        if action in ['Connected device profile', 'Create backup', 'Create local backup',
+                      'Delete calibre hashes', 'Delete Marvin hashes',
+                      'Delete iOSRA booklist.zip',
+                      'Nuke annotations',
                       'Reset column widths', 'Restore from backup']:
             if action == 'Delete Marvin hashes':
                 rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
@@ -713,6 +737,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self.ios.remove(rhc)
                     self._log("iOSRA booklist.zip deleted")
 
+            elif action == 'Connected device profile':
+                self.show_connected_device_profile()
             elif action == 'Create backup':
                 self.create_backup()
             elif action == 'Create local backup':
@@ -726,8 +752,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         self.library_scanner.hash_map = None
             elif action == 'Nuke annotations':
                 self.nuke_annotations()
-            elif action == 'Profile connected device':
-                self.profile_connected_device()
             elif action == 'Reset column widths':
                 self._log("deleting marvin_library_column_widths")
                 self.prefs.pop('marvin_library_column_widths')
@@ -1357,24 +1381,22 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location()
 
+        self._log_location()
         device_profile = self.connected_device.device_profile.copy()
+
         marvin_version = self.connected_device.marvin_version
         device_profile['MarvinVersion'] = "{0}.{1}.{2}".format(
             marvin_version[0], marvin_version[1], marvin_version[2])
+
         device_profile['InstalledBooks'] = len(self.connected_device.cached_books)
+
         device_profile['MarvinAppID'] = self.connected_device.app_id
+
         for key in ['FSFreeBytes', 'FSTotalBytes']:
             device_profile[key] = int(device_profile[key])
 
         local_db_path = self.connected_device.local_db_path
         device_profile['MarvinMainDbSize'] = os.stat(local_db_path).st_size
-
-        # Separators
-        device_profile['MarvinDetails'] = " Marvin "
-        device_profile['SystemDetails'] = " System "
-        device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
-        separator_width = len(device_profile['DeviceName']) + 30
-        device_profile['SeparatorWidth'] = separator_width
 
         # Cribbed from calibre.debug:print_basic_debug_info()
         import platform
@@ -1410,40 +1432,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log(traceback.format_exc())
             os_profile = "unknown"
         device_profile['OSProfile'] = os_profile
-
-        DEVICE_PROFILE = (
-            '{DeviceName:-^{SeparatorWidth}}\n'
-            '           Type: {ProductType}\n'
-            '          Model: {ModelNumber}\n'
-            '            iOS: {ProductVersion}\n'
-            '       Password: {PasswordProtected}\n'
-            '   FSTotalBytes: {FSTotalBytes:,}\n'
-            '    FSFreeBytes: {FSFreeBytes:,}\n'
-            '\n{MarvinDetails:-^{SeparatorWidth}}\n'
-            '            app: {MarvinAppID}\n'
-            '        version: {MarvinVersion}\n'
-            'installed books: {InstalledBooks}\n'
-            '         mainDb: {MarvinMainDbSize:,}\n'
-            '\n{SystemDetails:-^{SeparatorWidth}}\n'
-            '{CalibreProfile}\n'
-            '{PlatformProfile}\n'
-            '{OSProfile}\n'
-            )
-
-        # Display connected device profile
-        title = "Connected device profile"
-        msg = (
-               '<p>{0}<br/>Marvin v{1}</p>'
-               '<p>Click <b>Show details</b> for more information.</p>'
-              ).format(self.ios.device_name, device_profile['MarvinVersion'])
-        det_msg = DEVICE_PROFILE.format(**device_profile)
-
-        # Set dialog det_msg to monospace
-        dialog = info_dialog(self.gui, title, msg, det_msg=det_msg)
-        font = QFont('monospace')
-        font.setFixedPitch(True)
-        dialog.det_msg.setFont(font)
-        dialog.exec_()
+        return device_profile
 
     def profile_db(self):
         '''
@@ -1581,7 +1570,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
                 self.developer_menu.addSeparator()
-                action = 'Profile connected device'
+                action = 'Connected device profile'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('dialog_information.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(enabled)
@@ -1666,8 +1655,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
         Display a dialog telling user how to complete restore
         '''
         RESTORE_MSG_1 = ('<ol style="margin-right:1.5em">'
-                         '<li style="margin-bottom:0.5em">Transferring backup of '
-                         '{book_count:,} books to Marvin …</li>'
+                         '<li style="margin-bottom:0.5em">Transferring backup image of '
+                         '{book_count:,} books …</li>'
                          '<li style="color:#bbb">Complete restore process in Marvin</li>'
                          '</ol>')
 
@@ -1701,10 +1690,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
             if fs_free_bytes < space_required:
                 title = "Insufficient space available"
                 msg = ("<p>Not enough space available on {0} to restore backup.</p>"
-                       "<p>{1:,} bytes required<br/>{2:,} bytes available.</p>".format(
+                       "<p>{1:,.0f} MB required<br/>{2:,.0f} MB available.</p>".format(
                         self.ios.device_name,
-                        space_required,
-                        fs_free_bytes))
+                        space_required / (1024*1024),
+                        fs_free_bytes / (1024*1024)))
                 return MessageBox(MessageBox.WARNING, title, msg,
                                   parent=self.gui, show_copy_button=False).exec_()
 
@@ -1719,13 +1708,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             backup_date = components.group(2)
 
             # Estimate transfer time @ IOS_WRITE_RATE
-            avg_book_size = src_size/epub_count
-            if avg_book_size < 500 * 1024:
-                IOS_WRITE_RATE = 5000000
-            elif avg_book_size < 2 * 1024 * 1024:
-                IOS_WRITE_RATE = 6500000
-            else:
-                IOS_WRITE_RATE = 7000000
+            IOS_WRITE_RATE = 5800000
 
             total_seconds = int(src_size / IOS_WRITE_RATE) + 1
             estimated_time = self.format_time(total_seconds)
@@ -1733,7 +1716,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             # Confirm
             title = "Confirm restore operation"
-            msg = "<p>This will restore a backup of {0} books".format(epub_count)
+            msg = "<p>This will restore a backup of {0:,} books".format(epub_count)
             if backup_source:
                 msg += ", from {0},".format(backup_source)
             msg += (' created {0}, to {1}.</p>'
@@ -1784,21 +1767,18 @@ class MarvinManagerAction(InterfaceAction, Logger):
             actual_time = time.time() - start_time
             args = {'actual_size': actual_size,
                     'actual_time': self.format_time(actual_time),
-                    'avg_book_size': avg_book_size,
                     'epub_count': epub_count,
                     'estimated_time': estimated_time,
                     'IOS_WRITE_RATE': IOS_WRITE_RATE,
                     'pct_complete': pb.get_pct_complete(),
                     'transfer_rate': actual_size/actual_time}
             analytics.append((
-                '1. Restore from backup:\n'
-                '   number of books: {epub_count}\n'
-                '   backup image size: {actual_size:,}\n'
-                '   average book size: {avg_book_size:,.0f}\n'
-                '   estimated time: {estimated_time}\n'
-                '   actual time: {actual_time} ({pct_complete}%)\n'
-                '   estimated transfer rate: {IOS_WRITE_RATE:,}\n'
-                '   actual transfer rate: {transfer_rate:,.0f}'
+                '1. Restore from backup\n'
+                '    backup image size: {actual_size:,}\n'
+                '     est. backup time: {estimated_time}\n'
+                '   actual backup time: {actual_time} ({pct_complete}%)\n'
+                '   est. transfer rate: {IOS_WRITE_RATE:,} bytes/sec\n'
+                ' actual transfer rate: {transfer_rate:,.0f} bytes/sec\n'
                 ).format(**args))
 
             # Verify transferred size
@@ -1858,9 +1838,27 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 actual_time = time.time() - start_time
                 analytics.append((
-                    '2. Recover MXD components:\n'
-                    '   {0}'
+                    '2. Recover iOSRA and MXD caches\n'
+                    '        recovery time: {0}\n'
                     ).format(self.format_time(actual_time)))
+
+                # Add the environment details to analytics
+                device_profile = self.profile_connected_device()
+                device_profile['SystemDetails'] = " System "
+                device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
+                separator_width = len(device_profile['DeviceName']) + 30
+                device_profile['SeparatorWidth'] = separator_width
+                DEVICE_PROFILE = (
+                    '{DeviceName:-^{SeparatorWidth}}\n'
+                    '  Type: {ProductType}\n'
+                    ' Model: {ModelNumber}\n'
+                    '   iOS: {ProductVersion}\n'
+                    '\n{SystemDetails:-^{SeparatorWidth}}\n'
+                    ' {CalibreProfile}\n'
+                    ' {PlatformProfile}\n'
+                    ' {OSProfile}\n'
+                    )
+                analytics.append(DEVICE_PROFILE.format(**device_profile))
 
                 pb.hide()
 
@@ -1878,10 +1876,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        '</ol>'
                        )
                 det_msg = '\n'.join(analytics)
-                d = MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
-                               parent=self.gui).exec_()
 
-                self._log("\nRestore analytics\n{0}".format('\n'.join(analytics)))
+                # Set dialog det_msg to monospace
+                dialog = info_dialog(self.gui, title, msg, det_msg=det_msg)
+                font = QFont('monospace')
+                font.setFixedPitch(True)
+                dialog.det_msg.setFont(font)
+                dialog.exec_()
 
             else:
                 pb.hide()
@@ -1941,6 +1942,52 @@ class MarvinManagerAction(InterfaceAction, Logger):
         d = MessageBox(MessageBox.INFO, title, msg, det_msg=text,
                        parent=self.gui, show_copy_button=False)
         d.exec_()
+
+    def show_connected_device_profile(self):
+        '''
+        '''
+        device_profile = self.profile_connected_device()
+
+        # Separators
+        device_profile['MarvinDetails'] = " Marvin "
+        device_profile['SystemDetails'] = " System "
+        device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
+        separator_width = len(device_profile['DeviceName']) + 30
+        device_profile['SeparatorWidth'] = separator_width
+
+        DEVICE_PROFILE = (
+            '{DeviceName:-^{SeparatorWidth}}\n'
+            '           Type: {ProductType}\n'
+            '          Model: {ModelNumber}\n'
+            '            iOS: {ProductVersion}\n'
+            '       Password: {PasswordProtected}\n'
+            '   FSTotalBytes: {FSTotalBytes:,}\n'
+            '    FSFreeBytes: {FSFreeBytes:,}\n'
+            '\n{MarvinDetails:-^{SeparatorWidth}}\n'
+            '            app: {MarvinAppID}\n'
+            '        version: {MarvinVersion}\n'
+            'installed books: {InstalledBooks}\n'
+            '         mainDb: {MarvinMainDbSize:,}\n'
+            '\n{SystemDetails:-^{SeparatorWidth}}\n'
+            '{CalibreProfile}\n'
+            '{PlatformProfile}\n'
+            '{OSProfile}\n'
+            )
+
+        # Display connected device profile
+        title = "Connected device profile"
+        msg = (
+               '<p>{0}<br/>Marvin v{1}</p>'
+               '<p>Click <b>Show details</b> for more information.</p>'
+              ).format(self.ios.device_name, device_profile['MarvinVersion'])
+        det_msg = DEVICE_PROFILE.format(**device_profile)
+
+        # Set dialog det_msg to monospace
+        dialog = info_dialog(self.gui, title, msg, det_msg=det_msg)
+        font = QFont('monospace')
+        font.setFixedPitch(True)
+        dialog.det_msg.setFont(font)
+        dialog.exec_()
 
     def show_help(self):
         path = os.path.join(self.resources_path, 'help/help.html')
