@@ -288,15 +288,14 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 # Display status
                 busy_panel_args['backup_size'] = int(int(stats['st_size'])/(1024*1024))
-                busy_panel_args['destination'] = "{0}{1}".format(
-                    os.path.sep, destination_folder.split(os.path.sep)[-1])
+                busy_panel_args['destination'] = destination_folder
 
                 BACKUP_MSG_3 = ('<ol style="margin-right:1.5em">'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Backup of {book_count:,} '
                                 'books prepared</li>'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Destination folder selected</li>'
                                 '<li>Moving backup ({backup_size:,} MB) '
-                                'from {device} to {destination} …</li>'
+                                'from {device} to<br/>{destination} …</li>'
                                 '</ol>')
 
                 # Create the ProgressBar in the main GUI thread
@@ -420,7 +419,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     '   iOS: {ProductVersion}\n'
                     '\n{SystemDetails:-^{SeparatorWidth}}\n'
                     ' {CalibreProfile}\n'
-                    ' {PlatformProfile}\n'
+                    #' {PlatformProfile}\n'
                     ' {OSProfile}\n'
                     )
                 analytics.append(DEVICE_PROFILE.format(**device_profile))
@@ -1381,7 +1380,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location()
 
-        self._log_location()
         device_profile = self.connected_device.device_profile.copy()
 
         marvin_version = self.connected_device.marvin_version
@@ -1421,16 +1419,15 @@ class MarvinManagerAction(InterfaceAction, Logger):
                             os_profile += " 32bit process running on 64bit windows"
                     except:
                         pass
-
             elif isosx:
                 os_profile = "OS X {0}".format(platform.mac_ver()[0])
             else:
                 os_profile = "Linux {0}".format(platform.linux_distribution())
-            self._log(os_profile)
         except:
             import traceback
             self._log(traceback.format_exc())
             os_profile = "unknown"
+
         device_profile['OSProfile'] = os_profile
         return device_profile
 
@@ -1855,7 +1852,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     '   iOS: {ProductVersion}\n'
                     '\n{SystemDetails:-^{SeparatorWidth}}\n'
                     ' {CalibreProfile}\n'
-                    ' {PlatformProfile}\n'
+                    #' {PlatformProfile}\n'
                     ' {OSProfile}\n'
                     )
                 analytics.append(DEVICE_PROFILE.format(**device_profile))
@@ -1970,7 +1967,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             '         mainDb: {MarvinMainDbSize:,}\n'
             '\n{SystemDetails:-^{SeparatorWidth}}\n'
             '{CalibreProfile}\n'
-            '{PlatformProfile}\n'
+            #'{PlatformProfile}\n'
             '{OSProfile}\n'
             )
 
