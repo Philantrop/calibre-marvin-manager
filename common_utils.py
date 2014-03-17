@@ -485,6 +485,7 @@ class ProgressBar(QDialog, Logger):
         self.l.addSpacing(15)
 
         self.close_requested = False
+        self.resize(self.sizeHint())
 
     def closeEvent(self, event):
         self._log_location()
@@ -509,6 +510,7 @@ class ProgressBar(QDialog, Logger):
 
     def set_label(self, value):
         self.label.setText(value)
+        self.resize(self.sizeHint())
         self.label.repaint()
         self.refresh()
 
@@ -1097,7 +1099,7 @@ class CommandHandler(Logger):
             self.watchdog.start()
 
             while True:
-                if not self.ios.exists(self.connected_device.status_fs):
+                if not self.ios.exists(self.connected_device.status_fs, silent=True):
                     # status.xml not created yet
                     if self.operation_timed_out:
                         final_code = '-1'
@@ -1235,7 +1237,7 @@ class CommandHandler(Logger):
                         rf = b'/'.join([self.connected_device.staging_folder, self.get_response])
                         self._log("fetching response '%s'" % rf)
                         if not self.ios.exists(rf):
-                            response = "%s not found" % rf
+                            response = "{0} not found".format(rf)
                         else:
                             response = self.ios.read(rf)
                             self.ios.remove(rf)

@@ -23,7 +23,7 @@ from calibre.constants import DEBUG
 from calibre.customize.ui import device_plugins, disabled_device_plugins
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
 from calibre.devices.usbms.driver import debug_print
-from calibre.ebooks.BeautifulSoup import BeautifulSoup
+from calibre.ebooks.BeautifulSoup import BeautifulSoup, UnicodeDammit
 from calibre.gui2 import Application, info_dialog, open_url
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
@@ -52,11 +52,8 @@ PLUGIN_ICONS = ['images/connected.png', 'images/disconnected.png']
 class MarvinManagerAction(InterfaceAction, Logger):
 
     INSTALLED_BOOKS_SNAPSHOT = "installed_books.zip"
-
-    # Location reporting template
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-
     REMOTE_CACHE_FOLDER = '/'.join(['/Library', 'calibre.mm'])
+    UTF_8_BOM = r'\xef\xbb\xbf'
 
     icon = PLUGIN_ICONS[0]
     minimum_ios_driver_version = (1, 3, 5)
@@ -129,7 +126,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             Return True: continue
             Return False: cancel
             '''
-            stats = self.ios.exists(backup_target)
+            stats = self.ios.exists(backup_target, silent=True)
             if stats:
                 d = datetime.fromtimestamp(float(stats['st_mtime']))
                 friendly_date = d.strftime("%A, %B %d, %Y")
@@ -569,6 +566,31 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     zfw.write(temp_backup_xml, arcname='backup.xml')
                 else:
                     self._log("!!! backup.xml not available, not included in image !!!")
+
+                # Issue command to request backup.xml
+                """
+                command_type = "GetGlobalVocabularyHTML"
+                ch = CommandHandler(self)
+                ch.construct_general_command(command_type)
+                ch.issue_command(get_response="html_response.html")
+                if ch.results['code']:
+                    self._log("results: %s" % ch.results)
+                    title = "Unable to get backup.xml"
+                    msg = ('<p>Unable to get backup.xml from Marvin.</p>'
+                           '<p>Click <b>Show details</b> for more information.</p>').format(
+                           self.ios.device_name)
+                    det_msg = ch.results['details']
+                    pb.hide()
+                    return MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg,
+                               parent=self.gui).exec_()
+
+                response = ch.results['response']
+                if re.match(self.UTF_8_BOM, response):
+                    response = UnicodeDammit(response).unicode
+                response = "<?xml version='1.0' encoding='utf-8'?>" + response
+                self._log("backup.xml:\n{0}".format(response))
+                zfw.writestr("backup.xml", response)
+                """
                 pb.increment()
 
                 # mainDb
@@ -1400,9 +1422,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
         import platform
         from calibre.constants import (__appname__, get_version, isportable, isosx,
                                        isfrozen, is64bit, iswindows)
-        calibre_profile = "{0} {1} {2} isfrozen: {3} is64bit: {4}".format(
+        calibre_profile = "{0} {1}{2} isfrozen:{3} is64bit:{4}".format(
             __appname__, get_version(),
-            'Portable' if isportable else '', isfrozen, is64bit)
+            ' Portable' if isportable else '', isfrozen, is64bit)
         device_profile['CalibreProfile'] = calibre_profile
 
         platform_profile = "{0} {1} {2}".format(
@@ -1963,8 +1985,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
             '\n{MarvinDetails:-^{SeparatorWidth}}\n'
             '            app: {MarvinAppID}\n'
             '        version: {MarvinVersion}\n'
-            'installed books: {InstalledBooks}\n'
             '         mainDb: {MarvinMainDbSize:,}\n'
+            'installed books: {InstalledBooks}\n'
             '\n{SystemDetails:-^{SeparatorWidth}}\n'
             '{CalibreProfile}\n'
             #'{PlatformProfile}\n'
@@ -1975,7 +1997,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         title = "Connected device profile"
         msg = (
                '<p>{0}<br/>Marvin v{1}</p>'
-               '<p>Click <b>Show details</b> for more information.</p>'
+               '<p>Click <b>Show details</b> for summary.</p>'
               ).format(self.ios.device_name, device_profile['MarvinVersion'])
         det_msg = DEVICE_PROFILE.format(**device_profile)
 
