@@ -94,7 +94,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 stored_mainDb_profile['device'],
                 current_mainDb_profile['device']))
             keys = current_mainDb_profile.keys()
-            keys.pop('device')
+            keys.pop(keys.index('device'))
             for key in sorted(keys):
                 self._log("{0}  {1:20} {2:<37} {3:<37}".format(
                     'x' if stored_mainDb_profile[key] != current_mainDb_profile[key] else ' ',
