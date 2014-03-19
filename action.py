@@ -455,6 +455,18 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location()
 
+        """
+        # Get a list of files, covers from mainDb
+        con = sqlite3.connect(self.connected_device.local_db_path)
+        with con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+            cur.execute('''SELECT FileName, Hash FROM Books''')
+            rows = cur.fetchall()
+            mdb_epubs = [row[b'FileName'] for row in rows]
+            mdb_covers = ["{0}.jpg".format(row[b'Hash']) for row in rows]
+        """
+
         epubs_path = b'/Documents'
         dir_contents = self.ios.listdir(epubs_path, get_stats=False)
         epubs = []
@@ -1474,9 +1486,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
             profile['content_hash'] = m.hexdigest()
 
             # Get the latest MetadataUpdated timestamp
-            cur.execute('''SELECT max(MetadataUpdated) FROM Books''')
-            row = cur.fetchone()
-            profile['max_MetadataUpdated'] = row[b'max(MetadataUpdated)']
+            try:
+                cur.execute('''SELECT max(MetadataUpdated) FROM Books''')
+                row = cur.fetchone()
+                profile['max_MetadataUpdated'] = row[b'max(MetadataUpdated)']
+            except:
+                # Outdated version of Marvin
+                profile['max_MetadataUpdated'] = -1
 
             # Get the table sizes
             for table in ['BookCollections', 'Bookmarks', 'Books', 'Collections',
