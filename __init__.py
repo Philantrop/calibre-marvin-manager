@@ -15,7 +15,8 @@ class MarvinManagerPlugin(InterfaceActionBase):
     supported_platforms = ['linux', 'osx', 'windows']
     author = 'Greg Riker'
     version = (1, 2, 0)
-    minimum_calibre_version = (1, 0, 0)
+    # #mark ~~~ Minimum calibre version ~~~
+    minimum_calibre_version = (1, 29, 0)
 
     actual_plugin = 'calibre_plugins.marvin_manager.action:MarvinManagerAction'
     prefs = JSONConfig('plugins/Marvin XD')

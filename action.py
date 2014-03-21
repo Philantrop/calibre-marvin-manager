@@ -56,7 +56,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
     UTF_8_BOM = r'\xef\xbb\xbf'
 
     icon = PLUGIN_ICONS[0]
-    minimum_ios_driver_version = (1, 3, 5)
+    # #mark ~~~ Minimum iOSRA version required ~~~
+    minimum_ios_driver_version = (1, 3, 6)
     name = 'Marvin XD'
     prefs = cfg.plugin_prefs
     verbose = prefs.get('debug_plugin', False)
