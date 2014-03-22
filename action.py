@@ -77,16 +77,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def compare_mainDb_profiles(self, stored_mainDb_profile):
         '''
         '''
-        self._log_location()
         current_mainDb_profile = self.profile_db()
         matched = True
         for key in sorted(current_mainDb_profile.keys()):
             if current_mainDb_profile[key] != stored_mainDb_profile[key]:
                 matched = False
-                self._log("'{0}' does not match".format(key))
+                break
 
         # Display mainDb_profile mismatch
         if not matched:
+            self._log_location()
             self._log("   {0:20} {1:37} {2:37}".format('key', 'stored', 'current'))
             self._log("{0:—^23} {1:—^37} {2:—^37}".format('', '', ''))
             self._log("{0}  {1:20} {2:<37} {3:<37}".format(
@@ -743,11 +743,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         '''
         self._log_location(action)
-        if action in ['Connected device profile', 'Create backup', 'Create local backup',
+        if action in ['Connected device profile', 'Create local backup',
                       'Delete calibre hashes', 'Delete Marvin hashes',
-                      'Delete iOSRA booklist.zip',
+                      'Delete iOSRA booklist cache',
                       'Nuke annotations',
-                      'Reset column widths', 'Restore from backup']:
+                      'Reset column widths']:
             if action == 'Delete Marvin hashes':
                 rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
 
@@ -764,34 +764,52 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self._log("cover hashes at {0} deleted".format(dch))
                 else:
                     self._log("no cover hashes found at {0}".format(dch))
+                info_dialog(self.gui, 'Developer utilities',
+                            'Marvin hashes deleted', show=True,
+                            show_copy_button=False)
 
-            elif action == 'Delete iOSRA booklist.zip':
+            elif action == 'Delete iOSRA booklist cache':
                 rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
                 if self.ios.exists(rhc):
                     self.ios.remove(rhc)
-                    self._log("iOSRA booklist.zip deleted")
+                    self._log("iOSRA booklist cache deleted")
+                    info_dialog(self.gui, 'Developer utilities',
+                                'iOSRA booklist cache deleted', show=True,
+                                show_copy_button=False)
+                else:
+                    info_dialog(self.gui, 'Developer utilities',
+                                'iOSRA booklist cache not found', show=True,
+                                show_copy_button=False)
 
             elif action == 'Connected device profile':
                 self.show_connected_device_profile()
-            elif action == 'Create backup':
-                self.create_backup()
+
             elif action == 'Create local backup':
                 self.create_local_backup()
+
             elif action == 'Delete calibre hashes':
                 self.gui.current_db.delete_all_custom_book_data('epub_hash')
                 self._log("cached epub hashes deleted")
+
                 # Invalidate the library hash map, as library contents may change before reconnection
                 if hasattr(self, 'library_scanner'):
                     if hasattr(self.library_scanner, 'hash_map'):
                         self.library_scanner.hash_map = None
+                info_dialog(self.gui, 'Developer utilities',
+                            'calibre epub hashes deleted', show=True,
+                            show_copy_button=False)
+
             elif action == 'Nuke annotations':
+                # nuke_annotations() has its own dialog informing progress
                 self.nuke_annotations()
+
             elif action == 'Reset column widths':
                 self._log("deleting marvin_library_column_widths")
                 self.prefs.pop('marvin_library_column_widths')
                 self.prefs.commit()
-            elif action == 'Restore from backup':
-                self.restore_from_backup()
+                info_dialog(self.gui, 'Developer utilities',
+                            'Column widths reset', show=True,
+                            show_copy_button=False)
 
         else:
             self._log("unsupported action '{0}'".format(action))
@@ -1592,7 +1610,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(marvin_connected)
 
-                action = 'Delete iOSRA booklist.zip'
+                action = 'Delete iOSRA booklist cache'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(enabled)
@@ -1623,11 +1641,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.process_dropbox_sync_records()
                 self.dropbox_processed = True
 
-    def rehydrate_installed_books(self, stored):
+    def rehydrate_installed_books(self, stored, silent=False):
         '''
         Reconstruct self.installed_books from stored image
         '''
-        self._log_location()
+        if not silent:
+            self._log_location()
+
         rehydrated = None
         try:
             all_mxd_keys = sorted(Book.mxd_standard_keys + Book.mxd_custom_keys)
@@ -1641,6 +1661,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     setattr(rehydrated[int(cid)], prop, stored[cid].get(prop))
         except:
             import traceback
+            self._log_location()
             self._log(traceback.format_exc())
             rehydrated = None
         return rehydrated
@@ -1961,7 +1982,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 dehydrated = json.loads(zfr.read('installed_books.json'), object_hook=from_json)
 
         if self.compare_mainDb_profiles(stored_mainDb_profile):
-            self._log("restoring self.installed_books from stored image")
+            self._log("restoring self.installed_books from cache")
             self.installed_books = self.rehydrate_installed_books(dehydrated)
 
     def show_configuration(self):
@@ -2103,13 +2124,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
         A sanity test to confirm stored version of self.installed_books is legit
         '''
         self._log_location()
-        rehydrated = self.rehydrate_installed_books(dehydrated)
+        rehydrated = self.rehydrate_installed_books(dehydrated, silent=True)
         ans = None
         if rehydrated == self.installed_books:
-            self._log("dehydrated matches self.installed")
+            self._log("validated: dehydrated matches self.installed")
             ans = True
         else:
-            self._log("mismatches")
+            self._log("not validated: dehydrated does not match self.installed")
             """
             for cid in sorted(rehydrated.keys()):
                 self._log("{0:>3} {1:30} {2}  |  {3}".format(cid, rehydrated[cid].title,

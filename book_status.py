@@ -5199,7 +5199,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
     def _localize_marvin_database(self):
         '''
-        Copy remote_db_path from iOS to local storage using device pointers
+        Copy remote_db_path from iOS to local storage using device method
         '''
         self._log_location("starting")
         msg = "Refreshing database"
@@ -5210,15 +5210,17 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             local_busy = True
             self._busy_status_setup(msg=msg)
 
-        local_db_path = self.connected_device.local_db_path
-        remote_db_path = self.connected_device.books_subpath
+        self.connected_device._localize_database_path(self.connected_device.books_subpath)
 
-        # Report size of remote_db
-        stats = self.ios.exists(remote_db_path)
-        self._log("mainDb: {:,} bytes".format(int(stats['st_size'])))
-
-        with open(local_db_path, 'wb') as out:
-            self.ios.copy_from_idevice(remote_db_path, out)
+#         local_db_path = self.connected_device.local_db_path
+#         remote_db_path = self.connected_device.books_subpath
+#
+#         # Report size of remote_db
+#         stats = self.ios.exists(remote_db_path)
+#         self._log("mainDb: {:,} bytes".format(int(stats['st_size'])))
+#
+#         with open(local_db_path, 'wb') as out:
+#             self.ios.copy_from_idevice(remote_db_path, out)
 
         if local_busy:
             self._busy_status_teardown()
