@@ -764,9 +764,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self._log("cover hashes at {0} deleted".format(dch))
                 else:
                     self._log("no cover hashes found at {0}".format(dch))
-                info_dialog(self.gui, 'Developer utilities',
-                            'Marvin hashes deleted', show=True,
-                            show_copy_button=False)
+#                 Called by restore_from_backup
+#                 info_dialog(self.gui, 'Developer utilities',
+#                             'Marvin hashes deleted', show=True,
+#                             show_copy_button=False)
 
             elif action == 'Delete iOSRA booklist cache':
                 rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
@@ -1580,13 +1581,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
             action = 'Create backup'
             icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
             ac = self.create_menu_item(m, action, image=icon)
-            ac.triggered.connect(partial(self.developer_utilities, action))
+            ac.triggered.connect(self.create_backup)
             ac.setEnabled(enabled)
 
             action = 'Restore from backup'
             icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
             ac = self.create_menu_item(m, action, image=icon)
-            ac.triggered.connect(partial(self.developer_utilities, action))
+            ac.triggered.connect(self.restore_from_backup)
             ac.setEnabled(enabled)
 
             m.addSeparator()
