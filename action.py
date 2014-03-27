@@ -19,12 +19,13 @@ from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QFont, QIcon,
                       QMenu, QTimer, QUrl,
                       pyqtSignal)
 
+from calibre import browser
 from calibre.constants import DEBUG
 from calibre.customize.ui import device_plugins, disabled_device_plugins
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, UnicodeDammit
-from calibre.gui2 import Application, info_dialog, open_url
+from calibre.gui2 import Application, info_dialog, open_url, warning_dialog
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
@@ -39,7 +40,7 @@ from calibre_plugins.marvin_manager.annotations_db import AnnotationsDB
 from calibre_plugins.marvin_manager.book_status import BookStatusDialog
 from calibre_plugins.marvin_manager.common_utils import (AbortRequestException,
     Book, CommandHandler, CompileUI, IndexLibrary, Logger,
-    MoveBackup, MyBlockingBusy,
+    MoveBackup, MyBlockingBusy, PluginMetricsLogger,
     ProgressBar, RestoreBackup, Struct,
     from_json, get_icon, set_plugin_icon_resources, to_json, updateCalibreGUIView)
 import calibre_plugins.marvin_manager.config as cfg
@@ -260,9 +261,15 @@ class MarvinManagerAction(InterfaceAction, Logger):
             msg = ('<p>Unable to create backup of {0}.</p>'
                    '<p>Click <b>Show details</b> for more information.</p>').format(
                    self.ios.device_name)
-            det_msg = ch.results['details']
-            MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg,
-                       parent=self.gui).exec_()
+            det_msg = ch.results['details'] + '\n\n'
+            det_msg += self.format_device_profile()
+
+            # Set dialog det_msg to monospace
+            dialog = warning_dialog(self.gui, title, msg, det_msg=det_msg)
+            font = QFont('monospace')
+            font.setFixedPitch(True)
+            dialog.det_msg.setFont(font)
+            dialog.exec_()
             return
 
         # Move backup to the specified location
@@ -405,22 +412,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 local.close()
 
                 # Add the environment details to analytics
-                device_profile = self.profile_connected_device()
-                device_profile['SystemDetails'] = " System "
-                device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
-                separator_width = len(device_profile['DeviceName']) + 30
-                device_profile['SeparatorWidth'] = separator_width
-                DEVICE_PROFILE = (
-                    '{DeviceName:-^{SeparatorWidth}}\n'
-                    '  Type: {ProductType}\n'
-                    ' Model: {ModelNumber}\n'
-                    '   iOS: {ProductVersion}\n'
-                    '\n{SystemDetails:-^{SeparatorWidth}}\n'
-                    ' {CalibreProfile}\n'
-                    #' {PlatformProfile}\n'
-                    ' {OSProfile}\n'
-                    )
-                analytics.append(DEVICE_PROFILE.format(**device_profile))
+                analytics.append(self.format_device_profile())
 
                 pb.hide()
 
@@ -587,15 +579,22 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ch.construct_general_command(command_type)
                 ch.issue_command(get_response="html_response.html")
                 if ch.results['code']:
+                    pb.hide()
+
                     self._log("results: %s" % ch.results)
                     title = "Unable to get backup.xml"
                     msg = ('<p>Unable to get backup.xml from Marvin.</p>'
                            '<p>Click <b>Show details</b> for more information.</p>').format(
                            self.ios.device_name)
-                    det_msg = ch.results['details']
-                    pb.hide()
-                    return MessageBox(MessageBox.WARNING, title, msg, det_msg=det_msg,
-                               parent=self.gui).exec_()
+                    det_msg = ch.results['details'] + '\n\n'
+                    det_msg += self.format_device_profile()
+
+                    # Set dialog det_msg to monospace
+                    dialog = warning_dialog(self.gui, title, msg, det_msg=det_msg)
+                    font = QFont('monospace')
+                    font.setFixedPitch(True)
+                    dialog.det_msg.setFont(font)
+                    return dialog.exec_()
 
                 response = ch.results['response']
                 if re.match(self.UTF_8_BOM, response):
@@ -857,6 +856,39 @@ class MarvinManagerAction(InterfaceAction, Logger):
                        parent=self.gui, show_copy_button=False).exec_()
 
         return status
+
+    def format_device_profile(self):
+        '''
+        Return a formatted summary of the connected device
+        '''
+        device_profile = self.profile_connected_device()
+
+        # Separators
+        device_profile['MarvinDetails'] = " Marvin "
+        device_profile['SystemDetails'] = " System "
+        device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
+        separator_width = len(device_profile['DeviceName']) + 30
+        device_profile['SeparatorWidth'] = separator_width
+
+        DEVICE_PROFILE = (
+            '{DeviceName:-^{SeparatorWidth}}\n'
+            '           Type: {ProductType}\n'
+            '          Model: {ModelNumber}\n'
+            '            iOS: {ProductVersion}\n'
+            '       Password: {PasswordProtected}\n'
+            '   FSTotalBytes: {FSTotalBytes:,}\n'
+            '    FSFreeBytes: {FSFreeBytes:,}\n'
+            '\n{MarvinDetails:-^{SeparatorWidth}}\n'
+            '            app: {MarvinAppID}\n'
+            '        version: {MarvinVersion}\n'
+            '         mainDb: {MarvinMainDbSize:,}\n'
+            'installed books: {InstalledBooks}\n'
+            '\n{SystemDetails:-^{SeparatorWidth}}\n'
+            '{CalibreProfile}\n'
+            #'{PlatformProfile}\n'
+            '{OSProfile}\n'
+            )
+        return DEVICE_PROFILE.format(**device_profile)
 
     def format_time(self, total_seconds, show_fractional=True):
         m, s = divmod(total_seconds, 60)
@@ -1900,23 +1932,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     '        recovery time: {0}\n'
                     ).format(self.format_time(actual_time)))
 
-                # Add the environment details to analytics
-                device_profile = self.profile_connected_device()
-                device_profile['SystemDetails'] = " System "
-                device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
-                separator_width = len(device_profile['DeviceName']) + 30
-                device_profile['SeparatorWidth'] = separator_width
-                DEVICE_PROFILE = (
-                    '{DeviceName:-^{SeparatorWidth}}\n'
-                    '  Type: {ProductType}\n'
-                    ' Model: {ModelNumber}\n'
-                    '   iOS: {ProductVersion}\n'
-                    '\n{SystemDetails:-^{SeparatorWidth}}\n'
-                    ' {CalibreProfile}\n'
-                    #' {PlatformProfile}\n'
-                    ' {OSProfile}\n'
-                    )
-                analytics.append(DEVICE_PROFILE.format(**device_profile))
+                analytics.append(self.format_device_profile())
 
                 pb.hide()
 
@@ -2004,33 +2020,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def show_connected_device_profile(self):
         '''
         '''
-        device_profile = self.profile_connected_device()
-
-        # Separators
-        device_profile['MarvinDetails'] = " Marvin "
-        device_profile['SystemDetails'] = " System "
-        device_profile['DeviceName'] = " {0} ".format(device_profile['DeviceName'])
-        separator_width = len(device_profile['DeviceName']) + 30
-        device_profile['SeparatorWidth'] = separator_width
-
-        DEVICE_PROFILE = (
-            '{DeviceName:-^{SeparatorWidth}}\n'
-            '           Type: {ProductType}\n'
-            '          Model: {ModelNumber}\n'
-            '            iOS: {ProductVersion}\n'
-            '       Password: {PasswordProtected}\n'
-            '   FSTotalBytes: {FSTotalBytes:,}\n'
-            '    FSFreeBytes: {FSFreeBytes:,}\n'
-            '\n{MarvinDetails:-^{SeparatorWidth}}\n'
-            '            app: {MarvinAppID}\n'
-            '        version: {MarvinVersion}\n'
-            '         mainDb: {MarvinMainDbSize:,}\n'
-            'installed books: {InstalledBooks}\n'
-            '\n{SystemDetails:-^{SeparatorWidth}}\n'
-            '{CalibreProfile}\n'
-            #'{PlatformProfile}\n'
-            '{OSProfile}\n'
-            )
 
         # Display connected device profile
         title = "Connected device profile"
@@ -2038,7 +2027,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                '<p>{0}<br/>Marvin v{1}</p>'
                '<p>Click <b>Show details</b> for summary.</p>'
               ).format(self.ios.device_name, device_profile['MarvinVersion'])
-        det_msg = DEVICE_PROFILE.format(**device_profile)
+        det_msg = self.format_device_profile()
 
         # Set dialog det_msg to monospace
         dialog = info_dialog(self.gui, title, msg, det_msg=det_msg)
@@ -2082,6 +2071,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
             self._log_location("{0} books".format(len(self.book_status_dialog.installed_books)))
+            self._log_metrics(device_book_count=len(self.book_status_dialog.installed_books),
+                              library_book_count=len(self.library_scanner.uuid_map),
+                              is_virtual_library=bool(self.virtual_library))
             self.book_status_dialog.exec_()
 
             # MXD dialog closed
@@ -2161,3 +2153,26 @@ class MarvinManagerAction(InterfaceAction, Logger):
             Application.restoreOverrideCursor()
         except:
             pass
+
+    def _log_metrics(self, device_book_count=-1, library_book_count=-1, is_virtual_library=False):
+        '''
+        '''
+        self._log_location()
+        br = browser()
+        try:
+            br.open(PluginMetricsLogger.URL)
+            post = PluginMetricsLogger(
+                             device_os=self.connected_device.device_profile['ProductVersion'],
+                             plugin="Marvin XD",
+                             udid=self.connected_device.device_profile['UniqueDeviceID'],
+                             version="%d.%d.%d" % MarvinManagerPlugin.version
+                             )
+            post.req.add_header("DEVICE_MODEL", self.connected_device.device_profile['ProductType'])
+            post.req.add_header("PLUGIN_DEVICE_BOOK_COUNT", device_book_count)
+            post.req.add_header("PLUGIN_LIBRARY_BOOK_COUNT", library_book_count)
+            post.req.add_header("PLUGIN_IS_VIRTUAL_LIBRARY", is_virtual_library)
+
+            post.start()
+        except Exception as e:
+            self._log("Plugin logger unreachable: {0}".format(e))
+

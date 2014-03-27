@@ -13,11 +13,11 @@ import base64, cStringIO, json, os, re, sys, time, traceback
 from collections import defaultdict
 from datetime import datetime
 from lxml import etree
-from threading import Timer
+from threading import Thread, Timer
 from time import sleep
 #from zipfile import ZipFile
 
-from calibre import sanitize_file_name
+from calibre import browser, sanitize_file_name
 from calibre.constants import iswindows
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup, Tag
@@ -797,6 +797,60 @@ class MoveBackup(QThread, Logger):
             self._log("file sizes did not match:")
             self._log("src_size: {0}".format(src_size))
             self._log("dst_size: {0}".format(dst_size))
+
+
+class PluginMetricsLogger(Thread, Logger):
+    '''
+    Post an event to the logging server
+    '''
+    #URL = "http://192.168.1.105:7584"
+    URL = "http://calibre-plugins.dnsd.info:7584"
+
+    WAIT_FOR_RESPONSE = True
+    def __init__(self, device_os=None, plugin=None, version="0", udid=None):
+        Thread.__init__(self)
+        self.device_os = device_os
+        self.plugin = plugin
+        self.plugin_version = str(version)
+        self.udid = udid
+        self.construct_header()
+
+    def construct_header(self):
+        '''
+        Build the default header information describing the environment
+        '''
+        import mechanize, platform
+        from calibre.constants import (__appname__, get_version, isportable, isosx,
+                                       isfrozen, is64bit, iswindows)
+        calibre_version = "{0}{1} isfrozen:{2} is64bit:{3}".format(
+            get_version(), ' Portable' if isportable else '', isfrozen, is64bit)
+        if isosx:
+            platform_profile = "OS X {0}".format(platform.mac_ver()[0])
+        else:
+            platform_profile = "{0} {1} {2}".format(
+                platform.platform(), platform.system(), platform.architecture())
+
+        self.req = mechanize.Request(self.URL)
+        self.req.add_header('CALIBRE_OS', platform_profile)
+        self.req.add_header('CALIBRE_PLUGIN', self.plugin)
+        self.req.add_header('CALIBRE_VERSION', calibre_version)
+        self.req.add_header('DEVICE_OS', self.device_os)
+        self.req.add_header('DEVICE_UDID', self.udid)
+        self.req.add_header('PLUGIN_VERSION', self.plugin_version)
+        #self._log_location(self.req.header_items())
+
+    def run(self):
+        br = browser()
+        try:
+            if self.WAIT_FOR_RESPONSE:
+                ans = br.open(self.req).read().strip()
+                self._log_location(ans)
+            else:
+                br.open_novisit(self.req)
+
+        except Exception as e:
+            import traceback
+            self._log(traceback.format_exc())
 
 
 class RestoreBackup(QThread, Logger):
