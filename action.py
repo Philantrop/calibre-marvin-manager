@@ -32,7 +32,7 @@ from calibre.gui2.dialogs.message_box import MessageBox
 from calibre.library import current_library_name
 from calibre.ptempfile import (PersistentTemporaryDirectory, PersistentTemporaryFile,
     TemporaryDirectory, TemporaryFile)
-from calibre.utils.config import config_dir
+from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.zipfile import ZipFile, ZIP_STORED, is_zipfile
 
 from calibre_plugins.marvin_manager import MarvinManagerPlugin
@@ -816,6 +816,428 @@ class MarvinManagerAction(InterfaceAction, Logger):
         else:
             self._log("unsupported action '{0}'".format(action))
 
+    def device_diagnostics(self):
+        '''
+        Replacement for profile_connected_device()
+        '''
+        def _add_available_space():
+            available = self.connected_device.free_space()[0]
+            if available > 1024 * 1024 * 1024:
+                available = available / (1024 * 1024 * 1024)
+                fmt_str = "{:.2f} GB"
+            else:
+                available = int(available / (1024 * 1024))
+                fmt_str = "{:,} MB"
+            device_profile['available_space'] = fmt_str.format(available)
+
+        def _add_cache_files():
+            # Cache files
+            # Marvin:
+            #   Library/mainDb.sqlite
+            #   Library/calibre.mm/booklist.db
+            #   Library/calibre.mm/content_hashes.db
+            # Local:
+            #   <calibre resource dir>/iOS_reader_applications_resources/booklist.db
+            #   <calibre resource dir>/Marvin_XD_resources/*_cover_hashes.json
+            #   <calibre resource dir>/Marvin_XD_resources/installed_books.zip
+
+            from datetime import datetime
+
+            def _get_ios_stats(path):
+                mtime = st_size = None
+                stats = self.connected_device.ios.stat(path)
+                if stats:
+                    st_size = int(stats['st_size'])
+                    d = datetime.fromtimestamp(int(stats['st_mtime']))
+                    mtime = d.strftime('%Y-%m-%d %H:%M:%S')
+                return {'mtime': mtime, 'size': st_size}
+
+            def _get_os_stats(path):
+                mtime = st_size = None
+                if os.path.exists(path):
+                    stats = os.stat(path)
+                    st_size = stats.st_size
+                    d = datetime.fromtimestamp(stats.st_mtime)
+                    mtime = d.strftime('%Y-%m-%d %H:%M:%S')
+                return {'mtime': mtime, 'size': st_size}
+
+            cache_files = {}
+
+            ''' Marvin-specific cache files '''
+            cache_files['mainDb.sqlite (remote)'] = _get_ios_stats('/Library/mainDb.sqlite')
+            cache_files['mainDb.sqlite (local)'] = _get_os_stats(self.connected_device.local_db_path)
+            cache_files['booklist.db (remote)'] = _get_ios_stats('Library/calibre.mm/booklist.db')
+            cache_files['mxd_content_hashes.db (remote)'] = _get_ios_stats('Library/calibre.mm/content_hashes.db')
+
+            # booklist.db from iOSRA resources
+            path = os.path.join(self.connected_device.resources_path, 'booklist.db')
+            cache_files['booklist.db (local)'] = _get_os_stats(path)
+
+            #installed_books.zip from MXD resources
+            #mxd_resources_path = os.path.join(config_dir, 'plugins', "Marvin_XD_resources")
+            mxd_resources_path = self.resources_path
+            path = os.path.join(mxd_resources_path, 'installed_books.zip')
+            cache_files['mxd_installed_books.zip'] = _get_os_stats(path)
+
+            # Per-device cover hashes
+            import glob
+            pattern = mxd_resources_path + "/*_cover_hashes.json"
+            for path in glob.glob(pattern):
+                ans = _get_os_stats(path)
+                name = path.rsplit(os.path.sep)[-1]
+                cache_files['mxd_{}'.format(name)] = ans
+
+            device_profile['cache_files'] = cache_files
+
+        def _add_caching():
+            iosra_prefs = JSONConfig('plugins/iOS reader applications')
+            device_caching = {}
+            device_caching_enabled = iosra_prefs.get('device_booklist_caching')
+            allocation_factor = iosra_prefs.get('device_booklist_cache_limit')
+            device_caching['enabled'] = device_caching_enabled
+            device_caching['allocation_factor'] = allocation_factor
+
+            allocated_space = int(self.connected_device.free_space()[0] * (allocation_factor / 100))
+            if allocated_space > 1024 * 1024 * 1024:
+                allocated_space = allocated_space / (1024 * 1024 * 1024)
+                fmt_str = "{:.2f} GB"
+            else:
+                allocated_space = int(allocated_space / (1024 * 1024))
+                fmt_str = "{:,} MB"
+            device_caching['allocated_space'] = fmt_str.format(allocated_space)
+            device_profile['device_caching'] = device_caching
+
+        def _add_installed_plugins():
+            # installed plugins
+            from calibre.customize.ui import initialized_plugins
+            user_installed_plugins = {}
+            for plugin in initialized_plugins():
+                path = getattr(plugin, 'plugin_path', None)
+                if path is not None:
+                    name = getattr(plugin, 'name', None)
+                    if name == self.name:
+                        continue
+                    author = getattr(plugin, 'author', None)
+                    version = getattr(plugin, 'version', None)
+                    user_installed_plugins[name] = {'author': author, 'version': "{0}.{1}.{2}".format(*version)}
+            device_profile['user_installed_plugins'] = user_installed_plugins
+
+        def _add_device_book_count():
+            # Device book count
+            device_profile['device_book_count'] = len(self.connected_device.cached_books)
+
+        def _add_device_info():
+            cdp = self.connected_device.device_profile
+            device_info = {}
+            all_fields = ['DeviceClass', 'DeviceColor', 'DeviceName', 'FSBlockSize',
+                          'FSFreeBytes', 'FSTotalBytes', 'FirmwareVersion', 'HardwareModel',
+                          'ModelNumber', 'PasswordProtected', 'ProductType', 'ProductVersion',
+                          'SerialNumber', 'TimeIntervalSince1970', 'TimeZone',
+                          'TimeZoneOffsetFromUTC', 'UniqueDeviceID']
+            superfluous = ['DeviceClass', 'DeviceColor', 'FSBlockSize', 'HardwareModel',
+                           'SerialNumber', 'TimeIntervalSince1970', 'TimeZoneOffsetFromUTC',
+                           'UniqueDeviceID', 'ModelNumber']
+            for item in sorted(cdp):
+                if item in superfluous:
+                    continue
+                if item in ['FSTotalBytes', 'FSFreeBytes']:
+                    device_info[item] = int(cdp[item])
+                else:
+                    device_info[item] = cdp[item]
+            device_profile['device_info'] = device_info
+
+        def _add_library_profile():
+            library_profile = {}
+            cdb = self.gui.current_db
+            library_profile['epubs'] = len(cdb.search_getting_ids('formats:EPUB', ''))
+            #library_profile['pdfs'] = len(cdb.search_getting_ids('formats:PDF', ''))
+            #library_profile['mobis'] = len(cdb.search_getting_ids('formats:MOBI', ''))
+
+            device_profile['library_profile'] = library_profile
+
+        def _add_load_time():
+            elapsed = _seconds_to_time(self.connected_device.load_time)
+            formatted = "{0:02d}:{1:02d}".format(int(elapsed['mins']), int(elapsed['secs']))
+            device_profile['load_time'] = formatted
+
+        def _add_iOSRA_version():
+            device_profile['iOSRA_version'] = "{0}.{1}.{2}".format(*self.connected_device.version)
+
+        def _add_platform_profile():
+            # Platform info
+            import platform
+            from calibre.constants import (__appname__, get_version, isportable, isosx,
+                                           isfrozen, is64bit, iswindows)
+            calibre_profile = "{0} {1}{2} isfrozen:{3} is64bit:{4}".format(
+                __appname__, get_version(),
+                ' Portable' if isportable else '', isfrozen, is64bit)
+            device_profile['CalibreProfile'] = calibre_profile
+
+            platform_profile = "{0} {1} {2}".format(
+                platform.platform(), platform.system(), platform.architecture())
+            device_profile['PlatformProfile'] = platform_profile
+
+            try:
+                if iswindows:
+                    os_profile = "Windows {0}".format(platform.win32_ver())
+                    if not is64bit:
+                        try:
+                            import win32process
+                            if win32process.IsWow64Process():
+                                os_profile += " 32bit process running on 64bit windows"
+                        except:
+                            pass
+                elif isosx:
+                    os_profile = "OS X {0}".format(platform.mac_ver()[0])
+                else:
+                    os_profile = "Linux {0}".format(platform.linux_distribution())
+            except:
+                import traceback
+                self._log(traceback.format_exc())
+                os_profile = "unknown"
+
+            device_profile['OSProfile'] = os_profile
+
+        def _add_prefs():
+            prefs = {'created_under': self.prefs.get('plugin_version')}
+            for pref in sorted(self.prefs.keys()):
+                if pref == 'plugin_version':
+                    continue
+                prefs[pref] = self.prefs.get(pref, None)
+            device_profile['prefs'] = prefs
+
+        def _format_cache_files_info():
+            max_fs_width = max([len(v) for v in device_profile['cache_files'].keys()])
+            max_size_width = 12
+            max_ts_width = 20
+
+            args = {'subtitle': " Caches ",
+                    'separator_width': separator_width,
+                    'report_time_label': "report generated",
+                    'report_time': report_time,
+                    'fs_width': max_fs_width + 1,
+                    'ts_width': max_ts_width + 1}
+            for cache_fs in device_profile['cache_files']:
+                args[cache_fs] = "{%s}" % cache_fs
+
+            TEMPLATE = ('\n{subtitle:-^{separator_width}}\n'
+                        ' {report_time_label:{fs_width}} {report_time:{ts_width}}\n')
+
+            # iOSRA cache files
+            ans = TEMPLATE.format(**args)
+            # iOSRA cache files
+            TEMPLATE = 'iOSRA\n'
+            for cache_fs, d in sorted(device_profile['cache_files'].iteritems(), key=lambda item: item[0].lower()):
+                if cache_fs.startswith('mxd_'):
+                    continue
+                try:
+                    TEMPLATE += " {0:{1}} {2:{3}} {4:{5},}\n".format(
+                        cache_fs, max_fs_width + 1,
+                        d['mtime'], max_ts_width + 1,
+                        d['size'], max_size_width + 1)
+                except:
+                    TEMPLATE += " {0:{1}} {2:{3}} {4:{5},}\n".format(
+                        cache_fs, max_fs_width + 1,
+                        d['mtime'], max_ts_width + 1,
+                        0, max_size_width + 1)
+
+            ans += TEMPLATE.format(**args)
+            ans += '\n'
+
+            # MXD cache files
+            TEMPLATE = 'MXD\n'
+            for cache_fs, d in sorted(device_profile['cache_files'].iteritems(), key=lambda item: item[0].lower()):
+                if not cache_fs.startswith('mxd_'):
+                    continue
+                try:
+                    TEMPLATE += " {0:{1}} {2:{3}} {4:{5},}\n".format(
+                        cache_fs[len('mxd_'):], max_fs_width + 1,
+                        d['mtime'], max_ts_width + 1,
+                        d['size'], max_size_width + 1)
+                except:
+                    TEMPLATE += " {0:{1}} {2:{3}} {4:{5},}\n".format(
+                        cache_fs[len('mxd_'):], max_fs_width + 1,
+                        d['mtime'], max_ts_width + 1,
+                        0, max_size_width + 1)
+            ans += TEMPLATE.format(**args)
+
+            return ans
+
+        def _format_caching_info():
+            args = {'subtitle': " Device booklist caching ",
+                    'separator_width': separator_width,
+                    'enabled': device_profile['device_caching']['enabled'],
+                    'available_space': device_profile['available_space'],
+                    'allocation_factor': device_profile['device_caching']['allocation_factor'],
+                    'allocated_space': device_profile['device_caching']['allocated_space']
+                    }
+            TEMPLATE = (
+                '\n{subtitle:-^{separator_width}}\n'
+                ' enabled: {enabled}\n'
+                ' available space: {available_space}\n'
+                ' allocation factor: {allocation_factor}%\n'
+                ' allocated space: {allocated_space}\n'
+                )
+            return TEMPLATE.format(**args)
+
+        def _format_device_info():
+            args = {'subtitle': " iDevice ",
+                    'separator_width': separator_width,
+                    'iOSRA_version': device_profile['iOSRA_version'],
+                    'iOS_version': device_profile['device_info']['ProductVersion'],
+                    'ProductType': device_profile['device_info']['ProductType'],
+                    'FSTotalBytes': device_profile['device_info']['FSTotalBytes'],
+                    'FSFreeBytes': device_profile['device_info']['FSFreeBytes'],
+                    'PasswordProtected': device_profile['device_info']['PasswordProtected']
+                    }
+            TEMPLATE = (
+                '\n{subtitle:-^{separator_width}}\n'
+                ' iOSRA version: {iOSRA_version}\n'
+                ' iOS version: {iOS_version}\n'
+                ' model: {ProductType}\n'
+                ' FSTotalBytes: {FSTotalBytes:,}\n'
+                ' FSFreeBytes: {FSFreeBytes:,}\n'
+                ' PasswordProtected: {PasswordProtected}\n'
+                )
+            return TEMPLATE.format(**args)
+
+        def _format_installed_plugins_info():
+
+            args = {'subtitle': " Installed plugins ",
+                    'separator_width': separator_width,
+                    }
+            ans = '\n{subtitle:-^{separator_width}}\n'.format(**args)
+
+            if device_profile['user_installed_plugins']:
+                for plugin in device_profile['user_installed_plugins']:
+                    args[plugin] = "{{{0}}}".format(plugin)
+                max_name_width = max([len(v) for v in device_profile['user_installed_plugins'].keys()])
+                max_author_width = max([len(d['author']) for d in device_profile['user_installed_plugins'].values()])
+                max_version_width = max([len(d['version']) for d in device_profile['user_installed_plugins'].values()])
+                TEMPLATE = ''
+                for plugin, d in sorted(device_profile['user_installed_plugins'].iteritems(), key=lambda item: item[0].lower()):
+                    TEMPLATE += " {0:{1}} {2:{3}}\n".format(
+                        plugin, max_name_width + 1,
+                        d['version'], max_version_width + 1)
+                ans += TEMPLATE.format(**args)
+
+            return ans
+
+        def _format_prefs_info():
+            try:
+                args = {'subtitle': " Prefs ",
+                        'separator_width': separator_width}
+                for pref in device_profile['prefs']:
+                    args[pref] = repr(device_profile['prefs'][pref])
+
+                TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
+                for pref in sorted(device_profile['prefs'].keys()):
+                    TEMPLATE += " {0}: {{{1}}}\n".format(pref, pref)
+
+                return TEMPLATE.format(**args)
+            except:
+                import traceback
+                self._log(traceback.format_exc())
+                self._log(args)
+                self._log(TEMPLATE)
+                stop
+
+        def _format_reader_app_info():
+
+            args = {'subtitle': " {} ".format("Marvin"),
+                    'separator_width': separator_width,
+                    'device_books': device_profile['device_book_count'],
+                    'load_time': device_profile['load_time']
+                    }
+            TEMPLATE = (
+                '\n{subtitle:-^{separator_width}}\n'
+                ' device books: {device_books}\n'
+                ' initialization time: {load_time}\n'
+                )
+            return TEMPLATE.format(**args)
+
+        def _format_system_info():
+            # System information
+            # MXD version
+            # MXD load time
+            args = {'subtitle': " {} ".format(report_time),
+                    'separator_width': separator_width,
+                    'CalibreProfile': device_profile['CalibreProfile'],
+                    'OSProfile': device_profile['OSProfile'],
+                    'plugin_version': "{0}.{1}.{2}".format(*self.interface_action_base_plugin.version),
+                    'library_books': "{0:,} EPUBs".format(
+                        device_profile['library_profile']['epubs']),
+                    'is_virtual': bool(self.virtual_library)
+                    }
+
+            TEMPLATE = (
+                '{subtitle:-^{separator_width}}\n'
+                ' {CalibreProfile}\n'
+                ' {OSProfile}\n'
+                ' library: {library_books} | virtual: {is_virtual}\n'
+                ' MXD version: {plugin_version}\n'
+                )
+
+            if self.load_time is not None:
+                elapsed = _seconds_to_time(self.load_time)
+                formatted = "{0:02d}:{1:02d}".format(int(elapsed['mins']), int(elapsed['secs']))
+                args['load_time'] = formatted
+                TEMPLATE += ' load time: {load_time}\n'
+
+            return TEMPLATE.format(**args)
+
+        def _seconds_to_time(s):
+            years, s = divmod(s, 31556952)
+            min, s = divmod(s, 60)
+            h, min = divmod(min, 60)
+            d, h = divmod(h, 24)
+            ans = {'days': d, 'hours': h, 'mins': min, 'secs': s}
+            return ans
+
+        # ~~~ Entry point ~~~
+        self._log_location()
+        report_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        # Collect the diagnostic information
+        device_profile = {}
+        _add_platform_profile()
+        _add_iOSRA_version()
+        _add_prefs()
+        _add_installed_plugins()
+        _add_device_book_count()
+        _add_load_time()
+        _add_library_profile()
+        _add_device_info()
+        _add_available_space()
+        _add_caching()
+        _add_cache_files()
+
+        # Format for printing
+        det_msg = ''
+        separator_width = 80
+
+        det_msg += _format_system_info()
+        det_msg += _format_device_info()
+        det_msg += _format_reader_app_info()
+        det_msg += _format_prefs_info()
+        det_msg += _format_installed_plugins_info()
+        det_msg += _format_caching_info()
+        det_msg += _format_cache_files_info()
+
+        # Present the results
+        title = "Marvin XD diagnostics"
+        msg = (
+               '<p>Device diagnostics generated for {}.</p>'
+               '<p>Click <b>Show details</b> for summary.</p>'
+              ).format(self.connected_device.ios.device_name)
+
+        # Set dialog det_msg to monospace
+        dialog = info_dialog(self.gui, title, msg, det_msg=det_msg)
+        font = QFont('monospace')
+        font.setFixedPitch(True)
+        dialog.det_msg.setFont(font)
+        dialog.exec_()
+
     def discover_iosra_status(self):
         '''
         Confirm that iOSRA is installed and not disabled
@@ -920,6 +1342,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         self.dropbox_processed = False
         self.ios = None
         self.installed_books = None
+        self.load_time = None
         self.marvin_content_updated = False
         self.menus_lock = threading.RLock()
         self.sync_lock = threading.RLock()
@@ -1625,7 +2048,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
             ac.setEnabled(enabled)
 
             m.addSeparator()
-            # Add 'Reset caches'
+            # Add 'Device diagnostics', enabled when connected device
+            ac = self.create_menu_item(m, 'Device diagnostics', image=I('dialog_information.png'))
+            ac.triggered.connect(self.device_diagnostics)
+            ac.setEnabled(enabled)
+
+            # Add 'Reset caches', enabled when connected device
             ac = self.create_menu_item(m, 'Reset Marvin XD caches', image=I('trash.png'))
             ac.triggered.connect(self.reset_caches)
             ac.setEnabled(enabled)
@@ -1661,12 +2089,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 action = 'Reset column widths'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
-
-                self.developer_menu.addSeparator()
-                action = 'Connected device profile'
-                ac = self.create_menu_item(self.developer_menu, action, image=I('dialog_information.png'))
-                ac.triggered.connect(partial(self.developer_utilities, action))
-                ac.setEnabled(enabled)
 
                 self.developer_menu.addSeparator()
                 action = 'Create remote backup'
@@ -2172,11 +2594,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
             self._log_location("{0} books".format(len(self.book_status_dialog.installed_books)))
-            elapsed_time = time.time() - start_time
+            self.load_time = time.time() - start_time
             args = {'device_book_count': len(self.book_status_dialog.installed_books),
                     'library_book_count': len(self.library_scanner.uuid_map),
                     'is_virtual_library': bool(self.virtual_library),
-                    'load_time': int(elapsed_time)}
+                    'load_time': int(self.load_time)}
             self._log_metrics(args)
             self.book_status_dialog.exec_()
 
