@@ -14,7 +14,8 @@ class MarvinManagerPlugin(InterfaceActionBase):
     description = 'Extended Driver for Marvin'
     supported_platforms = ['linux', 'osx', 'windows']
     author = 'Greg Riker'
-    version = (1, 2, 0)
+    # #mark ~~~ plugin version ~~~
+    version = (1, 2, 2)
     # #mark ~~~ Minimum calibre version ~~~
     minimum_calibre_version = (1, 29, 0)
 

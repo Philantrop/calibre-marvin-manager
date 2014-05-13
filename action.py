@@ -25,7 +25,7 @@ from calibre.customize.ui import device_plugins, disabled_device_plugins
 from calibre.devices.idevice.libimobiledevice import libiMobileDevice
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, UnicodeDammit
-from calibre.gui2 import Application, info_dialog, open_url, warning_dialog
+from calibre.gui2 import Application, info_dialog, open_url, question_dialog, warning_dialog
 from calibre.gui2.actions import InterfaceAction
 from calibre.gui2.device import device_signals
 from calibre.gui2.dialogs.message_box import MessageBox
@@ -105,7 +105,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     repr(current_mainDb_profile[key])))
         return matched
 
-    def create_backup(self):
+    def create_remote_backup(self):
         '''
         iPad1:      500 books in 90 seconds - 5.5 books/second
         iPad Mini:  500 books in 64 seconds - 7.8 books/second
@@ -490,6 +490,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         total_steps = len(epubs) + len(large_covers)
         total_steps += 5    # MXD components
         total_steps += 2    # backup.xml, mainDb.sqlite
+        total_steps += 1    # Move backup to destination folder
 
         # Set up the progress panel
         busy_panel_args = {'book_count': "{:,}".format(len(epubs)),
@@ -503,7 +504,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         '<li style="margin-bottom:0.5em">Preparing backup …</li>'
                         '<li style="color:#bbb;margin-bottom:0.5em">Add {book_count} ePubs to archive</li>'
                         '<li style="color:#bbb;margin-bottom:0.5em">Add {large_covers} covers to archive</li>'
-                        '<li style="color:#bbb">Select destination folder to store backup</li>'
+                        '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder</li>'
+                        '<li style="color:#bbb">Move backup to destination folder</li>'
                         '</ol>')
         pb = ProgressBar(alignment=Qt.AlignLeft,
                          label=BACKUP_MSG_1.format(**busy_panel_args),
@@ -555,29 +557,17 @@ class MarvinManagerAction(InterfaceAction, Logger):
                         indent=2, sort_keys=True))
                 pb.increment()
 
-                # iOSRA booklist.zip
-                archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
-                if self.ios.exists(archive_path):
-                    # Copy the stored booklist to a local temp file
-                    with PersistentTemporaryFile(suffix=".zip") as local:
-                        with open(local._name, 'w') as f:
-                            self.ios.copy_from_idevice(archive_path, f)
-                    zfw.write(local._name, arcname="iosra_booklist.zip")
+                # iOSRA booklist.db
+                lhc = os.path.join(self.connected_device.resources_path, 'booklist.db')
+                if os.path.exists(lhc):
+                    zfw.write(lhc, arcname="iosra_booklist.db")
                 pb.increment()
 
-                # backup.xml
-                temp_backup_xml = os.path.join(os.path.expanduser('~'), 'Desktop', 'backup.xml')
-                if os.path.exists(temp_backup_xml):
-                    zfw.write(temp_backup_xml, arcname='backup.xml')
-                else:
-                    self._log("!!! backup.xml not available, not included in image !!!")
-
                 # Issue command to request backup.xml
-                """
-                command_type = "GetGlobalVocabularyHTML"
+                command_type = "BACKUPMANIFEST"
                 ch = CommandHandler(self)
                 ch.construct_general_command(command_type)
-                ch.issue_command(get_response="html_response.html")
+                ch.issue_command(get_response="backup.xml")
                 if ch.results['code']:
                     pb.hide()
 
@@ -600,9 +590,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 if re.match(self.UTF_8_BOM, response):
                     response = UnicodeDammit(response).unicode
                 response = "<?xml version='1.0' encoding='utf-8'?>" + response
-                self._log("backup.xml:\n{0}".format(response))
                 zfw.writestr("backup.xml", response)
-                """
                 pb.increment()
 
                 # mainDb
@@ -616,7 +604,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                                 '<li style="color:#bbb;margin-bottom:0.5em">Backup image initialized</li>'
                                 '<li style="margin-bottom:0.5em">Archiving {book_count} ePubs …</li>'
                                 '<li style="color:#bbb;margin-bottom:0.5em">Add {large_covers} covers to archive</li>'
-                                '<li style="color:#bbb">Select destination folder to store backup</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder</li>'
+                                '<li style="color:#bbb">Move backup to destination folder</li>'
                                 '</ol>')
 
                 pb.set_label(BACKUP_MSG_2.format(**busy_panel_args))
@@ -641,7 +630,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
                                 '<li style="color:#bbb;margin-bottom:0.5em">Backup image initialized</li>'
                                 '<li style="color:#bbb;margin-bottom:0.5em">{book_count} ePubs archived</li>'
                                 '<li style="margin-bottom:0.5em">Archiving {large_covers} covers …</li>'
-                                '<li style="color:#bbb">Select destination folder to store backup</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Select destination folder</li>'
+                                '<li style="color:#bbb">Move backup to destination folder</li>'
                                 '</ol>')
                 pb.set_label(BACKUP_MSG_3.format(**busy_panel_args))
 
@@ -696,8 +686,23 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 if not os.path.isdir(destination_folder):
                     destination_folder = os.path.dirname(destination_folder)
 
+                BACKUP_MSG_4 = (
+                                '<ol style="margin-right:1.5em">'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Backup image initialized</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">{book_count} ePubs archived</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">{large_covers} covers archived</li>'
+                                '<li style="color:#bbb;margin-bottom:0.5em">Destination folder selected</li>'
+                                '<li style="margin-bottom:0.5em">Moving {backup_size} MB backup to destination folder…</li>'
+                                '</ol>')
+                busy_panel_args['backup_size'] = "{:,}".format(int(os.stat(local_backup).st_size/(1000*1000)))
+                pb.set_label(BACKUP_MSG_4.format(**busy_panel_args))
+                pb.show()
+
                 # Copy local_backup to destination folder
                 shutil.copy(local_backup, os.path.join(destination_folder, storage_name))
+
+                pb.increment()
+                pb.hide()
 
                 # Inform user backup operation is complete
                 title = "Backup operation complete"
@@ -742,9 +747,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         '''
         self._log_location(action)
-        if action in ['Connected device profile', 'Create local backup',
+        if action in ['Connected device profile', 'Create remote backup',
                       'Delete calibre hashes', 'Delete Marvin hashes',
-                      'Delete iOSRA booklist cache',
+                      'Delete MXD installed books cache',
                       'Nuke annotations',
                       'Reset column widths']:
             if action == 'Delete Marvin hashes':
@@ -763,29 +768,26 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     self._log("cover hashes at {0} deleted".format(dch))
                 else:
                     self._log("no cover hashes found at {0}".format(dch))
-#                 Called by restore_from_backup
+
+#                 Called by restore_from_backup, so no dialog
 #                 info_dialog(self.gui, 'Developer utilities',
 #                             'Marvin hashes deleted', show=True,
 #                             show_copy_button=False)
 
-            elif action == 'Delete iOSRA booklist cache':
-                rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
-                if self.ios.exists(rhc):
-                    self.ios.remove(rhc)
-                    self._log("iOSRA booklist cache deleted")
+            elif action == 'Delete MXD installed books cache':
+                lhc = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
+                if os.path.exists(lhc):
+                    os.remove(lhc)
+                    self._log("MXD installed books cache deleted")
                     info_dialog(self.gui, 'Developer utilities',
-                                'iOSRA booklist cache deleted', show=True,
-                                show_copy_button=False)
-                else:
-                    info_dialog(self.gui, 'Developer utilities',
-                                'iOSRA booklist cache not found', show=True,
+                                'MXD installed books cache deleted', show=True,
                                 show_copy_button=False)
 
             elif action == 'Connected device profile':
                 self.show_connected_device_profile()
 
-            elif action == 'Create local backup':
-                self.create_local_backup()
+            elif action == 'Create remote backup':
+                self.create_remote_backup()
 
             elif action == 'Delete calibre hashes':
                 self.gui.current_db.delete_all_custom_book_data('epub_hash')
@@ -888,7 +890,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             #'{PlatformProfile}\n'
             '{OSProfile}\n'
             )
-        return DEVICE_PROFILE.format(**device_profile)
+        return DEVICE_PROFILE.format(**device_profile) + '\n' + self._get_user_installed_plugins(separator_width)
 
     def format_time(self, total_seconds, show_fractional=True):
         m, s = divmod(total_seconds, 60)
@@ -1613,7 +1615,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             action = 'Create backup'
             icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
             ac = self.create_menu_item(m, action, image=icon)
-            ac.triggered.connect(self.create_backup)
+            ac.triggered.connect(self.create_local_backup)
             ac.setEnabled(enabled)
 
             action = 'Restore from backup'
@@ -1623,6 +1625,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
             ac.setEnabled(enabled)
 
             m.addSeparator()
+            # Add 'Reset caches'
+            ac = self.create_menu_item(m, 'Reset Marvin XD caches', image=I('trash.png'))
+            ac.triggered.connect(self.reset_caches)
+            ac.setEnabled(enabled)
 
             # Add 'Help'
             ac = self.create_menu_item(m, 'Help', image=I('help.png'))
@@ -1643,10 +1649,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(marvin_connected)
 
-                action = 'Delete iOSRA booklist cache'
+                action = 'Delete MXD installed books cache'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
-                ac.setEnabled(enabled)
+                ac.setEnabled(marvin_connected)
 
                 action = 'Nuke annotations'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
@@ -1663,7 +1669,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ac.setEnabled(enabled)
 
                 self.developer_menu.addSeparator()
-                action = 'Create local backup'
+                action = 'Create remote backup'
                 icon = QIcon(os.path.join(self.resources_path, 'icons', 'sync_collections.png'))
                 ac = self.create_menu_item(self.developer_menu, action, image=icon)
                 ac.triggered.connect(partial(self.developer_utilities, action))
@@ -1736,6 +1742,70 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.ios.remove(str(rhc))
                 self.ios.copy_to_idevice(lhc, str(rhc))
 
+    def reset_caches(self):
+        '''
+        Delete all cache content locally and remotely
+        Mirrors developer_utilities()
+        '''
+        import glob
+
+        self._log_location()
+
+        # Confirm
+        if question_dialog(self.gui, 'Marvin XD', 'Reset all Marvin XD caches?'):
+
+            det_msg = ''
+
+            # Delete Marvin hashes
+            rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, BookStatusDialog.HASH_CACHE_FS])
+
+            if self.ios.exists(rhc):
+                self.ios.remove(rhc)
+                self._log("remote hash cache deleted: {}".format(rhc))
+                det_msg += "remote hash cache deleted:\n {}\n".format(rhc)
+            else:
+                self._log("no remote hash cache found")
+                det_msg += "no remote hash cache found\n"
+
+            # Delete cover hashes for all devices
+            pattern = os.path.join(self.resources_path, "*_cover_hashes.json")
+            if glob.glob(pattern):
+                det_msg += "deleting device cover hashes:\n"
+                for path in glob.glob(pattern):
+                    self._log("deleting device cover hashes: {}".format(path))
+                    det_msg += " {}\n".format(path)
+                    os.remove(path)
+            else:
+                self._log("no device cover hashes found")
+                det_msg += "no device cover hashes found\n"
+
+            # Delete installed books cache
+            lhc = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
+            if os.path.exists(lhc):
+                os.remove(lhc)
+                self._log("installed books cache deleted: {}".format(lhc))
+                det_msg += "installed books cached deleted:\n {}\n".format(lhc)
+            else:
+                self._log("no installed books cache found\n")
+                det_msg += "no installed books cache found\n"
+
+            # Delete calibre hashes from db
+            self.gui.current_db.delete_all_custom_book_data('epub_hash')
+            self._log("calibre epub hashes deleted from db")
+            det_msg += "calibre epub hashes deleted from db\n"
+
+            # Invalidate the library hash map, as library contents may change before reconnection
+            if hasattr(self, 'library_scanner'):
+                if hasattr(self.library_scanner, 'hash_map'):
+                    self.library_scanner.hash_map = None
+
+            dialog = info_dialog(self.gui, "Marvin XD", "All Marvin XD caches reset",
+                show_copy_button=False, det_msg=det_msg)
+            font = QFont('monospace')
+            font.setFixedPitch(True)
+            dialog.det_msg.setFont(font)
+            dialog.exec_()
+
     def reset_marvin_library(self):
         self._log_location("not implemented")
 
@@ -1795,7 +1865,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
             ts = os.path.getmtime(backup_image)
             dt = datetime.fromtimestamp(ts)
             #backup_date = dt.strftime("%A, %b %e %Y")  # Windows chokes on this
-            backup_date = components.group(2)
+            try:
+                backup_date = components.group(2)
+            except:
+                backup_date = 'unknown'
 
             # Estimate transfer time @ IOS_WRITE_RATE
             IOS_WRITE_RATE = 5800000
@@ -1915,14 +1988,41 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 else:
                     self._log("installed_books snapshot not found in archive")
 
-                # Recover iosra_booklist.zip, restore to connected device
-                if 'iosra_booklist.zip' in archive.namelist():
+                # Recover iosra_booklist.db, restore to connected device and iOSRA resource folder
+                local_booklist_path = os.path.join(self.connected_device.resources_path, 'booklist.db')
+                if os.path.exists(local_booklist_path):
+                    os.remove(local_booklist_path)
+                if 'iosra_booklist.db' in archive.namelist():
                     with TemporaryDirectory() as tdir:
-                        basename = 'iosra_booklist.zip'
+                        basename = 'iosra_booklist.db'
                         archive.extract(basename, tdir)
                         source = str(os.path.join(tdir, basename))
-                        destination = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
-                        self.ios.copy_to_idevice(source, destination)
+
+                        # Copy to iOSRA resource folder
+                        shutil.copy(source, local_booklist_path)
+
+                        # If iOSRA device_booklist_caching enabled and within allocated size, copy to device
+                        # Modeled from iOSRA:Marvin_overlays:_restore_from_snapshot(#2294)
+                        from calibre.utils.config import JSONConfig
+                        iOSRA_prefs = JSONConfig('plugins/iOS reader applications')
+                        if iOSRA_prefs.get('device_booklist_caching'):
+                            db_size = os.stat(source).st_size
+                            #self._log("*** size of iosra_booklist.db: {:,}".format(db_size))
+                            available = int(self.connected_device.device_profile['FSFreeBytes'])
+                            #self._log("*** available: {:,}".format(available))
+                            allocated = float(iOSRA_prefs.get('device_booklist_cache_limit', 10.0) / 100)
+                            max_allowed = int(available * allocated)
+                            #self._log("*** allocated: {0}% of free space ({1:,})".format(allocated * 100, max_allowed))
+                            if db_size < max_allowed:
+                                self._log("restoring iosra_booklist snapshot to device")
+                                destination = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.db'])
+                                self.ios.copy_to_idevice(source, destination)
+                            else:
+                                self._log("iosra_booklist snapshot ({0:,}) exceeds allocated cache size ({1:,})".format(
+                                    db_size, max_allowed))
+                        else:
+                            self._log("device_booklist_caching disabled, booklist.db not restored to device")
+
                 else:
                     self._log("iosra_booklist snapshot not found in archive")
 
@@ -2020,7 +2120,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def show_connected_device_profile(self):
         '''
         '''
-
+        device_profile = self.profile_connected_device()
         # Display connected device profile
         title = "Connected device profile"
         msg = (
@@ -2056,6 +2156,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             MessageBox(MessageBox.INFO, title, msg, det_msg='',
                        parent=self.gui, show_copy_button=False).exec_()
         else:
+            start_time = time.time()
             self.launch_library_scanner()
 
             # Assure that Library is active view. Avoids problems with _delete_books
@@ -2071,9 +2172,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self.book_status_dialog = BookStatusDialog(self, 'marvin_library')
             self.book_status_dialog.initialize(self)
             self._log_location("{0} books".format(len(self.book_status_dialog.installed_books)))
-            self._log_metrics(device_book_count=len(self.book_status_dialog.installed_books),
-                              library_book_count=len(self.library_scanner.uuid_map),
-                              is_virtual_library=bool(self.virtual_library))
+            elapsed_time = time.time() - start_time
+            args = {'device_book_count': len(self.book_status_dialog.installed_books),
+                    'library_book_count': len(self.library_scanner.uuid_map),
+                    'is_virtual_library': bool(self.virtual_library),
+                    'load_time': int(elapsed_time)}
+            self._log_metrics(args)
             self.book_status_dialog.exec_()
 
             # MXD dialog closed
@@ -2154,25 +2258,58 @@ class MarvinManagerAction(InterfaceAction, Logger):
         except:
             pass
 
-    def _log_metrics(self, device_book_count=-1, library_book_count=-1, is_virtual_library=False):
+    def _get_user_installed_plugins(self, width):
         '''
+        Return a formatted list of user-installed plugins
         '''
-        self._log_location()
-        br = browser()
-        try:
-            br.open(PluginMetricsLogger.URL)
-            post = PluginMetricsLogger(
-                             device_os=self.connected_device.device_profile['ProductVersion'],
-                             plugin="Marvin XD",
-                             udid=self.connected_device.device_profile['UniqueDeviceID'],
-                             version="%d.%d.%d" % MarvinManagerPlugin.version
-                             )
-            post.req.add_header("DEVICE_MODEL", self.connected_device.device_profile['ProductType'])
-            post.req.add_header("PLUGIN_DEVICE_BOOK_COUNT", device_book_count)
-            post.req.add_header("PLUGIN_LIBRARY_BOOK_COUNT", library_book_count)
-            post.req.add_header("PLUGIN_IS_VIRTUAL_LIBRARY", is_virtual_library)
+        from calibre.customize.ui import initialized_plugins
+        user_installed_plugins = {}
+        for plugin in initialized_plugins():
+            path = getattr(plugin, 'plugin_path', None)
+            if path is not None:
+                name = getattr(plugin, 'name', None)
+                if name == self.name:
+                    continue
+                author = getattr(plugin, 'author', None)
+                version = getattr(plugin, 'version', None)
+                user_installed_plugins[name] = {'author': author,
+                                                'version': "{0}.{1}.{2}".format(*version)}
+        max_name_width = max([len(v) for v in user_installed_plugins.keys()])
+        max_author_width = max([len(d['author']) for d in user_installed_plugins.values()])
+        max_version_width = max([len(d['version']) for d in user_installed_plugins.values()])
+        ans = "{:-^{}}\n".format(" User installed plugins ", width)
+        for plugin, d in sorted(user_installed_plugins.iteritems(), key=lambda item: item[0].lower()):
+            ans += "{0:{1}} {2:{3}}\n".format(plugin, max_name_width + 1,
+                                              d['version'], max_version_width + 1)
+        return ans
 
-            post.start()
-        except Exception as e:
-            self._log("Plugin logger unreachable: {0}".format(e))
+    def _log_metrics(self, kwargs):
+        '''
+        Post logging event
+        No identifying information or library metadata is included in the logging event.
+        device_udid is securely encrypted before logging so we have an anonymous (but unique) device id,
+        used to determine number of unique devices using plugin.
+        '''
+        if self.prefs.get('plugin_diagnostics', True):
+            self._log_location()
+            br = browser()
+            try:
+                br.open(PluginMetricsLogger.URL)
+                args = {'plugin': "Marvin XD",
+                        'version': "%d.%d.%d" % MarvinManagerPlugin.version}
+                post = PluginMetricsLogger(**args)
+                post.req.add_header("DEVICE_MODEL", self.connected_device.device_profile['ProductType'])
+                post.req.add_header("DEVICE_OS", self.connected_device.device_profile['ProductVersion'])
+                # Encrypt the udid using MD5 encryption before logging
+                m = hashlib.md5()
+                m.update(self.connected_device.device_profile['UniqueDeviceID'])
+                post.req.add_header("DEVICE_UDID", m.hexdigest())
+                post.req.add_header("PLUGIN_BOOK_COUNT", kwargs.get('device_book_count', -1))
+                post.req.add_header("PLUGIN_LIBRARY_BOOK_COUNT", kwargs.get('library_book_count', -1))
+                post.req.add_header("PLUGIN_LIBRARY_IS_VIRTUAL", int(kwargs.get('is_virtual_library', False)))
+                post.req.add_header("PLUGIN_LOAD_TIME", kwargs.get('load_time', 0))
+                #self._log(post.req.header_items())
+                post.start()
+            except Exception as e:
+                self._log("Plugin logger unreachable: {0}".format(e))
 
