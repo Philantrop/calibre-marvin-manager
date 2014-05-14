@@ -956,12 +956,26 @@ class MarvinManagerAction(InterfaceAction, Logger):
             device_profile['library_profile'] = library_profile
 
         def _add_load_time():
-            elapsed = _seconds_to_time(self.connected_device.load_time)
-            formatted = "{0:02d}:{1:02d}".format(int(elapsed['mins']), int(elapsed['secs']))
-            device_profile['load_time'] = formatted
+            if self.load_time:
+                elapsed = _seconds_to_time(self.load_time)
+                formatted = "{0:02d}:{1:02d}".format(int(elapsed['mins']), int(elapsed['secs']))
+                device_profile['load_time'] = formatted
+            else:
+                device_profile['load_time'] = "n/a"
 
         def _add_iOSRA_version():
             device_profile['iOSRA_version'] = "{0}.{1}.{2}".format(*self.connected_device.version)
+
+        def _add_mainDb_profiles():
+            archive_path = os.path.join(self.resources_path,
+                self.INSTALLED_BOOKS_SNAPSHOT)
+            if os.path.exists(archive_path):
+                stored_mainDb_profile = None
+                with ZipFile(archive_path, 'r') as zfr:
+                    if 'mainDb_profile.json' in zfr.namelist():
+                        stored_mainDb_profile = json.loads(zfr.read('mainDb_profile.json'))
+            device_profile['stored_mainDb_profile'] = stored_mainDb_profile
+            device_profile['current_mainDb_profile'] = self.profile_db()
 
         def _add_platform_profile():
             # Platform info
@@ -999,29 +1013,31 @@ class MarvinManagerAction(InterfaceAction, Logger):
             device_profile['OSProfile'] = os_profile
 
         def _add_prefs():
+            irrelevant = ['appearance_dialog', 'cc_mappings', 'collections_viewer',
+                          'css_editor', 'css_editor_split_points', 'html_viewer',
+                          'marvin_library', 'metadata_comparison', 'plugin_version']
             prefs = {'created_under': self.prefs.get('plugin_version')}
             for pref in sorted(self.prefs.keys()):
-                if pref == 'plugin_version':
+                if pref in irrelevant:
                     continue
                 prefs[pref] = self.prefs.get(pref, None)
             device_profile['prefs'] = prefs
+
 
         def _format_cache_files_info():
             max_fs_width = max([len(v) for v in device_profile['cache_files'].keys()])
             max_size_width = 12
             max_ts_width = 20
 
-            args = {'subtitle': " Caches ",
+            args = {'subtitle': " Caches {} ".format(report_time),
                     'separator_width': separator_width,
                     'report_time_label': "report generated",
-                    'report_time': report_time,
                     'fs_width': max_fs_width + 1,
                     'ts_width': max_ts_width + 1}
             for cache_fs in device_profile['cache_files']:
                 args[cache_fs] = "{%s}" % cache_fs
 
-            TEMPLATE = ('\n{subtitle:-^{separator_width}}\n'
-                        ' {report_time_label:{fs_width}} {report_time:{ts_width}}\n')
+            TEMPLATE = ('\n{subtitle:-^{separator_width}}\n')
 
             # iOSRA cache files
             ans = TEMPLATE.format(**args)
@@ -1123,43 +1139,58 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             return ans
 
+        def _format_mainDb_profiles():
+            CHECKMARK = u"\u2713"
+            args = {'subtitle': " mainDb profiles ",
+                    'separator_width': separator_width}
+            TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
+            ans = TEMPLATE.format(**args)
+
+            current = device_profile['current_mainDb_profile']
+            stored = device_profile['stored_mainDb_profile']
+            ans += "   {0:20} {1:37} {2:37}\n".format('', 'Stored', 'Current')
+            #ans += "{0:—^23} {1:—^37} {2:—^37}\n".format('', '', '')
+            ans += "{0}  {1:20} {2:<37} {3:<37}\n".format(
+                'x' if stored['device'] != current['device'] else ' ',
+                'device',
+                stored['device'],
+                current['device'])
+            keys = current.keys()
+            keys.pop(keys.index('device'))
+            for key in sorted(keys):
+                stored_key = repr(stored[key])
+                current_key = repr(current[key])
+                if key in ['BookCollections', 'Bookmarks', 'Books', 'Collections',
+                           'Highlights', 'PinnedArticles', 'Vocabulary']:
+                    current_key = "{:,}".format(current[key])
+                    stored_key = "{:,}".format(stored[key])
+                if key == "max_MetadataUpdated":
+                    stored_ts = datetime.fromtimestamp(stored[key])
+                    stored_key = stored_ts.strftime('%Y-%m-%d %H:%M:%S')
+                    current_ts = datetime.fromtimestamp(current[key])
+                    current_key = current_ts.strftime('%Y-%m-%d %H:%M:%S')
+
+                ans += "{0}  {1:20} {2:<37} {3:<37}\n".format(
+                    'x' if stored[key] != current[key] else ' ',
+                    key,
+                    stored_key,
+                    current_key)
+            return ans
+
         def _format_prefs_info():
-            try:
-                args = {'subtitle': " Prefs ",
-                        'separator_width': separator_width}
-                for pref in device_profile['prefs']:
-                    args[pref] = repr(device_profile['prefs'][pref])
+            args = {'subtitle': " Prefs ",
+                    'separator_width': separator_width}
+            for pref in device_profile['prefs']:
+                args[pref] = repr(device_profile['prefs'][pref])
 
-                TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
-                for pref in sorted(device_profile['prefs'].keys()):
-                    TEMPLATE += " {0}: {{{1}}}\n".format(pref, pref)
+            TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
+            for pref in sorted(device_profile['prefs'].keys()):
+                TEMPLATE += " {0}: {{{1}}}\n".format(pref, pref)
 
-                return TEMPLATE.format(**args)
-            except:
-                import traceback
-                self._log(traceback.format_exc())
-                self._log(args)
-                self._log(TEMPLATE)
-                stop
-
-        def _format_reader_app_info():
-
-            args = {'subtitle': " {} ".format("Marvin"),
-                    'separator_width': separator_width,
-                    'device_books': device_profile['device_book_count'],
-                    'load_time': device_profile['load_time']
-                    }
-            TEMPLATE = (
-                '\n{subtitle:-^{separator_width}}\n'
-                ' device books: {device_books}\n'
-                ' initialization time: {load_time}\n'
-                )
             return TEMPLATE.format(**args)
 
         def _format_system_info():
-            # System information
-            # MXD version
-            # MXD load time
+            # System information + MXD details
             args = {'subtitle': " {} ".format(report_time),
                     'separator_width': separator_width,
                     'CalibreProfile': device_profile['CalibreProfile'],
@@ -1167,15 +1198,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     'plugin_version': "{0}.{1}.{2}".format(*self.interface_action_base_plugin.version),
                     'library_books': "{0:,} EPUBs".format(
                         device_profile['library_profile']['epubs']),
-                    'is_virtual': bool(self.virtual_library)
+                    'is_virtual': bool(self.virtual_library),
+                    'load_time': device_profile['load_time'],
+                    'device_books': "{0:,} EPUBs".format(device_profile['device_book_count'])
                     }
 
             TEMPLATE = (
                 '{subtitle:-^{separator_width}}\n'
                 ' {CalibreProfile}\n'
                 ' {OSProfile}\n'
-                ' library: {library_books} | virtual: {is_virtual}\n'
-                ' MXD version: {plugin_version}\n'
+                ' calibre library: {library_books} | virtual: {is_virtual}\n'
+                ' Marvin XD version: {plugin_version}\n'
+                ' Marvin library: {device_books}\n'
+                ' initialization time: {load_time}\n'
                 )
 
             if self.load_time is not None:
@@ -1211,18 +1246,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
         _add_available_space()
         _add_caching()
         _add_cache_files()
+        _add_mainDb_profiles()
 
         # Format for printing
         det_msg = ''
-        separator_width = 80
+        separator_width = 96
 
         det_msg += _format_system_info()
         det_msg += _format_device_info()
-        det_msg += _format_reader_app_info()
-        det_msg += _format_prefs_info()
         det_msg += _format_installed_plugins_info()
         det_msg += _format_caching_info()
         det_msg += _format_cache_files_info()
+        det_msg += _format_mainDb_profiles()
+        det_msg += _format_prefs_info()
 
         # Present the results
         title = "Marvin XD diagnostics"
