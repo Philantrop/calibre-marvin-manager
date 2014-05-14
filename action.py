@@ -969,8 +969,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
         def _add_mainDb_profiles():
             archive_path = os.path.join(self.resources_path,
                 self.INSTALLED_BOOKS_SNAPSHOT)
+            stored_mainDb_profile = {}
             if os.path.exists(archive_path):
-                stored_mainDb_profile = None
                 with ZipFile(archive_path, 'r') as zfr:
                     if 'mainDb_profile.json' in zfr.namelist():
                         stored_mainDb_profile = json.loads(zfr.read('mainDb_profile.json'))
@@ -1013,12 +1013,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
             device_profile['OSProfile'] = os_profile
 
         def _add_prefs():
-            irrelevant = ['appearance_dialog', 'cc_mappings', 'collections_viewer',
-                          'css_editor', 'css_editor_split_points', 'html_viewer',
-                          'marvin_library', 'metadata_comparison', 'plugin_version']
+            if self.prefs.get('debug_plugin', False):
+                ignore = ['plugin_version']
+            else:
+                ignore = ['appearance_css', 'appearance_dialog', 'cc_mappings',
+                          'collections_viewer', 'css_editor', 'css_editor_split_points',
+                          'html_viewer', 'injected_css', 'marvin_library',
+                          'metadata_comparison', 'plugin_version']
             prefs = {'created_under': self.prefs.get('plugin_version')}
             for pref in sorted(self.prefs.keys()):
-                if pref in irrelevant:
+                if pref in ignore:
                     continue
                 prefs[pref] = self.prefs.get(pref, None)
             device_profile['prefs'] = prefs
@@ -1151,27 +1155,32 @@ class MarvinManagerAction(InterfaceAction, Logger):
             ans += "   {0:20} {1:37} {2:37}\n".format('', 'Stored', 'Current')
             #ans += "{0:—^23} {1:—^37} {2:—^37}\n".format('', '', '')
             ans += "{0}  {1:20} {2:<37} {3:<37}\n".format(
-                'x' if stored['device'] != current['device'] else ' ',
+                'x' if stored.get('device') != current['device'] else ' ',
                 'device',
-                stored['device'],
+                stored.get('device'),
                 current['device'])
             keys = current.keys()
             keys.pop(keys.index('device'))
             for key in sorted(keys):
-                stored_key = repr(stored[key])
-                current_key = repr(current[key])
-                if key in ['BookCollections', 'Bookmarks', 'Books', 'Collections',
-                           'Highlights', 'PinnedArticles', 'Vocabulary']:
-                    current_key = "{:,}".format(current[key])
-                    stored_key = "{:,}".format(stored[key])
+                stored_key = stored.get(key, '')
+                current_key = current[key]
+
+                if type(current_key) is int:
+                    current_key = "{:,}".format(current_key)
+
+                if type(stored_key) is int:
+                    stored_key = "{:,}".format(stored_key)
+
                 if key == "max_MetadataUpdated":
-                    stored_ts = datetime.fromtimestamp(stored[key])
-                    stored_key = stored_ts.strftime('%Y-%m-%d %H:%M:%S')
+                    stored_key = stored.get(key, '')
+                    if type(stored_key) is int:
+                        stored_ts = datetime.fromtimestamp(stored_key)
+                        stored_key = stored_ts.strftime('%Y-%m-%d %H:%M:%S')
                     current_ts = datetime.fromtimestamp(current[key])
                     current_key = current_ts.strftime('%Y-%m-%d %H:%M:%S')
 
                 ans += "{0}  {1:20} {2:<37} {3:<37}\n".format(
-                    'x' if stored[key] != current[key] else ' ',
+                    'x' if stored.get(key) != current[key] else ' ',
                     key,
                     stored_key,
                     current_key)
@@ -1263,8 +1272,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         # Present the results
         title = "Marvin XD diagnostics"
         msg = (
-               '<p>Device diagnostics generated for {}.</p>'
-               '<p>Click <b>Show details</b> for summary.</p>'
+               '<p>Plugin diagnostics for {}.</p>'
               ).format(self.connected_device.ios.device_name)
 
         # Set dialog det_msg to monospace
@@ -1612,9 +1620,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def library_changed(self, db):
         self._log_location(current_library_name())
         self.indexed_library = None
+        self.installed_books = None
         self.library_indexed = False
         self.library_scanner = None
         self.library_last_modified = None
+        self.load_time = None
+        self.virtual_library = None
 
     def library_index_complete(self):
         self._log_location()
@@ -1982,36 +1993,38 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         Snapshot key aspects of mainDb
         '''
-        profile = {'device': self.ios.device_name}
+        profile = {}
+        if self.ios.device_name:
+            profile = {'device': self.ios.device_name}
 
-        con = sqlite3.connect(self.connected_device.local_db_path)
-        with con:
-            con.row_factory = sqlite3.Row
-            cur = con.cursor()
+            con = sqlite3.connect(self.connected_device.local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
 
-            # Hash the titles and authors
-            m = hashlib.md5()
-            cur.execute('''SELECT Title, Author FROM Books''')
-            rows = cur.fetchall()
-            for row in rows:
-                m.update(row[b'Title'])
-                m.update(row[b'Author'])
-            profile['content_hash'] = m.hexdigest()
+                # Hash the titles and authors
+                m = hashlib.md5()
+                cur.execute('''SELECT Title, Author FROM Books''')
+                rows = cur.fetchall()
+                for row in rows:
+                    m.update(row[b'Title'])
+                    m.update(row[b'Author'])
+                profile['content_hash'] = m.hexdigest()
 
-            # Get the latest MetadataUpdated timestamp
-            try:
-                cur.execute('''SELECT max(MetadataUpdated) FROM Books''')
-                row = cur.fetchone()
-                profile['max_MetadataUpdated'] = row[b'max(MetadataUpdated)']
-            except:
-                # Outdated version of Marvin
-                profile['max_MetadataUpdated'] = -1
+                # Get the latest MetadataUpdated timestamp
+                try:
+                    cur.execute('''SELECT max(MetadataUpdated) FROM Books''')
+                    row = cur.fetchone()
+                    profile['max_MetadataUpdated'] = row[b'max(MetadataUpdated)']
+                except:
+                    # Outdated version of Marvin
+                    profile['max_MetadataUpdated'] = -1
 
-            # Get the table sizes
-            for table in ['BookCollections', 'Bookmarks', 'Books', 'Collections',
-                          'Highlights', 'PinnedArticles', 'Vocabulary']:
-                cur.execute('''SELECT * FROM '{0}' '''.format(table))
-                profile[table] = len(cur.fetchall())
+                # Get the table sizes
+                for table in ['BookCollections', 'Bookmarks', 'Books', 'Collections',
+                              'Highlights', 'PinnedArticles', 'Vocabulary']:
+                    cur.execute('''SELECT * FROM '{0}' '''.format(table))
+                    profile[table] = len(cur.fetchall())
 
         return profile
 
@@ -2085,7 +2098,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
             m.addSeparator()
             # Add 'Device diagnostics', enabled when connected device
-            ac = self.create_menu_item(m, 'Device diagnostics', image=I('dialog_information.png'))
+            ac = self.create_menu_item(m, 'Plugin diagnostics', image=I('dialog_information.png'))
             ac.triggered.connect(self.device_diagnostics)
             ac.setEnabled(enabled)
 
