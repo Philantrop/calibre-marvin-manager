@@ -162,14 +162,16 @@ class Book(Metadata):
     A simple class describing a book
     See ebooks.metadata.book.base #46
     '''
-    # 13 standard field keys from Metadata
-    mxd_standard_keys = ['author_sort', 'authors', 'comments', 'device_collections', 'pubdate',
-                         'publisher', 'rating', 'series', 'series_index', 'tags', 'title', 'title_sort', 'uuid']
+    # 14 standard field keys from Metadata
+    mxd_standard_keys = ['author_sort', 'authors', 'comments', 'device_collections',
+                         'last_updated', 'pubdate', 'publisher', 'rating', 'series',
+                         'series_index', 'tags', 'title', 'title_sort', 'uuid']
     # 19 private field keys
-    mxd_custom_keys = ['articles', 'cid', 'calibre_collections', 'cover_file', 'date_added', 'date_opened',
-                       'deep_view_prepared', 'flags', 'hash', 'highlights', 'match_quality',
-                       'metadata_mismatches', 'mid', 'on_device', 'path', 'pin', 'progress', 'vocabulary',
-                       'word_count']
+    mxd_custom_keys = ['articles', 'cid', 'calibre_collections', 'cover_file',
+                       'date_added', 'date_opened', 'deep_view_prepared',
+                       'flags', 'hash', 'highlights', 'match_quality',
+                       'metadata_mismatches', 'mid', 'on_device', 'path', 'pin',
+                       'progress', 'vocabulary', 'word_count']
 
     def __init__(self, title, author):
         if type(author) is list:

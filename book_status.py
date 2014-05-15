@@ -397,6 +397,7 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "import_metadata", row))
             ac.setEnabled(enable_metadata_updates)
 
+            # #mark ~~~ Add books to calibre library ~~~
             menu.addSeparator()
             # Test for calibre cids
             in_library = True
@@ -2110,6 +2111,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Build map of added books from the model so we know which items to monitor for completion
         if paths_to_add:
+            count = 1
+            msg = "Adding {0:,} of {1:,} to calibre library".format(count, len(paths_to_add))
+            self._busy_status_setup(msg=msg)
+
             # Find the books in the Device model
             model = self.parent.gui.memory_view.model()
             added = {}
@@ -2117,6 +2122,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 original_cids = self.parent.opts.gui.current_db.search_getting_ids('formats:EPUB', '')
                 book = model.db[item]
                 if book.path in paths_to_add:
+
+                    msg = "Adding {0:,} of {1:,} to calibre library".format(count, len(paths_to_add))
+                    self._busy_status_msg(msg=msg)
+
                     # Tell calibre to add the paths
                     # gui2.actions.add #406
                     self.opts.gui.iactions['Add Books'].add_books_from_device(self.parent.gui.memory_view,
@@ -2137,6 +2146,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         if added_cids:
                             break
                     added[item] = {'path': book.path, 'cid': added_cids[0], 'row': item}
+                    count += 1
 
             #self._log("added: %s" % added)
 
@@ -2152,6 +2162,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         #added[item]['cid'] = cid
                         added[item]['book_id'] = book.mid
                         book.cid = cid
+                        #book.match_quality = self.MATCH_COLORS.index('GREEN')
                         break
 
                 # Add model_row, update cid in spreadsheet
@@ -2161,7 +2172,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         self.tm.set_calibre_id(model_row, cid)
 
             total_books = len(added)
-            self._busy_status_setup()
 
             db = self.opts.gui.current_db
             cached_books = self.connected_device.cached_books
@@ -4605,6 +4615,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 mi = None
             return cid, mi
 
+        def _get_calibre_metadata_last_updated(mi):
+            '''
+            Return timestamp of last metadata update
+            '''
+            ans = None
+            if mi:
+                #dt = mi.last_modified.astimezone(tz.tzlocal())
+                ans = time.mktime(mi.last_modified.astimezone(tz.tzlocal()).timetuple())
+            return ans
+
         def _get_collections(cur, book_id):
             # Get the collection assignments
             ca_cur = con.cursor()
@@ -5030,6 +5050,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                             this_book.flags = _get_flags(cur, row)
                             this_book.hash = hashes[row[b'FileName']]['hash']
                             this_book.highlights = _get_highlights(cur, book_id)
+                            this_book.last_updated = _get_calibre_metadata_last_updated(mi)
                             this_book.match_quality = None  # Added in _construct_table_data()
                             this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
                             this_book.mid = book_id

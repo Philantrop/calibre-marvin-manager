@@ -8,10 +8,11 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import atexit, cPickle as pickle, hashlib, json, os, re, shutil, sqlite3, sys
+import atexit, cPickle as pickle, glob, hashlib, json, os, re, shutil, sqlite3, sys
 import tempfile, threading, time
 
 from datetime import datetime
+from dateutil import tz
 from functools import partial
 from lxml import etree, html
 
@@ -354,12 +355,14 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 # mainDb profile
                 move_operation.mxd_mainDb_profile = mainDb_profile
 
+                """
                 # self.installed_books
                 if self.installed_books:
                     move_operation.mxd_installed_books = json.dumps(
                         self.dehydrate_installed_books(self.installed_books),
                         default=to_json,
                         indent=2, sort_keys=True)
+                """
 
                 # iOSRA booklist.zip
                 archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
@@ -548,13 +551,11 @@ class MarvinManagerAction(InterfaceAction, Logger):
                              json.dumps(self.profile_db(), sort_keys=True))
                 pb.increment()
 
-                # self.installed_books
-                if self.installed_books:
-                    base_name = "mxd_installed_books.json"
-                    zfw.writestr(base_name, json.dumps(
-                        self.dehydrate_installed_books(self.installed_books),
-                        default=to_json,
-                        indent=2, sort_keys=True))
+                # <current_library>_installed_books.zip
+                installed_books_archive = os.path.join(self.resources_path,
+                    current_library_name().replace(' ', '_') + '_installed_books.zip')
+                if os.path.exists(installed_books_archive):
+                    zfw.write(installed_books_archive, arcname="mxd_installed_books.zip")
                 pb.increment()
 
                 # iOSRA booklist.db
@@ -748,8 +749,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location(action)
         if action in ['Connected device profile', 'Create remote backup',
-                      'Delete calibre hashes', 'Delete Marvin hashes',
-                      'Delete MXD installed books cache',
+                      'Delete calibre hash cache', 'Delete Marvin hash cache',
+                      'Delete installed books cache', 'Delete all caches',
                       'Nuke annotations',
                       'Reset column widths']:
             if action == 'Delete Marvin hashes':
@@ -774,14 +775,17 @@ class MarvinManagerAction(InterfaceAction, Logger):
 #                             'Marvin hashes deleted', show=True,
 #                             show_copy_button=False)
 
-            elif action == 'Delete MXD installed books cache':
-                lhc = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
-                if os.path.exists(lhc):
-                    os.remove(lhc)
-                    self._log("MXD installed books cache deleted")
-                    info_dialog(self.gui, 'Developer utilities',
-                                'MXD installed books cache deleted', show=True,
-                                show_copy_button=False)
+            elif action == 'Delete installed books cache':
+                archive_path = os.path.join(self.resources_path,
+                    current_library_name().replace(' ', '_') + '_installed_books.zip')
+                if os.path.exists(archive_path):
+                    os.remove(archive_path)
+
+                self._log("installed books cache deleted: {}".format(archive_path))
+                info_dialog(self.gui, 'Developer utilities',
+                            'installed books archives deleted: {}'.format(archive_path),
+                            show=True,
+                            show_copy_button=False)
 
             elif action == 'Connected device profile':
                 self.show_connected_device_profile()
@@ -800,6 +804,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 info_dialog(self.gui, 'Developer utilities',
                             'calibre epub hashes deleted', show=True,
                             show_copy_button=False)
+
+            elif action == 'Delete all caches':
+                self.reset_caches()
 
             elif action == 'Nuke annotations':
                 # nuke_annotations() has its own dialog informing progress
@@ -873,15 +880,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
             path = os.path.join(self.connected_device.resources_path, 'booklist.db')
             cache_files['booklist.db (local)'] = _get_os_stats(path)
 
-            #installed_books.zip from MXD resources
-            #mxd_resources_path = os.path.join(config_dir, 'plugins', "Marvin_XD_resources")
+            # Per-library installed_books.zip archives
             mxd_resources_path = self.resources_path
-            path = os.path.join(mxd_resources_path, 'installed_books.zip')
-            cache_files['mxd_installed_books.zip'] = _get_os_stats(path)
+            pattern = os.path.join(mxd_resources_path, "*_installed_books.zip")
+            for path in glob.glob(pattern):
+                ans = _get_os_stats(path)
+                name = path.rsplit(os.path.sep)[-1]
+                cache_files['mxd_{}'.format(name)] = ans
 
             # Per-device cover hashes
-            import glob
-            pattern = mxd_resources_path + "/*_cover_hashes.json"
+            pattern = os.path.join(mxd_resources_path, "/*_cover_hashes.json")
             for path in glob.glob(pattern):
                 ans = _get_os_stats(path)
                 name = path.rsplit(os.path.sep)[-1]
@@ -1219,7 +1227,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 ' calibre library: {library_books} | virtual: {is_virtual}\n'
                 ' Marvin XD version: {plugin_version}\n'
                 ' Marvin library: {device_books}\n'
-                ' initialization time: {load_time}\n'
                 )
 
             if self.load_time is not None:
@@ -1272,7 +1279,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         # Present the results
         title = "Marvin XD diagnostics"
         msg = (
-               '<p>Plugin diagnostics for {}.</p>'
+               '<p>Plugin diagnostics created for {}.</p>'
               ).format(self.connected_device.ios.device_name)
 
         # Set dialog det_msg to monospace
@@ -1618,6 +1625,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     # subclass override
     def library_changed(self, db):
+        '''
+        When library changes, reset lib variables and delete installed_books.zip
+        '''
         self._log_location(current_library_name())
         self.indexed_library = None
         self.installed_books = None
@@ -2102,10 +2112,12 @@ class MarvinManagerAction(InterfaceAction, Logger):
             ac.triggered.connect(self.device_diagnostics)
             ac.setEnabled(enabled)
 
+            """
             # Add 'Reset caches', enabled when connected device
             ac = self.create_menu_item(m, 'Reset Marvin XD caches', image=I('trash.png'))
             ac.triggered.connect(self.reset_caches)
             ac.setEnabled(enabled)
+            """
 
             # Add 'Help'
             ac = self.create_menu_item(m, 'Help', image=I('help.png'))
@@ -2117,16 +2129,21 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 m.addSeparator()
                 self.developer_menu = m.addMenu(QIcon(I('config.png')),
                                                 "Developer…")
-                action = 'Delete calibre hashes'
+                action = 'Delete calibre hash cache'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
 
-                action = 'Delete Marvin hashes'
+                action = 'Delete Marvin hash cache'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(marvin_connected)
 
-                action = 'Delete MXD installed books cache'
+                action = 'Delete installed books cache'
+                ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
+                ac.triggered.connect(partial(self.developer_utilities, action))
+                ac.setEnabled(marvin_connected)
+
+                action = 'Delete all caches'
                 ac = self.create_menu_item(self.developer_menu, action, image=I('trash.png'))
                 ac.triggered.connect(partial(self.developer_utilities, action))
                 ac.setEnabled(marvin_connected)
@@ -2218,8 +2235,6 @@ class MarvinManagerAction(InterfaceAction, Logger):
         Delete all cache content locally and remotely
         Mirrors developer_utilities()
         '''
-        import glob
-
         self._log_location()
 
         # Confirm
@@ -2250,15 +2265,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self._log("no device cover hashes found")
                 det_msg += "no device cover hashes found\n"
 
-            # Delete installed books cache
-            lhc = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
-            if os.path.exists(lhc):
-                os.remove(lhc)
-                self._log("installed books cache deleted: {}".format(lhc))
-                det_msg += "installed books cached deleted:\n {}\n".format(lhc)
+            # Delete _installed_books.zip archives
+            pattern = os.path.join(self.resources_path, "*_installed_books.zip")
+            if glob.glob(pattern):
+                for path in glob.glob(pattern):
+                    self._log("deleting {}".format(path))
+                    det_msg += "deleted:\n {}\n".format(path)
+                    os.remove(path)
             else:
-                self._log("no installed books cache found\n")
-                det_msg += "no installed books cache found\n"
+                self._log("no _installed_books.zip archives found")
+                det_msg += "no _installed_books.zip archives found\n"
 
             # Delete calibre hashes from db
             self.gui.current_db.delete_all_custom_book_data('epub_hash')
@@ -2448,16 +2464,23 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 else:
                     self._log('MXD content hashes not found in archive')
 
-                # Recover mainDb_profile, installed_books
-                if ('mxd_mainDb_profile.json' in archive.namelist() and
-                    'mxd_installed_books.json' in archive.namelist()):
-                    stored_mainDb_profile = json.loads(archive.read('mxd_mainDb_profile.json'))
-                    dehydrated = json.loads(archive.read('mxd_installed_books.json'), object_hook=from_json)
-                    self._log("creating snapshot of installed_books from archive")
-                    self.installed_books = self.rehydrate_installed_books(dehydrated)
-                    self.snapshot_installed_books(stored_mainDb_profile)
+                # Recover _installed_books.zip
+                previous_library_name = None
+                if 'mxd_installed_books.zip' in archive.namelist():
+                    basename = 'mxd_installed_books.zip'
+                    with TemporaryDirectory() as tdir:
+                        archive.extract(basename, tdir)
+                        archive_path = os.path.join(tdir, basename)
+                        with ZipFile(archive_path, 'r') as zfr:
+                            if 'active_library.txt' in zfr.namelist():
+                                previous_library_name = zfr.read('active_library.txt')
+                        if previous_library_name:
+                            dst = os.path.join(self.resources_path,
+                                previous_library_name.replace(' ', '_') + "_installed_books.zip")
+                            shutil.copy(archive_path, dst)
+                            self._log("'{}' restored".format(os.path.basename(dst)))
                 else:
-                    self._log("installed_books snapshot not found in archive")
+                    self._log("mxd_installed_books.zip not found in archive")
 
                 # Recover iosra_booklist.db, restore to connected device and iOSRA resource folder
                 local_booklist_path = os.path.join(self.connected_device.resources_path, 'booklist.db')
@@ -2548,7 +2571,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
     def restore_installed_books(self):
         '''
         Try to restore self.installed_books from stored image
-        if stored_mainDb_profile == current_mainDb_profile
+        if stored_mainDb_profile == current_mainDb_profile and
+        calibre last_updated matches
         '''
         self._log_location()
         # Do we already have a populated self.installed_books?
@@ -2556,11 +2580,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log("self.installed_books already populated")
             return
 
-        # Do we have a stored image?
+        """
+        # Do we have a generic stored image?
         archive_path = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
         if not os.path.exists(archive_path):
             return
+        """
+        # Do we have a library-specific stored image?
+        archive_path = os.path.join(self.resources_path,
+            current_library_name().replace(' ', '_') + '_installed_books.zip')
+        if not os.path.exists(archive_path):
+            return
 
+        previous_library_name = None
         stored_mainDb_profile = None
         dehydrated = {}
         with ZipFile(archive_path, 'r') as zfr:
@@ -2568,10 +2600,32 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 stored_mainDb_profile = json.loads(zfr.read('mainDb_profile.json'))
             if 'installed_books.json' in zfr.namelist():
                 dehydrated = json.loads(zfr.read('installed_books.json'), object_hook=from_json)
+            if 'active_library.txt' in zfr.namelist():
+                previous_library_name = zfr.read('active_library.txt')
 
-        if self.compare_mainDb_profiles(stored_mainDb_profile):
-            self._log("restoring self.installed_books from cache")
-            self.installed_books = self.rehydrate_installed_books(dehydrated)
+        # Make sure we're dealing with the same library used when archive was created
+        if previous_library_name != current_library_name():
+            self._log("previous_library: {}".format(previous_library_name))
+            self._log("current_library: {}".format(current_library_name()))
+            self._log("unable to restore from installed_books archive, different libraries")
+            return
+
+        # Test calibre metadata last_updated timestamps against archived
+        db = self.opts.gui.current_db
+        for mid, d in dehydrated.iteritems():
+            if d['cid']:
+                mi = db.get_metadata(d['cid'], index_is_id=True)
+                calibre_last_modified = time.mktime(mi.last_modified.astimezone(tz.tzlocal()).timetuple())
+                archive_last_modified = d['last_updated']
+                if calibre_last_modified != archive_last_modified:
+                    self._log("'{}' metadata updated".format(d['title']))
+                    self._log("unable to restore from installed_books archive")
+                    break
+        else:
+            self._log("individual book last_updated validates")
+            if self.compare_mainDb_profiles(stored_mainDb_profile):
+                self._log("restoring self.installed_books from {}".format(os.path.basename(archive_path)))
+                self.installed_books = self.rehydrate_installed_books(dehydrated)
 
     def show_configuration(self):
         self.interface_action_base_plugin.do_user_config(self.gui)
@@ -2675,10 +2729,32 @@ class MarvinManagerAction(InterfaceAction, Logger):
         '''
         self._log_location()
 
+        if False:
+            db = self.opts.gui.current_db
+
+            for book in self.installed_books:
+                #self._log(dir(self.installed_books[book]))
+                title = getattr(self.installed_books[book], 'title')
+                last_updated = getattr(self.installed_books[book], 'last_updated')
+                self._log("{}: {}".format(title, last_updated))
+                '''
+                cid = getattr(self.installed_books[book], 'cid')
+                if cid:
+                    mi = db.get_metadata(cid, index_is_id=True)
+                    last_modified = mi.last_modified.astimezone(tz.tzlocal())
+                    ts = time.mktime(mi.last_modified.astimezone(tz.tzlocal()).timetuple())
+                    self._log("{0} last_modified: {1} {2}".format(cid, last_modified, ts))
+                '''
+
+            self._log("*** snapshotting disabled ***")
+            return
+
         dehydrated = self.dehydrate_installed_books(self.installed_books)
         if self.validate_dehydrated_books(dehydrated):
-            archive_path = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
+            archive_path = os.path.join(self.resources_path,
+                current_library_name().replace(' ', '_') + '_installed_books.zip')
             with ZipFile(archive_path, 'w', compression=ZIP_STORED) as zfw:
+                zfw.writestr("active_library.txt", current_library_name())
                 zfw.writestr("mainDb_profile.json", json.dumps(profile, indent=2, sort_keys=True))
                 zfw.writestr("installed_books.json", json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
 
@@ -2728,6 +2804,19 @@ class MarvinManagerAction(InterfaceAction, Logger):
             Application.restoreOverrideCursor()
         except:
             pass
+
+    def _delete_installed_books_archive(self):
+        '''
+        Delete all _installed_book.zip archives
+        '''
+        self._log_location()
+        pattern = os.path.join(self.resources_path, "*_installed_books.zip")
+        if glob.glob(pattern):
+            for path in glob.glob(pattern):
+                self._log("deleting {}".format(os.path.basename(path)))
+                os.remove(path)
+        else:
+            self._log("no _installed_books.zip archives found")
 
     def _get_user_installed_plugins(self, width):
         '''
