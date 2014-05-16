@@ -4644,6 +4644,23 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             ca_cur.close()
             return collections
 
+        def _get_collection_map(con):
+            '''
+            Return collection_map from cur
+            '''
+            collections_cur = con.cursor()
+            collections_cur.execute('''SELECT
+                                        ID,
+                                        Name
+                                       FROM Collections
+                                    ''')
+            rows = collections_cur.fetchall()
+            collection_map = {}
+            for row in rows:
+                collection_map[row[b'ID']] = row[b'Name']
+            collections_cur.close()
+            return collection_map
+
         def _get_flags(cur, row):
             # Get the flag assignments
             flags = []
@@ -4942,6 +4959,56 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             voc_cur.close()
             return vocabulary_list
 
+        def _populate_installed_book(row):
+            '''
+            Add row to installed_books
+            '''
+            try:
+                book_id = row[b'id_']
+                cid, mi = _get_calibre_id(row[b'UUID'],
+                                          row[b'Title'],
+                                          row[b'Author'])
+
+                # Get the primary metadata from Books
+                this_book = Book(row[b'Title'], row[b'Author'].split(', '))
+                this_book.articles = _get_articles(cur, book_id)
+                this_book.author_sort = row[b'AuthorSort']
+                this_book.cid = cid
+                this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
+                this_book.comments = row[b'Description']
+                this_book.cover_file = row[b'CoverFile']
+                this_book.date_added = row[b'DateAdded']
+                this_book.date_opened = row[b'DateOpened']
+                this_book.deep_view_prepared = row[b'DeepViewPrepared']
+                this_book.device_collections = _get_collections(cur, book_id)
+                this_book.flags = _get_flags(cur, row)
+                this_book.hash = hashes[row[b'FileName']]['hash']
+                this_book.highlights = _get_highlights(cur, book_id)
+                this_book.last_updated = _get_calibre_metadata_last_updated(mi)
+                this_book.match_quality = None  # Added in _construct_table_data()
+                this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
+                this_book.mid = book_id
+                this_book.on_device = _get_on_device_status(this_book.cid)
+                this_book.path = row[b'FileName']
+                this_book.pin = row[b'Pin']
+                this_book.progress = row[b'Progress']
+                this_book.pubdate = _get_pubdate(row)
+                this_book.publisher = _get_publisher(row)
+                if 'Rating' in row.keys():      # Rating added in 2.6.65
+                    this_book.rating = row[b'Rating']
+                this_book.series = row[b'CalibreSeries']
+                this_book.series_index = row[b'CalibreSeriesIndex']
+                this_book.tags = _get_marvin_genres(book_id)
+                this_book.title_sort = row[b'CalibreTitleSort']
+                this_book.uuid = row[b'UUID']
+                this_book.vocabulary = _get_vocabulary_list(cur, book_id)
+                this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
+                installed_books[book_id] = this_book
+            except:
+                self._log("ERROR adding to installed_books")
+                import traceback
+                self._log(traceback.format_exc())
+
         def _purge_cover_hash_orphans():
             '''
             Purge obsolete cover hashes
@@ -4962,19 +5029,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     del self.archived_cover_hashes[ch_cid]
             self._busy_panel_teardown()
 
-        # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
+        def _seconds_to_time(s):
+            years, s = divmod(s, 31556952)
+            min, s = divmod(s, 60)
+            h, min = divmod(min, 60)
+            d, h = divmod(h, 24)
+            ans = {'days': d, 'hours': h, 'mins': min, 'secs': s}
+            return ans
 
-        self._log_location()
-
-        marvin_content_updated = getattr(self.parent, 'marvin_content_updated', False)
-        installed_books = getattr(self.parent, 'installed_books', None)
-        if installed_books is None or marvin_content_updated:
-            self._log("building new installed_books")
-            if marvin_content_updated:
-                setattr(self.parent, 'marvin_content_updated', False)
-
-            installed_books = {}
-
+        def _wait_for_connected_device():
             # Wait for device driver to complete initialization, but tell user what's happening
             if not hasattr(self.connected_device, "cached_books"):
                 self._busy_panel_setup("Waiting for driver to finish initialization…")
@@ -4987,10 +5050,32 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         self._busy_panel_teardown()
                     break
 
+
+        # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
+
+        self._log_location()
+
+        start_time = time.time()
+        load_method = None
+
+        marvin_content_updated = getattr(self.parent, 'marvin_content_updated', False)
+        installed_books = getattr(self.parent, 'installed_books', None)
+        installed_books_metadata_changes = getattr(self.parent, 'installed_books_metadata_changes', None)
+
+        if installed_books is None or marvin_content_updated:
+            load_method = "COLD START"
+            self._log("{}: building new installed_books".format(load_method))
+            if marvin_content_updated:
+                setattr(self.parent, 'marvin_content_updated', False)
+
+            installed_books = {}
+
+            _wait_for_connected_device()
+
             # Is there a valid mainDb?
             local_db_path = getattr(self.connected_device, "local_db_path")
             if local_db_path is not None:
-                # Fetch/compute hashes
+                ''' Fetch/compute hashes '''
                 cached_books = self.connected_device.cached_books
                 hashes = self._scan_marvin_books(cached_books)
 
@@ -4999,18 +5084,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 with con:
                     con.row_factory = sqlite3.Row
 
-                    # Build a collection map
-                    collections_cur = con.cursor()
-                    collections_cur.execute('''SELECT
-                                                ID,
-                                                Name
-                                               FROM Collections
-                                            ''')
-                    rows = collections_cur.fetchall()
-                    collection_map = {}
-                    for row in rows:
-                        collection_map[row[b'ID']] = row[b'Name']
-                    collections_cur.close()
+                    # Get the collection map
+                    collection_map = _get_collection_map(con)
 
                     # Get the books
                     cur = con.cursor()
@@ -5030,53 +5105,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     pb.show()
 
                     for i in range(book_count):
-                        try:
-                            row = cur.fetchone()
-                            cid, mi = _get_calibre_id(row[b'UUID'],
-                                                      row[b'Title'],
-                                                      row[b'Author'])
-
-                            book_id = row[b'id_']
-                            # Get the primary metadata from Books
-                            this_book = Book(row[b'Title'], row[b'Author'].split(', '))
-                            this_book.articles = _get_articles(cur, book_id)
-                            this_book.author_sort = row[b'AuthorSort']
-                            this_book.cid = cid
-                            this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
-                            this_book.comments = row[b'Description']
-                            this_book.cover_file = row[b'CoverFile']
-                            this_book.date_added = row[b'DateAdded']
-                            this_book.date_opened = row[b'DateOpened']
-                            this_book.deep_view_prepared = row[b'DeepViewPrepared']
-                            this_book.device_collections = _get_collections(cur, book_id)
-                            this_book.flags = _get_flags(cur, row)
-                            this_book.hash = hashes[row[b'FileName']]['hash']
-                            this_book.highlights = _get_highlights(cur, book_id)
-                            this_book.last_updated = _get_calibre_metadata_last_updated(mi)
-                            this_book.match_quality = None  # Added in _construct_table_data()
-                            this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
-                            this_book.mid = book_id
-                            this_book.on_device = _get_on_device_status(this_book.cid)
-                            this_book.path = row[b'FileName']
-                            this_book.pin = row[b'Pin']
-                            this_book.progress = row[b'Progress']
-                            this_book.pubdate = _get_pubdate(row)
-                            this_book.publisher = _get_publisher(row)
-                            if 'Rating' in row.keys():      # Rating added in 2.6.65
-                                this_book.rating = row[b'Rating']
-                            this_book.series = row[b'CalibreSeries']
-                            this_book.series_index = row[b'CalibreSeriesIndex']
-                            this_book.tags = _get_marvin_genres(book_id)
-                            this_book.title_sort = row[b'CalibreTitleSort']
-                            this_book.uuid = row[b'UUID']
-                            this_book.vocabulary = _get_vocabulary_list(cur, book_id)
-                            this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
-                            installed_books[book_id] = this_book
-                        except:
-                            self._log("ERROR adding to installed_books")
-                            import traceback
-                            self._log(traceback.format_exc())
-
+                        row = cur.fetchone()
+                        _populate_installed_book(row)
                         pb.increment()
 
                     pb.hide()
@@ -5100,8 +5130,70 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
                 MessageBox(MessageBox.ERROR, title, msg,
                            parent=self.opts.gui, show_copy_button=False).exec_()
+
+        elif installed_books and installed_books_metadata_changes:
+            load_method = "COOL START"
+            self._log("{}: updating obsolete installed_books".format(load_method))
+            self._log("processing {:,} metadata {}".format(
+                len(installed_books_metadata_changes),
+                "update" if len(installed_books_metadata_changes) == 1 else "updates"))
+
+            _wait_for_connected_device()
+
+            # Is there a valid mainDb?
+            local_db_path = getattr(self.connected_device, "local_db_path")
+            if local_db_path is not None:
+                ''' Fetch/compute hashes '''
+                cached_books = self.connected_device.cached_books
+                hashes = self._scan_marvin_books(cached_books)
+
+                # Get the mainDb data
+                con = sqlite3.connect(self.connected_device.local_db_path)
+                with con:
+                    con.row_factory = sqlite3.Row
+
+                    # Get the collection map
+                    collection_map = _get_collection_map(con)
+
+                    # Get the updated books
+                    cur = con.cursor()
+                    modified_count = len(installed_books_metadata_changes)
+
+                    pb = ProgressBar(parent=self.opts.gui, window_title='')
+                    pb.set_maximum(modified_count)
+                    pb.set_value(0)
+                    pb.set_label('{:^100}'.format("Performing metadata magic…"))
+                    pb.show()
+
+                    for book_id in installed_books_metadata_changes:
+                        cur.execute('''SELECT
+                                        *,
+                                        Books.ID as id_
+                                       FROM Books
+                                       WHERE id_ = "{0}"
+                                    '''.format(book_id))
+                        row = cur.fetchone()
+                        self._log("updating calibre metadata for '{}'".format(row[b'title']))
+                        _populate_installed_book(row)
+                        pb.increment()
+
+                    pb.hide()
+
+            else:
+                self._log("Marvin database is damaged")
+                title = "Damaged database"
+                msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
+                MessageBox(MessageBox.ERROR, title, msg,
+                           parent=self.opts.gui, show_copy_button=False).exec_()
+
         else:
-            self._log("returning warm installed_books")
+            load_method = "WARM START"
+            self._log("{}: returning existing installed_books".format(load_method))
+
+        elapsed = _seconds_to_time(time.time() - start_time)
+        self._log_location("{0} elapsed time: {1:02d}:{2:02d}".format(
+            load_method, int(elapsed['mins']), int(elapsed['secs'])))
+
         return installed_books
 
     def _inject_css(self, html):

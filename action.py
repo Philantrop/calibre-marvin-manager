@@ -784,7 +784,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 if os.path.exists(archive_path):
                     os.remove(archive_path)
 
-                self._log("installed books cache deleted: {}".format(archive_path))
+                self._log("installed books cache deleted: {}".format(os.path.basename(archive_path)))
                 info_dialog(self.gui, 'Developer utilities',
                             'installed books archives deleted: {}'.format(
                             os.path.basename(archive_path)),
@@ -2614,7 +2614,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             return
 
         # Test calibre metadata last_updated timestamps against archived
-        installed_books_metadata_changes = {}
+        self.installed_books_metadata_changes = []
         db = self.opts.gui.current_db
         for mid, d in dehydrated.iteritems():
             if d['cid']:
@@ -2622,29 +2622,21 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 # Confirm CID is still active
                 if mi.uuid == 'dummy':
-                    installed_books_metadata_changes[d['mid']] = {
-                        'cid': d['cid'],
-                        'status': "deleted"
-                        }
+                    self.installed_books_metadata_changes.append(d['mid'])
                     continue
 
                 # Validate last_modified
                 calibre_last_modified = time.mktime(mi.last_modified.astimezone(tz.tzlocal()).timetuple())
                 archive_last_modified = d['last_updated']
                 if calibre_last_modified != archive_last_modified:
-                    installed_books_metadata_changes[d['mid']] = {
-                        'cid': d['cid'],
-                        'status': "modified"
-                        }
+                    self.installed_books_metadata_changes.append(d['mid'])
 
-        if not installed_books_metadata_changes:
+        if not self.installed_books_metadata_changes:
             self._log("individual book metadata is up to date")
-            if self.compare_mainDb_profiles(stored_mainDb_profile):
-                self._log("restoring self.installed_books from {}".format(os.path.basename(archive_path)))
-                self.installed_books = self.rehydrate_installed_books(dehydrated)
-        else:
-            self._log("updated metadata detected for the following MIDs: {}".format(
-                installed_books_metadata_changes))
+
+        if self.compare_mainDb_profiles(stored_mainDb_profile):
+            self._log("restoring self.installed_books from {}".format(os.path.basename(archive_path)))
+            self.installed_books = self.rehydrate_installed_books(dehydrated)
 
     def show_configuration(self):
         self.interface_action_base_plugin.do_user_config(self.gui)
