@@ -4969,6 +4969,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         marvin_content_updated = getattr(self.parent, 'marvin_content_updated', False)
         installed_books = getattr(self.parent, 'installed_books', None)
         if installed_books is None or marvin_content_updated:
+            self._log("building new installed_books")
             if marvin_content_updated:
                 setattr(self.parent, 'marvin_content_updated', False)
 
@@ -5013,23 +5014,24 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
                     # Get the books
                     cur = con.cursor()
+                    cur.execute('''SELECT count(*) from Books''')
+                    book_count = cur.fetchone()[0]
+
                     cur.execute('''SELECT
                                     *,
                                     Books.ID as id_
                                    FROM Books
                                 ''')
 
-                    rows = cur.fetchall()
-
                     pb = ProgressBar(parent=self.opts.gui, window_title='')
-                    book_count = len(rows)
                     pb.set_maximum(book_count)
                     pb.set_value(0)
                     pb.set_label('{:^100}'.format("Performing metadata magic…"))
                     pb.show()
 
-                    for i, row in enumerate(rows):
+                    for i in range(book_count):
                         try:
+                            row = cur.fetchone()
                             cid, mi = _get_calibre_id(row[b'UUID'],
                                                       row[b'Title'],
                                                       row[b'Author'])
@@ -5098,7 +5100,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
                 MessageBox(MessageBox.ERROR, title, msg,
                            parent=self.opts.gui, show_copy_button=False).exec_()
-
+        else:
+            self._log("returning warm installed_books")
         return installed_books
 
     def _inject_css(self, html):

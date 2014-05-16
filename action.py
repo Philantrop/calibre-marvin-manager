@@ -776,6 +776,9 @@ class MarvinManagerAction(InterfaceAction, Logger):
 #                             show_copy_button=False)
 
             elif action == 'Delete installed books cache':
+                # Delete <current_library>_installed_books.zip
+                # Reset self.installed_books
+                self.installed_books = None
                 archive_path = os.path.join(self.resources_path,
                     current_library_name().replace(' ', '_') + '_installed_books.zip')
                 if os.path.exists(archive_path):
@@ -783,7 +786,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
                 self._log("installed books cache deleted: {}".format(archive_path))
                 info_dialog(self.gui, 'Developer utilities',
-                            'installed books archives deleted: {}'.format(archive_path),
+                            'installed books archives deleted: {}'.format(
+                            os.path.basename(archive_path)),
                             show=True,
                             show_copy_button=False)
 
@@ -2570,9 +2574,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
 
     def restore_installed_books(self):
         '''
-        Try to restore self.installed_books from stored image
-        if stored_mainDb_profile == current_mainDb_profile and
-        calibre last_updated matches
+        Use existing self.installed_books, or try to restore self.installed_books
+        Evaluations:
+            Do we have a warm self.installed_books?
+            Is there an _installed_books.zip for the current library?
+            Do the calibre metadata last_modified timestamps match?
+            Do the mainDb profiles match?
+        book_status:_get_installed_books() uses self.installed_books if available
         '''
         self._log_location()
         # Do we already have a populated self.installed_books?
@@ -2580,18 +2588,13 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self._log("self.installed_books already populated")
             return
 
-        """
-        # Do we have a generic stored image?
-        archive_path = os.path.join(self.resources_path, self.INSTALLED_BOOKS_SNAPSHOT)
-        if not os.path.exists(archive_path):
-            return
-        """
         # Do we have a library-specific stored image?
         archive_path = os.path.join(self.resources_path,
             current_library_name().replace(' ', '_') + '_installed_books.zip')
         if not os.path.exists(archive_path):
             return
 
+        # Fetch the archived _installed_books contents
         previous_library_name = None
         stored_mainDb_profile = None
         dehydrated = {}
@@ -2611,21 +2614,37 @@ class MarvinManagerAction(InterfaceAction, Logger):
             return
 
         # Test calibre metadata last_updated timestamps against archived
+        installed_books_metadata_changes = {}
         db = self.opts.gui.current_db
         for mid, d in dehydrated.iteritems():
             if d['cid']:
                 mi = db.get_metadata(d['cid'], index_is_id=True)
+
+                # Confirm CID is still active
+                if mi.uuid == 'dummy':
+                    installed_books_metadata_changes[d['mid']] = {
+                        'cid': d['cid'],
+                        'status': "deleted"
+                        }
+                    continue
+
+                # Validate last_modified
                 calibre_last_modified = time.mktime(mi.last_modified.astimezone(tz.tzlocal()).timetuple())
                 archive_last_modified = d['last_updated']
                 if calibre_last_modified != archive_last_modified:
-                    self._log("'{}' metadata updated".format(d['title']))
-                    self._log("unable to restore from installed_books archive")
-                    break
-        else:
-            self._log("individual book last_updated validates")
+                    installed_books_metadata_changes[d['mid']] = {
+                        'cid': d['cid'],
+                        'status': "modified"
+                        }
+
+        if not installed_books_metadata_changes:
+            self._log("individual book metadata is up to date")
             if self.compare_mainDb_profiles(stored_mainDb_profile):
                 self._log("restoring self.installed_books from {}".format(os.path.basename(archive_path)))
                 self.installed_books = self.rehydrate_installed_books(dehydrated)
+        else:
+            self._log("updated metadata detected for the following MIDs: {}".format(
+                installed_books_metadata_changes))
 
     def show_configuration(self):
         self.interface_action_base_plugin.do_user_config(self.gui)
