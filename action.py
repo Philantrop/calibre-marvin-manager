@@ -1931,17 +1931,16 @@ class MarvinManagerAction(InterfaceAction, Logger):
             updated = True
 
         # Change CSS prefs 'Timestamp' to 'Location'
-        if prefs_version <= "1.2.0":
-            appearance_css = self.prefs.get('appearance_css', None)
-            if appearance_css is not None:
-                for element in appearance_css:
-                    if element['name'] == 'Timestamp':
-                        element['name'] = 'Location'
-                        self.prefs.set('appearance_css', appearance_css)
-                        updated = True
-                        _log_update()
-                        self._log("changing appearance_css 'Timestamp' to 'Location'")
-                    break
+        appearance_css = self.prefs.get('appearance_css', None)
+        if appearance_css is not None:
+            for element in appearance_css:
+                if element['name'] == 'Timestamp':
+                    element['name'] = 'Location'
+                    self.prefs.set('appearance_css', appearance_css)
+                    updated = True
+                    _log_update()
+                    self._log("changing appearance_css 'Timestamp' to 'Location'")
+                break
 
         if updated:
             self.prefs.set('plugin_version', "%d.%d.%d" % self.interface_action_base_plugin.version)

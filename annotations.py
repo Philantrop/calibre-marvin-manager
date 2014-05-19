@@ -370,24 +370,6 @@ class BookmarkNotes(object, Logger):
             self._log_location("ERROR: Unable to find '{0}' in stored_css".format(target))
         return style
 
-    """
-    def _get_note_style(self):
-        '''
-        Get the current CSS for bookmark_notes
-        '''
-        from calibre_plugins.marvin_manager.appearance import default_elements
-        stored_css = plugin_prefs.get('appearance_css', default_elements)
-
-        note_style = ''
-        for element in stored_css:
-            if element['name'] == 'Note':
-                note_style = re.sub('\n', '', element['css'])
-                break
-        else:
-            self._log_location("ERROR: Unable to find 'Note' in stored_css")
-
-        return note_style
-    """
 
 def merge_annotations(parent, cid, old_soup, new_soup):
     '''
