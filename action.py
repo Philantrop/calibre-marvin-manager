@@ -2211,8 +2211,15 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self.ios.copy_from_idevice(str(rhc), out)
 
             # Load hash_cache
-            with open(lhc, 'rb') as hcf:
-                hash_cache = pickle.load(hcf)
+            try:
+                with open(lhc, 'rb') as hcf:
+                    hash_cache = pickle.load(hcf)
+            except:
+                import traceback
+                self._log(traceback.format_exc())
+                self._log("deleting invalid remote hash cache")
+                self.ios.remove(str(rhc))
+                return
 
             # Scan the cached hashes
             updated_hash_cache = {}
