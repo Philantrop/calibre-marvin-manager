@@ -905,7 +905,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
             iosra_prefs = JSONConfig('plugins/iOS reader applications')
             device_caching = {}
             device_caching_enabled = iosra_prefs.get('device_booklist_caching')
-            allocation_factor = iosra_prefs.get('device_booklist_cache_limit')
+            allocation_factor = iosra_prefs.get('device_booklist_cache_limit', 0)
             device_caching['enabled'] = device_caching_enabled
             device_caching['allocation_factor'] = allocation_factor
 
