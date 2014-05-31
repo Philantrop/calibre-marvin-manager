@@ -1670,7 +1670,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
         Primary click on menu button
         '''
         self._log_location()
-        if self.connected_device:
+        if self.connected_device and self.connected_device.ios_reader_app == 'Marvin':
             if not self.dialog_active:
                 self.dialog_active = True
                 try:
@@ -2067,9 +2067,10 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     ac.triggered.connect(self.show_installed_books)
 
                 else:
-                    self._log("Marvin not connected")
+                    self._log("Marvin not connected, hiding MXD menu")
                     ac = self.create_menu_item(m, 'Marvin not connected')
                     ac.setEnabled(False)
+                    self.qaction.setVisible(False)
 
             elif False and not self.connected_device:
                 ac = self.create_menu_item(m, 'Update metadata via Dropbox')
@@ -2083,6 +2084,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                 self._log(iosra_status)
                 ac = self.create_menu_item(m, iosra_status)
                 ac.setEnabled(False)
+                self.qaction.setVisible(False)
 
             m.addSeparator()
 
