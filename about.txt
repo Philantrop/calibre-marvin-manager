@@ -4,6 +4,12 @@ A calibre plugin for managing Marvin, an iOS reader application.
 © 2013-2014 Gregory Riker
 
 Version history:
+1.3.0 [<date>]
+ • Added Backup and Restore features
+ • Added Reset caches option to context menu
+ • Added Device profile to Developer menu
+ • Added metrics logging
+ • Various performance improvements
 1.2.1 [8 March 2014]
  • Fixed typo in default CSS elements
 1.2.0 [7 March 2014]

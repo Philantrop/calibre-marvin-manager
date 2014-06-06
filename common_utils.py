@@ -8,17 +8,17 @@ __license__ = 'GPL v3'
 __copyright__ = '2013, Greg Riker <griker@hotmail.com>'
 __docformat__ = 'restructuredtext en'
 
-import cStringIO, os, re, sys, time, traceback
+import base64, cStringIO, json, os, re, sys, time, traceback
 
 from collections import defaultdict
 from datetime import datetime
 from lxml import etree
-from threading import Timer
+from threading import Thread, Timer
 from time import sleep
-from zipfile import ZipFile
+#from zipfile import ZipFile
 
-from calibre import sanitize_file_name
-from calibre.constants import iswindows
+from calibre import browser, sanitize_file_name
+from calibre.constants import __version__, iswindows, isosx
 from calibre.devices.usbms.driver import debug_print
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, BeautifulStoneSoup, Tag
 from calibre.ebooks.metadata import title_sort
@@ -29,10 +29,11 @@ from calibre.gui2.progress_indicator import ProgressIndicator
 from calibre.library import current_library_name
 from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
+from calibre.utils.zipfile import ZipFile, ZIP_STORED
 
 from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
                       QCheckBox, QComboBox, QCursor, QDial, QDialog, QDialogButtonBox,
-                      QDoubleSpinBox, QFont, QIcon,
+                      QDoubleSpinBox, QFont, QFrame, QIcon,
                       QKeySequence, QLabel, QLineEdit,
                       QPixmap, QProgressBar, QPushButton,
                       QRadioButton, QSizePolicy, QSlider, QSpinBox, QString,
@@ -74,28 +75,70 @@ FULL_STAR = u'\u2605'
 '''     Base classes    '''
 
 class Logger():
+    '''
+    A self-modifying class to print debug statements.
+    If disabled in prefs, methods are neutered at first call for performance optimization
+    '''
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
     def _log(self, msg=None):
         '''
-        Print msg to console
+        Upon first call, switch to appropriate method
         '''
         from calibre_plugins.marvin_manager.config import plugin_prefs
         if not plugin_prefs.get('debug_plugin', False):
-            return
+            # Neuter the method
+            self._log = self.__null
+            self._log_location = self.__null
+        else:
+            # Log the message, then switch to real method
+            if msg:
+                debug_print(" {0}".format(str(msg)))
+            else:
+                debug_print()
 
+            self._log = self.__log
+            self._log_location = self.__log_location
+
+    def __log(self, msg=None):
+        '''
+        The real method
+        '''
         if msg:
-            debug_print(" %s" % str(msg))
+            debug_print(" {0}".format(str(msg)))
         else:
             debug_print()
 
     def _log_location(self, *args):
         '''
-        Print location, args to console
+        Upon first call, switch to appropriate method
         '''
         from calibre_plugins.marvin_manager.config import plugin_prefs
         if not plugin_prefs.get('debug_plugin', False):
-            return
+            # Neuter the method
+            self._log = self.__null
+            self._log_location = self.__null
+        else:
+            # Log the message from here so stack trace is valid
+            arg1 = arg2 = ''
 
+            if len(args) > 0:
+                arg1 = str(args[0])
+            if len(args) > 1:
+                arg2 = str(args[1])
+
+            debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
+                        func=sys._getframe(1).f_code.co_name,
+                        arg1=arg1, arg2=arg2))
+
+            # Switch to real method
+            self._log = self.__log
+            self._log_location = self.__log_location
+
+    def __log_location(self, *args):
+        '''
+        The real method
+        '''
         arg1 = arg2 = ''
 
         if len(args) > 0:
@@ -107,17 +150,54 @@ class Logger():
                     func=sys._getframe(1).f_code.co_name,
                     arg1=arg1, arg2=arg2))
 
+    def __null(self, *args, **kwargs):
+        '''
+        Optimized method when logger is silent
+        '''
+        pass
+
 
 class Book(Metadata):
     '''
     A simple class describing a book
     See ebooks.metadata.book.base #46
     '''
+    # 14 standard field keys from Metadata
+    mxd_standard_keys = ['author_sort', 'authors', 'comments', 'device_collections',
+                         'last_updated', 'pubdate', 'publisher', 'rating', 'series',
+                         'series_index', 'tags', 'title', 'title_sort', 'uuid']
+    # 19 private field keys
+    mxd_custom_keys = ['articles', 'cid', 'calibre_collections', 'cover_file',
+                       'date_added', 'date_opened', 'deep_view_prepared',
+                       'flags', 'hash', 'highlights', 'match_quality',
+                       'metadata_mismatches', 'mid', 'on_device', 'path', 'pin',
+                       'progress', 'vocabulary', 'word_count']
+
     def __init__(self, title, author):
         if type(author) is list:
             Metadata.__init__(self, title, authors=author)
         else:
             Metadata.__init__(self, title, authors=[author])
+
+    def __eq__(self, other):
+        all_mxd_keys = self.mxd_standard_keys + self.mxd_custom_keys
+        for attr in all_mxd_keys:
+            v1, v2 = [getattr(obj, attr, object()) for obj in [self, other]]
+            if v1 is object() or v2 is object():
+                return False
+            elif v1 != v2:
+                return False
+        return True
+
+    def __ne__(self, other):
+        all_mxd_keys = self.mxd_standard_keys + self.mxd_custom_keys
+        for attr in all_mxd_keys:
+            v1, v2 = [getattr(obj, attr, object()) for obj in [self, other]]
+            if v1 is object() or v2 is object():
+                return True
+            elif v1 != v2:
+                return True
+        return False
 
     def title_sorter(self):
         return title_sort(self.title)
@@ -305,6 +385,7 @@ class MyBlockingBusy(QDialog):
         sp.setHeightForWidth(False)
         self.msg.setSizePolicy(sp)
         self.msg.setMinimumHeight(self.font.pointSize() + 8)
+        #self.msg.setFrameStyle(QFrame.Panel | QFrame.Sunken)
 
         self._layout.addSpacing(15)
 
@@ -350,8 +431,10 @@ class MyBlockingBusy(QDialog):
 
 
 class ProgressBar(QDialog, Logger):
-    def __init__(self, parent=None, max_items=100, window_title='Progress Bar',
-                 label='Label goes here', frameless=True, on_top=False):
+    def __init__(self,
+                 alignment=Qt.AlignHCenter, frameless=True, label='Label goes here',
+                 max_items=100, on_top=False, parent=None, window_title='Progress Bar'
+                 ):
         if on_top:
             _flags = Qt.WindowStaysOnTopHint
             if frameless:
@@ -369,9 +452,30 @@ class ProgressBar(QDialog, Logger):
         self.l = QVBoxLayout(self)
         self.setLayout(self.l)
 
+        if frameless and window_title:
+            # Add a label with window title
+            self.title = QLabel(window_title)
+            self.title.setAlignment(Qt.AlignHCenter)
+            self.font = QFont()
+            self.font.setPointSize(self.font.pointSize() + 2)
+            self.font.setBold(True)
+            self.title.setFont(self.font)
+            self.l.addWidget(self.title)
+            self.hl = QFrame()
+            self.hl.setFrameShape(QFrame.HLine)
+            self.hl.setFrameShadow(QFrame.Sunken)
+            self.l.addWidget(self.hl)
+        else:
+            self.setWindowTitle(window_title)
+
         self.label = QLabel(label)
-        self.label.setAlignment(Qt.AlignHCenter)
+        self.label.setAlignment(alignment)
+        self.font = QFont()
+        self.font.setPointSize(self.font.pointSize() + 2)
+        self.label.setFont(self.font)
         self.l.addWidget(self.label)
+
+        self.l.addSpacing(15)
 
         self.progressBar = QProgressBar(self)
         self.progressBar.setRange(0, max_items)
@@ -380,26 +484,44 @@ class ProgressBar(QDialog, Logger):
         self.progressBar.setValue(0)
         self.l.addWidget(self.progressBar)
 
+        self.l.addSpacing(15)
+
         self.close_requested = False
+        self.resize(self.sizeHint())
 
     def closeEvent(self, event):
         self._log_location()
         self.close_requested = True
 
+    def get_pct_complete(self):
+        pct_complete = float(self.progressBar.value() / self.progressBar.maximum())
+        return int(pct_complete * 100)
+
     def increment(self):
-        self.progressBar.setValue(self.progressBar.value() + 1)
-        self.refresh()
+        try:
+            if self.progressBar.value() < self.progressBar.maximum():
+                self.progressBar.setValue(self.progressBar.value() + 1)
+                self.refresh()
+        except:
+            self._log_location()
+            import traceback
+            self._log(traceback.format_exc())
 
     def refresh(self):
         self.application.processEvents()
 
     def set_label(self, value):
         self.label.setText(value)
+        self.resize(self.sizeHint())
         self.label.repaint()
         self.refresh()
 
     def set_maximum(self, value):
         self.progressBar.setMaximum(value)
+        self.refresh()
+
+    def set_range(self, min, max):
+        self.progressBar.setRange(min, max)
         self.refresh()
 
     def set_value(self, value):
@@ -535,61 +657,132 @@ class MoveBackup(QThread, Logger):
     '''
     Move a (potentially large) backup file from connected device to local fs
     '''
-    def __init__(self, parent, backup_folder, destination_folder, storage_name, src_stats):
-        QThread.__init__(self, parent)
-        self.backup_folder = backup_folder
-        self.destination_folder = destination_folder
-        self.dst = os.path.join(destination_folder, sanitize_file_name(storage_name))
-        self.ios = parent.ios
-        self.mxd_device_cached_hashes = None
-        self.mxd_remote_content_hashes = None
-        self.src = "{0}/marvin.backup".format(backup_folder)
-        self.src_stats = src_stats
-        self.success = None
+    TIMER_TICK = 0.25
+
+    def __init__(self, **kwargs):
+        '''
+        kwargs: {'backup_folder', 'destination_folder', 'ios',
+                 'parent', 'pb', 'storage_name', 'stats', total_seconds}
+        '''
+        self._log_location()
+        try:
+            for key in kwargs:
+                setattr(self, key, kwargs.get(key))
+            QThread.__init__(self, self.parent)
+
+            for prop in ['iosra_booklist', 'mxd_mainDb_profile', 'mxd_device_cached_hashes',
+                         'mxd_installed_books', 'mxd_remote_content_hashes', 'success',
+                         'timer']:
+                setattr(self, prop, None)
+
+            self.dst = os.path.join(self.destination_folder,
+                                    sanitize_file_name(self.storage_name))
+            self.src = b"{0}/marvin.backup".format(self.backup_folder)
+            self._init_pb()
+
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def run(self):
-        self._log_location()
-        # Remove any older file of the same name at destination
-        if os.path.isfile(self.dst):
-            os.remove(self.dst)
+        try:
+            backup_size = "{:,} MB".format(int(int(self.src_stats['st_size'])/(1024*1024)))
+            self._log_location()
+            self._log("moving {0} to '{1}'".format(backup_size, self.destination_folder))
 
-        # Copy from the iDevice to destination
-        with open(self.dst, 'wb') as out:
-            self.ios.copy_from_idevice(self.src, out)
+            start_time = time.time()
 
-        # Validate transferred file sizes, do cleanup
-        self._verify()
+            # Remove any older file of the same name at destination
+            if os.path.isfile(self.dst):
+                os.remove(self.dst)
 
-        # Append MXD components
-        self._append_mxd_components()
+            # Copy from the iDevice to destination
+            with open(self.dst, 'wb') as out:
+                self.ios.copy_from_idevice(self.src, out)
+
+            # Validate transferred file sizes, do cleanup
+            self._verify()
+
+            self.transfer_time = time.time() - start_time
+
+            # Append MXD components
+            self._append_mxd_components()
+
+            self._cleanup()
+
+        except:
+            self.pb.close()
+            import traceback
+            self._log(traceback.format_exc())
 
     def _append_mxd_components(self):
         self._log_location()
-        try:
-            if (self.mxd_device_cached_hashes or
-                self.mxd_remote_content_hashes):
 
-                zfa = ZipFile(self.dst, mode='a')
+        if (self.iosra_booklist or
+            self.mxd_mainDb_profile or
+            self.mxd_device_cached_hashes or
+            self.mxd_installed_books or
+            self.mxd_remote_content_hashes):
+
+            start_time = time.time()
+
+            with ZipFile(self.dst, mode='a') as zfa:
+                if self.iosra_booklist:
+                    zfa.write(self.iosra_booklist, arcname="iosra_booklist.zip")
+
+                if self.mxd_mainDb_profile:
+                    zfa.writestr("mxd_mainDb_profile.json",
+                                 json.dumps(self.mxd_mainDb_profile, sort_keys=True))
 
                 if self.mxd_device_cached_hashes:
                     base_name = "mxd_cover_hashes.json"
                     zfa.write(self.mxd_device_cached_hashes, arcname=base_name)
+
+                if self.mxd_installed_books:
+                    base_name = "mxd_installed_books.json"
+                    zfa.writestr(base_name, self.mxd_installed_books)
 
                 if self.mxd_remote_content_hashes:
                     from calibre_plugins.marvin_manager.book_status import BookStatusDialog
                     base_name = "mxd_{0}".format(BookStatusDialog.HASH_CACHE_FS)
                     zfa.write(self.mxd_remote_content_hashes, arcname=base_name)
 
-                zfa.close()
-        except:
-            import traceback
-            self._log(traceback.format_exc())
+            self.sidecar_time = time.time() - start_time
+        else:
+            self.sidecar_time = 0
 
     def _cleanup(self):
         self._log_location()
         try:
             self.ios.remove(self.src)
             self.ios.remove(self.backup_folder)
+            self.timer.cancel()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _init_pb(self):
+        self._log_location()
+        try:
+            max = int(self.total_seconds/self.TIMER_TICK) + 1
+            self.pb.set_maximum(max)
+            self.pb.set_range(0, max)
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _ticked(self):
+        '''
+        Increment the progress bar, restart the timer
+        Don't let it get to 100%
+        '''
+        try:
+            if self.pb.progressBar.value() < self.pb.progressBar.maximum() - 1:
+                self.pb.increment()
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
         except:
             import traceback
             self._log(traceback.format_exc())
@@ -602,36 +795,123 @@ class MoveBackup(QThread, Logger):
         dst_size = os.stat(self.dst).st_size
         self.success = (src_size == dst_size)
         self._log_location('backup verified' if self.success else '')
-        if self.success:
-            self._cleanup()
-        else:
+        if not self.success:
             self._log("file sizes did not match:")
             self._log("src_size: {0}".format(src_size))
             self._log("dst_size: {0}".format(dst_size))
 
 
-class RestoreBackup(QThread):
+class PluginMetricsLogger(Thread, Logger):
     '''
-    Copy a (potentially large) backup file from local fs to connected device
+    Post an event to the logging server
     '''
-    def __init__(self, parent, backup_image):
-        QThread.__init__(self, parent)
-        self.ios = parent.ios
-        self.src = backup_image
-        self.src_size = os.stat(self.src).st_size
-        self.success = None
+    # #mark ~~~ logging URL ~~~
+    #URL = "http://localhost:8378"
+    URL = "http://calibre-plugins.com:7584"
+
+    def __init__(self, **args):
+        Thread.__init__(self)
+        self.args = args
+        self.construct_header()
+
+    def construct_header(self):
+        '''
+        Build the default header information describing the environment plus the passed
+        plugin metadata
+        '''
+        import mechanize
+        self.req = mechanize.Request(self.URL)
+        self.req.add_header('CALIBRE_OS', 'Windows' if iswindows else 'OS X' if isosx else 'other')
+        self.req.add_header('CALIBRE_VERSION', __version__)
+        self.req.add_header('CALIBRE_PLUGIN', self.args.get('plugin'))
+        self.req.add_header('PLUGIN_VERSION', self.args.get('version'))
 
     def run(self):
-        tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
-        self.dst = b'/'.join(['/Documents', 'marvin.backup'])
-        self.ios.copy_to_idevice(self.src, tmp)
-        self.ios.rename(tmp, self.dst)
-        self._verify()
+        br = browser()
+        try:
+            ans = br.open(self.req).read().strip()
+            self._log_location(ans)
+        except Exception as e:
+            import traceback
+            self._log(traceback.format_exc())
+
+
+class RestoreBackup(QThread, Logger):
+    '''
+    Copy a (potentially large) backup file from local fs to connected device
+    ProgressBar needs to be created from main GUI thread
+    '''
+    TIMER_TICK = 0.25
+
+    def __init__(self, **kwargs):
+        '''
+        kwargs: {'backup_image', 'ios', 'msg', 'parent', 'pb', 'total_seconds'}
+        '''
+        self._log_location()
+        try:
+            for key in kwargs:
+                setattr(self, key, kwargs.get(key))
+            QThread.__init__(self, self.parent)
+            self.src_size = os.stat(self.backup_image).st_size
+            self.success = None
+            self.timer = None
+            self._init_pb()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def run(self):
+        self._log_location()
+        try:
+            tmp = b'/'.join(['/Documents', 'restore_image.tmp'])
+            self.dst = b'/'.join(['/Documents', 'marvin.backup'])
+            self.ios.copy_to_idevice(self.backup_image, tmp)
+            self.ios.rename(tmp, self.dst)
+            self._verify()
+            self._cleanup()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _cleanup(self):
+        self._log_location()
+        try:
+            self.timer.cancel()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _init_pb(self):
+        self._log_location()
+        try:
+            max = int(self.total_seconds/self.TIMER_TICK)
+            self.pb.set_maximum(max)
+            self.pb.set_range(0, max)
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
+
+    def _ticked(self):
+        '''
+        Increment the progress bar, restart the timer
+        Don't let it get to 100%
+        '''
+        try:
+            if self.pb.progressBar.value() < self.pb.progressBar.maximum() - 1:
+                self.pb.increment()
+            self.timer = Timer(self.TIMER_TICK, self._ticked)
+            self.timer.start()
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def _verify(self):
         '''
         Confirm source size == dest size
         '''
+        self._log_location()
         try:
             self.dst_size = int(self.ios.exists(self.dst)['st_size'])
         except:
@@ -706,7 +986,7 @@ class CommandHandler(Logger):
     </manifest>
     </{0}>'''
 
-    def __init__(self, parent):
+    def __init__(self, parent, pb=None):
         self._log_location()
         self.busy_cancel_requested = False
         self.command_name = None
@@ -716,6 +996,7 @@ class CommandHandler(Logger):
         self.ios = parent.ios
         self.marvin_cancellation_required = False
         self.operation_timed_out = False
+        self.pb = pb
         self.prefs = parent.prefs
         self.results = None
         self.timeout_override = None
@@ -737,6 +1018,16 @@ class CommandHandler(Logger):
         self.command_name = cmd_name
         self.command_soup = BeautifulStoneSoup(self.METADATA_COMMAND_XML.format(
             cmd_element, time.mktime(time.localtime())))
+
+    def init_pb(self, total_seconds):
+        self._log_location()
+        try:
+            max = int(total_seconds/self.POLLING_DELAY)
+            self.pb.set_maximum(max)
+            self.pb.set_range(0, max)
+        except:
+            import traceback
+            self._log(traceback.format_exc())
 
     def issue_command(self, get_response=None, timeout_override=None):
         '''
@@ -845,7 +1136,7 @@ class CommandHandler(Logger):
             self.watchdog.start()
 
             while True:
-                if not self.ios.exists(self.connected_device.status_fs):
+                if not self.ios.exists(self.connected_device.status_fs, silent=True):
                     # status.xml not created yet
                     if self.operation_timed_out:
                         final_code = '-1'
@@ -858,6 +1149,8 @@ class CommandHandler(Logger):
                             }
                         break
                     Application.processEvents()
+                    if self.pb:
+                        self.pb.increment()
                     time.sleep(self.POLLING_DELAY)
 
                 else:
@@ -926,6 +1219,8 @@ class CommandHandler(Logger):
                                 self.watchdog.start()
 
                             Application.processEvents()
+                            if self.pb:
+                                self.pb.increment()
                             time.sleep(self.POLLING_DELAY)
 
                         except:
@@ -979,7 +1274,7 @@ class CommandHandler(Logger):
                         rf = b'/'.join([self.connected_device.staging_folder, self.get_response])
                         self._log("fetching response '%s'" % rf)
                         if not self.ios.exists(rf):
-                            response = "%s not found" % rf
+                            response = "{0} not found".format(rf)
                         else:
                             response = self.ios.read(rf)
                             self.ios.remove(rf)
@@ -1164,6 +1459,19 @@ def existing_annotations(parent, field, return_all=False):
     return annotation_map
 
 
+def from_json(obj):
+    '''
+    Models calibre.utils.config:from_json
+    uses local parse_date()
+    '''
+    if '__class__' in obj:
+        if obj['__class__'] == 'bytearray':
+            return bytearray(base64.standard_b64decode(obj['__value__']))
+        if obj['__class__'] == 'datetime.datetime':
+            return parse_date(obj['__value__'])
+    return obj
+
+
 def get_cc_mapping(cc_name, element, default=None):
     '''
     Return the element mapped to cc_name in prefs
@@ -1231,6 +1539,13 @@ def get_pixmap(icon_name):
         pixmap.loadFromData(plugin_icon_resources[icon_name])
         return pixmap
     return None
+
+
+def isoformat(date_time, sep='T'):
+    '''
+    Mocks calibre.utils.date:isoformat()
+    '''
+    return unicode(date_time.isoformat(str(sep)))
 
 
 def move_annotations(parent, annotation_map, old_destination_field, new_destination_field,
@@ -1497,6 +1812,18 @@ def move_annotations(parent, annotation_map, old_destination_field, new_destinat
     updateCalibreGUIView()
 
 
+def parse_date(date_string):
+    '''
+    Mocks calibre.utils.date:parse_date()
+    https://labix.org/python-dateutil#head-42a94eedcff96da7fb1f77096b5a3b519c859ba9
+    '''
+    UNDEFINED_DATE = datetime(101,1,1, tzinfo=None)
+    from dateutil.parser import parse
+    if not date_string:
+        return UNDEFINED_DATE
+    return parse(date_string, ignoretz=True)
+
+
 def inventory_controls(ui, dump_controls=False):
     '''
      Build an inventory of stateful controls
@@ -1615,6 +1942,20 @@ def set_plugin_icon_resources(name, resources):
     global plugin_icon_resources, plugin_name
     plugin_name = name
     plugin_icon_resources = resources
+
+
+def to_json(obj):
+    '''
+    Models calibre.utils.config:to_json
+    Uses local isoformat()
+    '''
+    if isinstance(obj, bytearray):
+        return {'__class__': 'bytearray',
+                '__value__': base64.standard_b64encode(bytes(obj))}
+    if isinstance(obj, datetime):
+        return {'__class__': 'datetime.datetime',
+                '__value__': isoformat(obj)}
+    raise TypeError(repr(obj) + ' is not JSON serializable')
 
 
 def updateCalibreGUIView():

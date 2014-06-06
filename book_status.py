@@ -397,6 +397,7 @@ class MyTableView(QTableView):
             ac.triggered.connect(partial(self.parent.dispatch_context_menu_event, "import_metadata", row))
             ac.setEnabled(enable_metadata_updates)
 
+            # #mark ~~~ Add books to calibre library ~~~
             menu.addSeparator()
             # Test for calibre cids
             in_library = True
@@ -932,7 +933,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
     MATH_TIMES = u" \u00d7 "
     MAX_BOOKS_BEFORE_SPINNER = 4
     MAX_ELEMENT_DEPTH = 6
-    REMOTE_CACHE_FOLDER = '/'.join(['/Library', 'calibre.mm'])
     UPDATING_MARVIN_MESSAGE = "Updating Marvin Library…"
     UTF_8_BOM = r'\xef\xbb\xbf'
 
@@ -1071,7 +1071,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     title = "View collections"
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
-                               show_copy_button=False).exec_()
+                               parent=self.opts.gui, show_copy_button=False).exec_()
 
             elif button.objectName() == 'refresh_custom_columns_button':
                 self.refresh_custom_columns()
@@ -1087,7 +1087,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     title = "View metadata"
                     msg = "<p>Select a book.</p>"
                     MessageBox(MessageBox.INFO, title, msg,
-                               show_copy_button=False).exec_()
+                               parent=self.opts.gui, show_copy_button=False).exec_()
 
         elif self.dialogButtonBox.buttonRole(button) == QDialogButtonBox.DestructiveRole:
             self._delete_books()
@@ -1157,7 +1157,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    "<p>Click <b>Show details</b> for affected books</p>")
 
             MessageBox(MessageBox.INFO, title, msg, det_msg=det_msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def dispatch_double_click(self, index):
         '''
@@ -1198,7 +1198,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Flag options"
             msg = "<p>Right-click in the Flags column for flag management options.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
         elif column == self.LOCKED_COL:
             self._toggle_locked_status(row)
@@ -1550,7 +1550,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 msg = "<p>%s refreshed for %s.</p>" % (refreshed,
                                                "1 book" if len(rows_to_refresh) == 1 else
                                                "%d books" % len(rows_to_refresh))
-                MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+                MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                           parent=self.opts.gui, show_copy_button=False).exec_()
 
         else:
             # No rows selected, inform user how the feature works
@@ -1558,7 +1559,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             msg = ('No books selected.\n' +
                     'To refresh custom columns, select one or more books, ' +
                     "then click the 'Refresh custom columns' button.")
-            MessageBox(MessageBox.WARNING, title, msg, det_msg='', show_copy_button=False).exec_()
+            MessageBox(MessageBox.WARNING, title, msg, det_msg='',
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def show_add_collections_dialog(self):
         '''
@@ -1970,7 +1972,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Manage collections"
             msg = "<p>No collections to manage.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def show_view_collections_dialog(self, row):
         '''
@@ -1990,7 +1992,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = self.installed_books[book_id].title
             msg = "<p>This book is not assigned to any collections.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
         else:
             klass = os.path.join(dialog_resources_path, 'view_collections.py')
             if os.path.exists(klass):
@@ -2109,6 +2111,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Build map of added books from the model so we know which items to monitor for completion
         if paths_to_add:
+            count = 1
+            msg = "Adding {0:,} of {1:,} to calibre library".format(count, len(paths_to_add))
+            self._busy_status_setup(msg=msg)
+
             # Find the books in the Device model
             model = self.parent.gui.memory_view.model()
             added = {}
@@ -2116,6 +2122,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 original_cids = self.parent.opts.gui.current_db.search_getting_ids('formats:EPUB', '')
                 book = model.db[item]
                 if book.path in paths_to_add:
+
+                    msg = "Adding {0:,} of {1:,} to calibre library".format(count, len(paths_to_add))
+                    self._busy_status_msg(msg=msg)
+
                     # Tell calibre to add the paths
                     # gui2.actions.add #406
                     self.opts.gui.iactions['Add Books'].add_books_from_device(self.parent.gui.memory_view,
@@ -2136,6 +2146,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         if added_cids:
                             break
                     added[item] = {'path': book.path, 'cid': added_cids[0], 'row': item}
+                    count += 1
 
             #self._log("added: %s" % added)
 
@@ -2151,6 +2162,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         #added[item]['cid'] = cid
                         added[item]['book_id'] = book.mid
                         book.cid = cid
+                        #book.match_quality = self.MATCH_COLORS.index('GREEN')
                         break
 
                 # Add model_row, update cid in spreadsheet
@@ -2160,7 +2172,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         self.tm.set_calibre_id(model_row, cid)
 
             total_books = len(added)
-            self._busy_status_setup()
 
             db = self.opts.gui.current_db
             cached_books = self.connected_device.cached_books
@@ -2878,7 +2889,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Word count"
             msg = ("<p>Select one or more books to calculate word count.</p>")
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
         #self._log(stats)
         return stats
@@ -3383,7 +3394,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self._log_location()
         self.tm = MarkupTableModel(self, centered_columns=self.CENTERED_COLUMNS,
                                    right_aligned_columns=self.RIGHT_ALIGNED_COLUMNS)
-
         self.tv.setModel(self.tm)
         self.tv.setShowGrid(False)
         if self.parent.prefs.get('use_monospace_font', False):
@@ -3431,9 +3441,6 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 if saved_column_widths[col] == 0:
                     columns_to_hide.append(col)
 
-        # Set column width to fit contents
-        self.tv.resizeColumnsToContents()
-
         # Hide hidden columns
         for index in sorted(columns_to_hide):
             #self._log("hiding %s" % index)
@@ -3452,6 +3459,21 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             for i, width in enumerate(saved_column_widths):
                 self.tv.setColumnWidth(i, width)
         else:
+            # Set column width to fit contents. A potentially lengthy operation.
+            self.tv.resizeColumnsToContents()
+
+            # Hide hidden columns
+            for index in sorted(columns_to_hide):
+                #self._log("hiding %s" % index)
+                self.tv.hideColumn(index)
+
+            # Set horizontal self.header props
+            #self.tv.horizontalHeader().setStretchLastSection(True)
+
+            # Clip Author, Title to 250
+            self.tv.setColumnWidth(self.TITLE_COL, 250)
+            self.tv.setColumnWidth(self.AUTHOR_COL, 250)
+
             # Set narrow cols to width of FLAGS
             fixed_width = self.tv.columnWidth(self.LAST_OPENED_COL)
             if not fixed_width:
@@ -3499,7 +3521,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    '<p><b><font style="color:#FF0000; ">{0}</font></b></p>'.format(title))
             det_msg = '\n'.join(books_to_delete)
             d = MessageBox(MessageBox.QUESTION, title, msg, det_msg=det_msg,
-                           show_copy_button=False)
+                           parent=self.opts.gui, show_copy_button=False)
             if d.exec_():
                 model = self.parent.gui.memory_view.model()
                 paths_to_delete = [btd[b]['path'] for b in btd]
@@ -3594,7 +3616,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "No selected books"
             msg = "<p>Select one or more books to delete.</p>"
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _dump_hash_map(self, library_hash_map):
         '''
@@ -3656,7 +3678,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 title = 'Annotations refreshed'
                 msg = ("<p>Annotations refreshed for %s.</p>" %
                     ("1 book" if updated == 1 else "%d books" % updated))
-                MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+                MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                           parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _fetch_deep_view_status(self, book_ids):
         '''
@@ -3942,7 +3965,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                        "may take as long as {0}, depending on your iDevice.</p>".format(estimated_time) +
                        "<p>Proceed?</p>")
                 dlg = MessageBox(MessageBox.QUESTION, title, msg,
-                                 show_copy_button=False)
+                                 parent=self.opts.gui, show_copy_button=False)
                 if not dlg.exec_():
                     self._log("user declined to proceed with estimated_time of %s" % estimated_time)
                     # Update local_db anyway, as it has updated word counts
@@ -4592,6 +4615,16 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 mi = None
             return cid, mi
 
+        def _get_calibre_metadata_last_updated(mi):
+            '''
+            Return timestamp of last metadata update
+            '''
+            ans = None
+            if mi:
+                #dt = mi.last_modified.astimezone(tz.tzlocal())
+                ans = time.mktime(mi.last_modified.astimezone(tz.tzlocal()).timetuple())
+            return ans
+
         def _get_collections(cur, book_id):
             # Get the collection assignments
             ca_cur = con.cursor()
@@ -4610,6 +4643,23 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 collections = sorted(collections, key=sort_key)
             ca_cur.close()
             return collections
+
+        def _get_collection_map(con):
+            '''
+            Return collection_map from cur
+            '''
+            collections_cur = con.cursor()
+            collections_cur.execute('''SELECT
+                                        ID,
+                                        Name
+                                       FROM Collections
+                                    ''')
+            rows = collections_cur.fetchall()
+            collection_map = {}
+            for row in rows:
+                collection_map[row[b'ID']] = row[b'Name']
+            collections_cur.close()
+            return collection_map
 
         def _get_flags(cur, row):
             # Get the flag assignments
@@ -4909,6 +4959,56 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             voc_cur.close()
             return vocabulary_list
 
+        def _populate_installed_book(row):
+            '''
+            Add row to installed_books
+            '''
+            try:
+                book_id = row[b'id_']
+                cid, mi = _get_calibre_id(row[b'UUID'],
+                                          row[b'Title'],
+                                          row[b'Author'])
+
+                # Get the primary metadata from Books
+                this_book = Book(row[b'Title'], row[b'Author'].split(', '))
+                this_book.articles = _get_articles(cur, book_id)
+                this_book.author_sort = row[b'AuthorSort']
+                this_book.cid = cid
+                this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
+                this_book.comments = row[b'Description']
+                this_book.cover_file = row[b'CoverFile']
+                this_book.date_added = row[b'DateAdded']
+                this_book.date_opened = row[b'DateOpened']
+                this_book.deep_view_prepared = row[b'DeepViewPrepared']
+                this_book.device_collections = _get_collections(cur, book_id)
+                this_book.flags = _get_flags(cur, row)
+                this_book.hash = hashes[row[b'FileName']]['hash']
+                this_book.highlights = _get_highlights(cur, book_id)
+                this_book.last_updated = _get_calibre_metadata_last_updated(mi)
+                this_book.match_quality = None  # Added in _construct_table_data()
+                this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
+                this_book.mid = book_id
+                this_book.on_device = _get_on_device_status(this_book.cid)
+                this_book.path = row[b'FileName']
+                this_book.pin = row[b'Pin']
+                this_book.progress = row[b'Progress']
+                this_book.pubdate = _get_pubdate(row)
+                this_book.publisher = _get_publisher(row)
+                if 'Rating' in row.keys():      # Rating added in 2.6.65
+                    this_book.rating = row[b'Rating']
+                this_book.series = row[b'CalibreSeries']
+                this_book.series_index = row[b'CalibreSeriesIndex']
+                this_book.tags = _get_marvin_genres(book_id)
+                this_book.title_sort = row[b'CalibreTitleSort']
+                this_book.uuid = row[b'UUID']
+                this_book.vocabulary = _get_vocabulary_list(cur, book_id)
+                this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
+                installed_books[book_id] = this_book
+            except:
+                self._log("ERROR adding to installed_books")
+                import traceback
+                self._log(traceback.format_exc())
+
         def _purge_cover_hash_orphans():
             '''
             Purge obsolete cover hashes
@@ -4929,18 +5029,15 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                     del self.archived_cover_hashes[ch_cid]
             self._busy_panel_teardown()
 
-        # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
+        def _seconds_to_time(s):
+            years, s = divmod(s, 31556952)
+            min, s = divmod(s, 60)
+            h, min = divmod(min, 60)
+            d, h = divmod(h, 24)
+            ans = {'days': d, 'hours': h, 'mins': min, 'secs': s}
+            return ans
 
-        self._log_location()
-
-        marvin_content_updated = getattr(self.parent, 'marvin_content_updated', False)
-        installed_books = getattr(self.parent, 'installed_books', None)
-        if installed_books is None or marvin_content_updated:
-            if marvin_content_updated:
-                setattr(self.parent, 'marvin_content_updated', False)
-
-            installed_books = {}
-
+        def _wait_for_connected_device():
             # Wait for device driver to complete initialization, but tell user what's happening
             if not hasattr(self.connected_device, "cached_books"):
                 self._busy_panel_setup("Waiting for driver to finish initialization…")
@@ -4953,10 +5050,32 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                         self._busy_panel_teardown()
                     break
 
+
+        # ~~~~~~~~~~~~~ Entry point ~~~~~~~~~~~~~~~~~~
+
+        self._log_location()
+
+        start_time = time.time()
+        load_method = None
+
+        marvin_content_updated = getattr(self.parent, 'marvin_content_updated', False)
+        installed_books = getattr(self.parent, 'installed_books', None)
+        installed_books_metadata_changes = getattr(self.parent, 'installed_books_metadata_changes', None)
+
+        if installed_books is None or marvin_content_updated:
+            load_method = "COLD START"
+            self._log("{}: building new installed_books".format(load_method))
+            if marvin_content_updated:
+                setattr(self.parent, 'marvin_content_updated', False)
+
+            installed_books = {}
+
+            _wait_for_connected_device()
+
             # Is there a valid mainDb?
             local_db_path = getattr(self.connected_device, "local_db_path")
             if local_db_path is not None:
-                # Fetch/compute hashes
+                ''' Fetch/compute hashes '''
                 cached_books = self.connected_device.cached_books
                 hashes = self._scan_marvin_books(cached_books)
 
@@ -4965,82 +5084,29 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 with con:
                     con.row_factory = sqlite3.Row
 
-                    # Build a collection map
-                    collections_cur = con.cursor()
-                    collections_cur.execute('''SELECT
-                                                ID,
-                                                Name
-                                               FROM Collections
-                                            ''')
-                    rows = collections_cur.fetchall()
-                    collection_map = {}
-                    for row in rows:
-                        collection_map[row[b'ID']] = row[b'Name']
-                    collections_cur.close()
+                    # Get the collection map
+                    collection_map = _get_collection_map(con)
 
                     # Get the books
                     cur = con.cursor()
+                    cur.execute('''SELECT count(*) from Books''')
+                    book_count = cur.fetchone()[0]
+
                     cur.execute('''SELECT
                                     *,
                                     Books.ID as id_
                                    FROM Books
                                 ''')
 
-                    rows = cur.fetchall()
-
-                    pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 2 of 2")
-                    book_count = len(rows)
+                    pb = ProgressBar(parent=self.opts.gui, window_title='')
                     pb.set_maximum(book_count)
                     pb.set_value(0)
                     pb.set_label('{:^100}'.format("Performing metadata magic…"))
                     pb.show()
 
-                    for i, row in enumerate(rows):
-                        try:
-                            cid, mi = _get_calibre_id(row[b'UUID'],
-                                                      row[b'Title'],
-                                                      row[b'Author'])
-
-                            book_id = row[b'id_']
-                            # Get the primary metadata from Books
-                            this_book = Book(row[b'Title'], row[b'Author'].split(', '))
-                            this_book.articles = _get_articles(cur, book_id)
-                            this_book.author_sort = row[b'AuthorSort']
-                            this_book.cid = cid
-                            this_book.calibre_collections = self._get_calibre_collections(this_book.cid)
-                            this_book.comments = row[b'Description']
-                            this_book.cover_file = row[b'CoverFile']
-                            this_book.date_added = row[b'DateAdded']
-                            this_book.date_opened = row[b'DateOpened']
-                            this_book.deep_view_prepared = row[b'DeepViewPrepared']
-                            this_book.device_collections = _get_collections(cur, book_id)
-                            this_book.flags = _get_flags(cur, row)
-                            this_book.hash = hashes[row[b'FileName']]['hash']
-                            this_book.highlights = _get_highlights(cur, book_id)
-                            this_book.match_quality = None  # Added in _construct_table_data()
-                            this_book.metadata_mismatches = _get_metadata_mismatches(cur, book_id, row, mi, this_book)
-                            this_book.mid = book_id
-                            this_book.on_device = _get_on_device_status(this_book.cid)
-                            this_book.path = row[b'FileName']
-                            this_book.pin = row[b'Pin']
-                            this_book.progress = row[b'Progress']
-                            this_book.pubdate = _get_pubdate(row)
-                            this_book.publisher = _get_publisher(row)
-                            if 'Rating' in row.keys():      # Rating added in 2.6.65
-                                this_book.rating = row[b'Rating']
-                            this_book.series = row[b'CalibreSeries']
-                            this_book.series_index = row[b'CalibreSeriesIndex']
-                            this_book.tags = _get_marvin_genres(book_id)
-                            this_book.title_sort = row[b'CalibreTitleSort']
-                            this_book.uuid = row[b'UUID']
-                            this_book.vocabulary = _get_vocabulary_list(cur, book_id)
-                            this_book.word_count = locale.format("%d", row[b'WordCount'], grouping=True)
-                            installed_books[book_id] = this_book
-                        except:
-                            self._log("ERROR adding to installed_books")
-                            import traceback
-                            self._log(traceback.format_exc())
-
+                    for i in range(book_count):
+                        row = cur.fetchone()
+                        _populate_installed_book(row)
                         pb.increment()
 
                     pb.hide()
@@ -5063,7 +5129,70 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 title = "Damaged database"
                 msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
                 MessageBox(MessageBox.ERROR, title, msg,
-                           show_copy_button=False).exec_()
+                           parent=self.opts.gui, show_copy_button=False).exec_()
+
+        elif installed_books and installed_books_metadata_changes:
+            load_method = "COOL START"
+            self._log("{}: updating obsolete installed_books".format(load_method))
+            self._log("processing {:,} metadata {}".format(
+                len(installed_books_metadata_changes),
+                "update" if len(installed_books_metadata_changes) == 1 else "updates"))
+
+            _wait_for_connected_device()
+
+            # Is there a valid mainDb?
+            local_db_path = getattr(self.connected_device, "local_db_path")
+            if local_db_path is not None:
+                ''' Fetch/compute hashes '''
+                cached_books = self.connected_device.cached_books
+                hashes = self._scan_marvin_books(cached_books)
+
+                # Get the mainDb data
+                con = sqlite3.connect(self.connected_device.local_db_path)
+                with con:
+                    con.row_factory = sqlite3.Row
+
+                    # Get the collection map
+                    collection_map = _get_collection_map(con)
+
+                    # Get the updated books
+                    cur = con.cursor()
+                    modified_count = len(installed_books_metadata_changes)
+
+                    pb = ProgressBar(parent=self.opts.gui, window_title='')
+                    pb.set_maximum(modified_count)
+                    pb.set_value(0)
+                    pb.set_label('{:^100}'.format("Performing metadata magic…"))
+                    pb.show()
+
+                    for book_id in installed_books_metadata_changes:
+                        cur.execute('''SELECT
+                                        *,
+                                        Books.ID as id_
+                                       FROM Books
+                                       WHERE id_ = "{0}"
+                                    '''.format(book_id))
+                        row = cur.fetchone()
+                        self._log("updating calibre metadata for '{}'".format(row[b'title']))
+                        _populate_installed_book(row)
+                        pb.increment()
+
+                    pb.hide()
+
+            else:
+                self._log("Marvin database is damaged")
+                title = "Damaged database"
+                msg = "<p>Marvin database is damaged. Unable to retrieve Marvin library.</p>"
+                MessageBox(MessageBox.ERROR, title, msg,
+                           parent=self.opts.gui, show_copy_button=False).exec_()
+
+        else:
+            load_method = "WARM START"
+            self._log("{}: returning existing installed_books".format(load_method))
+
+        elapsed = _seconds_to_time(time.time() - start_time)
+        self._log_location("{0} elapsed time: {1:02d}:{2:02d}".format(
+            load_method, int(elapsed['mins']), int(elapsed['secs'])))
 
         return installed_books
 
@@ -5186,7 +5315,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
     def _localize_marvin_database(self):
         '''
-        Copy remote_db_path from iOS to local storage using device pointers
+        Copy remote_db_path from iOS to local storage using device method
         '''
         self._log_location("starting")
         msg = "Refreshing database"
@@ -5197,15 +5326,17 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             local_busy = True
             self._busy_status_setup(msg=msg)
 
-        local_db_path = self.connected_device.local_db_path
-        remote_db_path = self.connected_device.books_subpath
+        self.connected_device._localize_database_path(self.connected_device.books_subpath)
 
-        # Report size of remote_db
-        stats = self.ios.exists(remote_db_path)
-        self._log("mainDb: {:,} bytes".format(int(stats['st_size'])))
-
-        with open(local_db_path, 'wb') as out:
-            self.ios.copy_from_idevice(remote_db_path, out)
+#         local_db_path = self.connected_device.local_db_path
+#         remote_db_path = self.connected_device.books_subpath
+#
+#         # Report size of remote_db
+#         stats = self.ios.exists(remote_db_path)
+#         self._log("mainDb: {:,} bytes".format(int(stats['st_size'])))
+#
+#         with open(local_db_path, 'wb') as out:
+#             self.ios.copy_from_idevice(remote_db_path, out)
 
         if local_busy:
             self._busy_status_teardown()
@@ -5220,7 +5351,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         # Existing hash cache?
         lhc = os.path.join(self.local_cache_folder, self.HASH_CACHE_FS)
-        rhc = '/'.join([self.REMOTE_CACHE_FOLDER, self.HASH_CACHE_FS])
+        rhc = '/'.join([self.parent.REMOTE_CACHE_FOLDER, self.HASH_CACHE_FS])
 
         cache_exists = (self.ios.exists(rhc) and
                         not self.opts.prefs.get('hash_caching_disabled'))
@@ -5239,10 +5370,10 @@ class BookStatusDialog(SizePersistedDialog, Logger):
 
         else:
             # Confirm path to remote folder is valid store point
-            folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
+            folder_exists = self.ios.exists(self.parent.REMOTE_CACHE_FOLDER)
             if not folder_exists:
-                self._log("creating remote_cache_folder %s" % repr(self.REMOTE_CACHE_FOLDER))
-                self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
+                self._log("creating remote_cache_folder %s" % repr(self.parent.REMOTE_CACHE_FOLDER))
+                self.ios.mkdir(self.parent.REMOTE_CACHE_FOLDER)
 
             # Create a local cache
             with open(lhc, 'wb') as hcf:
@@ -5345,7 +5476,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                    marker_msg +
                    '<p>Click <b>Show details</b> to display duplicates.</p>')
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
-                       show_copy_button=True).exec_()
+                       parent=self.opts.gui, show_copy_button=True).exec_()
 
     def _report_content_updates(self):
         '''
@@ -5400,7 +5531,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 details += 'Books updated in Marvin:\n' + marvin_updates
 
             MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
-                       show_copy_button=True).exec_()
+                       parent=self.opts.gui, show_copy_button=True).exec_()
 
     def _save_column_widths(self):
         '''
@@ -5427,7 +5558,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             os.remove(path)
             return hash
 
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning calibre library")
+        pb = ProgressBar(parent=self.opts.gui, window_title='')
         pb.set_label('{:^100}'.format("Waiting for library scan to complete…"))
         pb.set_value(0)
         pb.show()
@@ -5546,7 +5677,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.hash_cache = self._localize_hash_cache(cached_books)
 
         # Set up the progress bar
-        pb = ProgressBar(parent=self.opts.gui, window_title="Scanning Marvin library: 1 of 2")
+        pb = ProgressBar(parent=self.opts.gui, window_title='')
         total_books = len(cached_books)
         pb.set_maximum(total_books)
         pb.set_value(0)
@@ -5830,7 +5961,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Rating"
             msg = ("<p>Select one or more books to apply rating to.</p>")
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _show_command_error(self, command, results):
         '''
@@ -5842,7 +5973,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                "<p>Click <b>Show details</b> for more information.</p>")
         details = results['details']
         MessageBox(MessageBox.WARNING, title, msg, det_msg=details,
-                   show_copy_button=False).exec_()
+                   parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _synchronize_flags(self):
         '''
@@ -6141,7 +6272,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 title = "Update collections"
                 msg = ("<p>{0}: not implemented</p>".format(action))
                 MessageBox(MessageBox.INFO, title, msg,
-                           show_copy_button=False).exec_()
+                           parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _update_device_flags(self, book_id, path, updated_flags):
         '''
@@ -6185,12 +6316,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             title = "Update flags"
             msg = ("<p>{0}: not implemented</p>".format(action))
             MessageBox(MessageBox.INFO, title, msg,
-                       show_copy_button=False).exec_()
+                       parent=self.opts.gui, show_copy_button=False).exec_()
 
         title = 'Flags updated'
         msg = ("<p>Flags updated for {0}.</p>".format(
             "1 book" if rows_to_refresh == 1 else "{0} books".format(rows_to_refresh)))
-        MessageBox(MessageBox.INFO, title, msg, det_msg='', show_copy_button=False).exec_()
+        MessageBox(MessageBox.INFO, title, msg, det_msg='',
+                   parent=self.opts.gui, show_copy_button=False).exec_()
 
     def _update_global_collections(self, details, update_local_db=True):
         '''
@@ -6709,7 +6841,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 msg = ("<p>'{0}' is a duplicate.</p>".format(self.installed_books[book_id].title) +
                        "<p>Remove duplicates before updating metadata.</p>")
                 return MessageBox(MessageBox.WARNING, title, msg,
-                                  show_copy_button=False).exec_()
+                                  parent=self.opts.gui, show_copy_button=False).exec_()
 
         total_books = len(selected_books)
         self._busy_status_setup(show_cancel=total_books > 1)

@@ -29,8 +29,11 @@ from calibre.utils.config import JSONConfig
 from calibre_plugins.marvin_manager.common_utils import (HelpView, SizePersistedDialog)
 
 # Default timestamp format: National representation of time and date
+
+# #mark ~~~ default_timestamp ~~~
 default_timestamp = '%c'
 
+# #mark ~~~ default_elements ~~~
 default_elements = [
                    {'ordinal':0,
                        'name':'Location',
