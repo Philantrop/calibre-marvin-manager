@@ -2065,7 +2065,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     marvin_connected = True
                     ac = self.create_menu_item(m, 'Explore Marvin Library', image=I("dialog_information.png"))
                     ac.triggered.connect(self.show_installed_books)
-
+                    self.qaction.setVisible(True)
                 else:
                     self._log("Marvin not connected, hiding MXD menu")
                     ac = self.create_menu_item(m, 'Marvin not connected')
