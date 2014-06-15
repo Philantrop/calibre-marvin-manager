@@ -13,7 +13,7 @@ class MarvinManagerPlugin(InterfaceActionBase):
     name = 'Marvin XD'
     description = 'Extended Driver for Marvin'
     supported_platforms = ['linux', 'osx', 'windows']
-    author = 'Greg Riker'
+    author = 'Wulf C. Krueger'
     # #mark ~~~ plugin version ~~~
     version = (1, 2, 2)
     # #mark ~~~ Minimum calibre version ~~~
