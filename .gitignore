@@ -5,3 +5,4 @@
 readers/_**
 *.DS_Store
 _Resources/**
+*.pyc
