@@ -15,7 +15,7 @@ class MarvinManagerPlugin(InterfaceActionBase):
     supported_platforms = ['linux', 'osx', 'windows']
     author = 'Wulf C. Krueger'
     # #mark ~~~ plugin version ~~~
-    version = (1, 2, 2)
+    version = (1, 2, 3)
     # #mark ~~~ Minimum calibre version ~~~
     minimum_calibre_version = (1, 29, 0)
 
