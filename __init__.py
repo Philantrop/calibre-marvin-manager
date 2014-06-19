@@ -3,7 +3,7 @@ from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 __license__ = 'GPL v3'
-__copyright__ = '2013, Greg Riker <griker@hotmail.com>'
+__copyright__ = '2013, Greg Riker <griker@hotmail.com>; 2014, Wulf C. Krueger <wk@mailstation.de>'
 __docformat__ = 'restructuredtext en'
 
 from calibre.customize import InterfaceActionBase
