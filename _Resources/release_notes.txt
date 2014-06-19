@@ -63,9 +63,9 @@ Marvin XD (eXtended Driver) is a calibre plugin that makes it easy to manage Mar
 
 [B]If you have problems:[/B]
 [LIST]
-[*]Please report issues at [URL=https://github.com/GRiker/calibre-marvin-manager/issues]Marvin XD's issue tracker[/URL].
+[*]Please report issues at [URL=https://github.com/Philantrop/calibre-marvin-manager/issues]Marvin XD's issue tracker[/URL].
 [*]Provide as much detail as possible to recreate the problem. At a minimum, your OS, the type of iDevice you're using, the version of Marvin you have installed, and the steps necessary to recreate the problem.
-[*]If the problem is a crash, please post a debug log with your issue. Instructions for creating a debug log may be found in  [URL=https://github.com/GRiker/calibre-marvin-manager/issues]Creating a new issue[/URL].
+[*]If the problem is a crash, please post a debug log with your issue. Instructions for creating a debug log may be found in  [URL=https://github.com/Philantrop/calibre-marvin-manager/issues]Creating a new issue[/URL].
 [/LIST]
 
 [B]Paypal Donations:[/B]
