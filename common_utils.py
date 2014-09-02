@@ -31,17 +31,49 @@ from calibre.utils.config import config_dir
 from calibre.utils.ipc import RC
 from calibre.utils.zipfile import ZipFile, ZIP_STORED
 
-from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
-                      QCheckBox, QComboBox, QCursor, QDial, QDialog, QDialogButtonBox,
-                      QDoubleSpinBox, QFont, QFrame, QIcon,
-                      QKeySequence, QLabel, QLineEdit,
-                      QPixmap, QProgressBar, QPushButton,
-                      QRadioButton, QSizePolicy, QSlider, QSpinBox, QString,
-                      QThread, QTimer, QUrl,
-                      QVBoxLayout,
-                      SIGNAL)
-from PyQt4.QtWebKit import QWebView
-from PyQt4.uic import compileUi
+try:
+    from PyQt5.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
+                          QCheckBox, QComboBox, QCursor, QDial, QDialog, QDialogButtonBox,
+                          QDoubleSpinBox, QFont, QFrame, QIcon,
+                          QKeySequence, QLabel, QLineEdit,
+                          QPixmap, QProgressBar, QPushButton,
+                          QRadioButton, QSizePolicy, QSlider, QSpinBox,
+                          QThread, QTimer, QUrl,
+                          QVBoxLayout,
+                          pyqtSignal)
+    from PyQt5.QtWebKitWidgets import QWebView
+    from PyQt5.uic import compileUi
+except ImportError as e:
+    from calibre.devices.usbms.driver import debug_print
+    debug_print("Error loading QT5: ", e)
+    from PyQt4.Qt import (Qt, QAbstractItemModel, QAction, QApplication,
+                          QCheckBox, QComboBox, QCursor, QDial, QDialog, QDialogButtonBox,
+                          QDoubleSpinBox, QFont, QFrame, QIcon,
+                          QKeySequence, QLabel, QLineEdit,
+                          QPixmap, QProgressBar, QPushButton,
+                          QRadioButton, QSizePolicy, QSlider, QSpinBox,
+                          QThread, QTimer, QUrl,
+                          QVBoxLayout,
+                          pyqtSignal)
+    from PyQt4.QtWebKit import QWebView
+    from PyQt4.uic import compileUi
+
+try:
+    from calibre.gui2 import QVariant
+    del QVariant
+except ImportError:
+    is_qt4 = False
+    convert_qvariant = lambda x: x
+else:
+    is_qt4 = True
+
+    def convert_qvariant(x):
+        vt = x.type()
+        if vt == x.String:
+            return unicode(x.toString())
+        if vt == x.List:
+            return [convert_qvariant(i) for i in x.toList()]
+        return x.toPyObject()
 
 # Stateful controls: (<class>,<list_name>,<get_method>,<default>,<set_method(s)>)
 # multiple set_methods are chained, i.e. the results of the first call are passed to the second
@@ -539,10 +571,11 @@ class IndexLibrary(QThread):
     uuid_map:  {uuid:  {'author's:…, 'id':…, 'title':…, 'path':…}, …}
     id_map:    {id:    {'uuid':…, 'author':…}, …}
     '''
+    signal = pyqtSignal(object)
 
     def __init__(self, parent):
         QThread.__init__(self, parent)
-        self.signal = SIGNAL("library_index_complete")
+#        self.signal = SIGNAL("library_index_complete")
         self.cdb = parent.opts.gui.current_db
         self.id_map = None
         self.hash_map = None
@@ -551,7 +584,8 @@ class IndexLibrary(QThread):
     def run(self):
         self.title_map = self.index_by_title()
         self.uuid_map = self.index_by_uuid()
-        self.emit(self.signal)
+#        self.emit(self.signal)
+        self.signal.emit("library_index_complete")
 
     def add_to_hash_map(self, hash, uuid):
         '''
@@ -621,10 +655,11 @@ class InventoryCollections(QThread):
     '''
     Build a list of books with collection assignments
     '''
+    signal = pyqtSignal(object)
 
     def __init__(self, parent):
         QThread.__init__(self, parent)
-        self.signal = SIGNAL("collection_inventory_complete")
+#        self.signal = SIGNAL("collection_inventory_complete")
         self.cdb = parent.opts.gui.current_db
         self.cfl = get_cc_mapping('collections', 'field', None)
         self.ids = []
@@ -632,7 +667,8 @@ class InventoryCollections(QThread):
 
     def run(self):
         self.inventory_collections()
-        self.emit(self.signal)
+#        self.emit(self.signal)
+        self.signal.emit("collection_inventory_complete")
 
     def inventory_collections(self):
         id = self.cdb.FIELD_MAP['id']
@@ -928,10 +964,11 @@ class RowFlasher(QThread):
     '''
     Flash rows_to_flash to show where ops occurred
     '''
+    signal = pyqtSignal(object)
 
     def __init__(self, parent, model, rows_to_flash):
         QThread.__init__(self)
-        self.signal = SIGNAL("flasher_complete")
+#        self.signal = SIGNAL("flasher_complete")
         self.model = model
         self.parent = parent
         self.rows_to_flash = rows_to_flash
@@ -945,7 +982,8 @@ class RowFlasher(QThread):
         QTimer.singleShot(self.old_time, self.update)
         while self.cycles:
             QApplication.processEvents()
-        self.emit(self.signal)
+#        self.emit(self.signal)
+        self.signal.emit("flasher_complete")
 
     def toggle_values(self, mode):
         for row, item in self.rows_to_flash.items():
@@ -1913,9 +1951,13 @@ def save_state(ui, prefs, save_position=False):
         for control in ui.controls[control_list]:
             # Intercept QString objects, coerce to unicode
             qt_type = getattr(getattr(ui, control), CONTROL_GET[index])()
-            if type(qt_type) is QString:
+            if CONTROL_GET[index] == 'isChecked':
+                pass
+            elif CONTROL_GET[index] == 'text':
                 qt_type = unicode(qt_type)
-            prefs.set(control, qt_type)
+            else:
+                qt_type = convert_qvariant(qt_type)
+            plugin_prefs.set(control, qt_type)
 
 
 def set_cc_mapping(cc_name, field=None, combobox=None):

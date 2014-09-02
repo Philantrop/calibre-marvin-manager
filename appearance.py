@@ -12,15 +12,26 @@ import os, re, time
 
 from functools import partial
 
-from PyQt4 import QtCore, QtGui
-from PyQt4.Qt import (Qt, QAbstractItemView, QCheckBox, QComboBox,
-                      QDialogButtonBox,
-                      QFont, QGridLayout, QGroupBox,
-                      QHBoxLayout, QIcon, QLabel, QLineEdit,
-                      QPlainTextEdit, QSizePolicy,
-                      QTableWidget, QTableWidgetItem, QToolButton,
-                      QUrl, QVBoxLayout)
-from PyQt4.QtWebKit import QWebView
+try:
+    from PyQt5 import QtCore, QtGui
+    from PyQt5.Qt import (Qt, QAbstractItemView, QCheckBox, QComboBox,
+                          QDialogButtonBox,
+                          QFont, QGridLayout, QGroupBox,
+                          QHBoxLayout, QIcon, QLabel, QLineEdit,
+                          QPlainTextEdit, QSizePolicy,
+                          QTableWidget, QTableWidgetItem, QToolButton,
+                          QUrl, QVBoxLayout)
+    from PyQt5.QtWebKitWidgets import QWebView
+except ImportError:
+    from PyQt4 import QtCore, QtGui
+    from PyQt4.Qt import (Qt, QAbstractItemView, QCheckBox, QComboBox,
+                          QDialogButtonBox,
+                          QFont, QGridLayout, QGroupBox,
+                          QHBoxLayout, QIcon, QLabel, QLineEdit,
+                          QPlainTextEdit, QSizePolicy,
+                          QTableWidget, QTableWidgetItem, QToolButton,
+                          QUrl, QVBoxLayout)
+    from PyQt4.QtWebKit import QWebView
 
 from calibre.constants import islinux, isosx, iswindows
 from calibre.ebooks.BeautifulSoup import BeautifulSoup, Tag

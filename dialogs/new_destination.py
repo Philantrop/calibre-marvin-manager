@@ -16,8 +16,12 @@ from calibre.gui2 import warning_dialog
 from calibre_plugins.marvin_manager.common_utils import Logger, get_pixmap
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
-from PyQt4.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap,
-                      QSize)
+try:
+    from PyQt5.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap,
+                          QSize)
+except ImportError:
+    from PyQt4.Qt import (QDialog, QDialogButtonBox, QIcon, QPixmap,
+                          QSize)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:

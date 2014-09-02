@@ -16,9 +16,14 @@ from dateutil import tz
 from functools import partial
 from lxml import etree, html
 
-from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QFont, QIcon,
-                      QMenu, QTimer, QUrl,
-                      pyqtSignal)
+try:
+    from PyQt5.Qt import (Qt, QApplication, QCursor, QFileDialog, QFont, QIcon,
+                          QMenu, QTimer, QUrl,
+                          pyqtSignal)
+except ImportError:
+    from PyQt4.Qt import (Qt, QApplication, QCursor, QFileDialog, QFont, QIcon,
+                          QMenu, QTimer, QUrl,
+                          pyqtSignal)
 
 from calibre import browser
 from calibre.constants import DEBUG
@@ -1615,7 +1620,8 @@ class MarvinManagerAction(InterfaceAction, Logger):
             self.library_scanner = IndexLibrary(self)
 
             if False:
-                self.connect(self.library_scanner, self.library_scanner.signal, self.library_index_complete)
+#                self.connect(self.library_scanner, self.library_scanner.signal, self.library_index_complete)
+                self.library_scanner.signal.connect(self.library_index_complete)
                 QTimer.singleShot(1, self.start_library_indexing)
 
                 # Wait for indexing to complete

@@ -23,12 +23,20 @@ from calibre_plugins.marvin_manager.appearance import (AnnotationsAppearance,
 from calibre_plugins.marvin_manager.common_utils import (Logger,
     existing_annotations, get_cc_mapping, get_icon, move_annotations, set_cc_mapping)
 
-from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
-                      QGridLayout, QGroupBox, QFileDialog, QIcon,
-                      QLabel, QLineEdit, QPlainTextEdit, QPushButton,
-                      QSizePolicy, QSpacerItem, QThread, QTimer, QToolButton,
-                      QVBoxLayout, QWidget,
-                      SIGNAL)
+try:
+    from PyQt5.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
+                          QGridLayout, QGroupBox, QFileDialog, QIcon,
+                          QLabel, QLineEdit, QPlainTextEdit, QPushButton,
+                          QSizePolicy, QSpacerItem, QThread, QTimer, QToolButton,
+                          QVBoxLayout, QWidget,
+                          pyqtSignal)
+except ImportError:
+    from PyQt4.Qt import (Qt, QCheckBox, QComboBox, QFont, QFontMetrics, QFrame,
+                          QGridLayout, QGroupBox, QFileDialog, QIcon,
+                          QLabel, QLineEdit, QPlainTextEdit, QPushButton,
+                          QSizePolicy, QSpacerItem, QThread, QTimer, QToolButton,
+                          QVBoxLayout, QWidget,
+                          pyqtSignal)
 
 plugin_prefs = JSONConfig('plugins/Marvin XD')
 
@@ -287,7 +295,7 @@ class ConfigWidget(QWidget, Logger):
         self.cfg_annotations_appearance_toolbutton.clicked.connect(self.configure_appearance)
         self.cfg_css_options_qgl.addWidget(self.cfg_annotations_appearance_toolbutton, current_row, 0)
         self.cfg_annotations_label = ClickableQLabel("Book notes, Bookmark notes and Annotations")
-        self.connect(self.cfg_annotations_label, SIGNAL('clicked()'), self.configure_appearance)
+        self.cfg_annotations_label.clicked.connect(self.configure_appearance)
         self.cfg_css_options_qgl.addWidget(self.cfg_annotations_label, current_row, 1)
         current_row += 1
 
@@ -298,7 +306,7 @@ class ConfigWidget(QWidget, Logger):
         self.cfg_css_editor_toolbutton.clicked.connect(self.edit_css)
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_toolbutton, current_row, 0)
         self.cfg_css_editor_label = ClickableQLabel("Articles, Vocabulary")
-        self.connect(self.cfg_css_editor_label, SIGNAL('clicked()'), self.edit_css)
+        self.cfg_css_editor_label.clicked.connect(self.edit_css)
         self.cfg_css_options_qgl.addWidget(self.cfg_css_editor_label, current_row, 1)
 
 
@@ -422,15 +430,14 @@ class ConfigWidget(QWidget, Logger):
         # Hook changes to Annotations comboBox
 #         self.annotations_field_comboBox.currentIndexChanged.connect(
 #             partial(self.save_combobox_setting, 'annotations_field_comboBox'))
-        self.connect(self.annotations_field_comboBox,
-                     SIGNAL('currentIndexChanged(const QString &)'),
-                     self.annotations_destination_changed)
-
+#        self.connect(self.annotations_field_comboBox,
+#                     SIGNAL('currentIndexChanged(const QString &)'),
+#                     self.annotations_destination_changed)
+        self.annotations_field_comboBox.currentIndexChanged.connect(self.annotations_destination_changed)
         # Launch the annotated_books_scanner
         field = get_cc_mapping('annotations', 'field', None)
         self.annotated_books_scanner = InventoryAnnotatedBooks(self.gui, field)
-        self.connect(self.annotated_books_scanner, self.annotated_books_scanner.signal,
-            self.inventory_complete)
+        self.annotated_books_scanner.signal.connect(self.inventory_complete)
         QTimer.singleShot(1, self.start_inventory)
 
     def annotations_destination_changed(self, qs_new_destination_name):
@@ -438,7 +445,7 @@ class ConfigWidget(QWidget, Logger):
         If the destination field changes, move all existing annotations from old to new
         '''
         self._log_location(str(qs_new_destination_name))
-        #self._log("self.eligible_annotations_fields: %s" % self.eligible_annotations_fields)
+        self._log("self.eligible_annotations_fields: %s" % self.eligible_annotations_fields)
 
         old_destination_field = get_cc_mapping('annotations', 'field', None)
         old_destination_name = get_cc_mapping('annotations', 'combobox', None)
@@ -446,7 +453,10 @@ class ConfigWidget(QWidget, Logger):
         self._log("old_destination_field: %s" % old_destination_field)
         self._log("old_destination_name: %s" % old_destination_name)
 
-        new_destination_name = unicode(qs_new_destination_name)
+#        new_destination_name = unicode(qs_new_destination_name)
+        # Signnls available have changed. Now receivin an indec rather than a name. Can get the name
+        # from the combobox
+        new_destination_name = unicode(self.annotations_field_comboBox.currentText())
         self._log("new_destination_name: %s" % repr(new_destination_name))
 
         if old_destination_name == new_destination_name:
@@ -953,14 +963,17 @@ class ConfigWidget(QWidget, Logger):
 
 class ClickableQLabel(QLabel):
 
+    clicked = pyqtSignal(object)
     def __init__(self, parent):
         QLabel.__init__(self, parent)
 
     def mouseReleaseEvent(self, event):
-        self.emit(SIGNAL('clicked()'))
+        self.clicked.emit('clicked')
 
 
 class InventoryAnnotatedBooks(QThread, Logger):
+
+    signal = pyqtSignal(object, object)#SIGNAL()
 
     def __init__(self, gui, field, get_date_range=False):
         QThread.__init__(self, gui)
@@ -970,7 +983,6 @@ class InventoryAnnotatedBooks(QThread, Logger):
         self.newest_annotation = 0
         self.oldest_annotation = mktime(datetime.today().timetuple())
         self.field = field
-        self.signal = SIGNAL("inventory_complete")
 
     def run(self):
         if self.field is not None:
@@ -979,7 +991,7 @@ class InventoryAnnotatedBooks(QThread, Logger):
             self._log_location("No annotations field specified")
         if self.annotation_map and self.get_date_range:
             self.get_annotations_date_range()
-        self.emit(self.signal, "{0} annotated books".format(len(self.annotation_map)))
+        self.signal.emit("inventory_complete", "{0} annotated books".format(len(self.annotation_map)))
 
     def find_all_annotated_books(self):
         '''
@@ -1029,7 +1041,11 @@ class InventoryAnnotatedBooks(QThread, Logger):
 # calibre-debug config.py
 # Search 'Marvin'
 if __name__ == '__main__':
-    from PyQt4.Qt import QApplication
+    try:
+        from PyQt5.Qt import QApplication
+    except ImportError:
+        from PyQt4.Qt import QApplication
+
     from calibre.gui2.preferences import test_widget
     app = QApplication([])
     test_widget('Advanced', 'Plugins')

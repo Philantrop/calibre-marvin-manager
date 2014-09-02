@@ -18,18 +18,32 @@ from lxml import etree
 from threading import Timer
 from xml.sax.saxutils import escape
 
-from PyQt4 import QtCore
-from PyQt4.Qt import (Qt, QAbstractTableModel,
-                      QApplication, QBrush,
-                      QColor, QCursor, QDialogButtonBox, QEvent,
-                      QFont, QFontMetrics, QGridLayout,
-                      QHeaderView, QHBoxLayout, QIcon,
-                      QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
-                      QPainter, QPixmap, QProgressDialog, QPushButton,
-                      QSize, QSizePolicy, QSpacerItem, QString,
-                      QTableView, QTableWidget, QTableWidgetItem, QTimer, QToolButton,
-                      QVariant, QVBoxLayout, QWidget,
-                      SIGNAL, pyqtSignal)
+try:
+    from PyQt5 import QtCore
+    from PyQt5.Qt import (Qt, QAbstractTableModel,
+                          QApplication, QBrush,
+                          QColor, QCursor, QDialogButtonBox, QEvent,
+                          QFont, QFontMetrics, QGridLayout,
+                          QHeaderView, QHBoxLayout, QIcon,
+                          QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
+                          QPainter, QPixmap, QProgressDialog, QPushButton,
+                          QSize, QSizePolicy, QSpacerItem,
+                          QTableView, QTableWidget, QTableWidgetItem, QTimer, QToolButton,
+                          QVBoxLayout, QWidget,
+                          pyqtSignal)
+except ImportError:
+    from PyQt4 import QtCore
+    from PyQt4.Qt import (Qt, QAbstractTableModel,
+                          QApplication, QBrush,
+                          QColor, QCursor, QDialogButtonBox, QEvent,
+                          QFont, QFontMetrics, QGridLayout,
+                          QHeaderView, QHBoxLayout, QIcon,
+                          QItemSelectionModel, QLabel, QLineEdit, QMenu, QModelIndex,
+                          QPainter, QPixmap, QProgressDialog, QPushButton,
+                          QSize, QSizePolicy, QSpacerItem,
+                          QTableView, QTableWidget, QTableWidgetItem, QTimer, QToolButton,
+                          QVBoxLayout, QWidget,
+                          pyqtSignal)
 
 from calibre import strftime
 from calibre.constants import islinux, isosx, iswindows
@@ -55,7 +69,7 @@ from calibre_plugins.marvin_manager.annotations import (
 from calibre_plugins.marvin_manager.common_utils import (
     AbortRequestException, AnnotationStruct, Book, BookStruct, CommandHandler, InventoryCollections,
     Logger, MyBlockingBusy, ProgressBar, RowFlasher, SizePersistedDialog,
-    get_cc_mapping, get_icon, updateCalibreGUIView,
+    get_cc_mapping, get_icon, updateCalibreGUIView, is_qt4,
     FULL_STAR)
 
 dialog_resources_path = os.path.join(config_dir, 'plugins', 'Marvin_XD_resources', 'dialogs')
@@ -557,6 +571,9 @@ class MarkupTableModel(QAbstractTableModel):
     MAGENTA_HUE = 0.875        # 315/360
     WHITE_HUE = 1.0
 
+    dataChanged = pyqtSignal(object, object)
+    layoutChanged = pyqtSignal(object)
+
     def __init__(self, parent=None, centered_columns=[], right_aligned_columns=[], *args):
         """
         datain: a list of lists
@@ -579,31 +596,31 @@ class MarkupTableModel(QAbstractTableModel):
     def data(self, index, role):
         row, col = index.row(), index.column()
         if not index.isValid():
-            return QVariant()
+            return None
 
         elif role == Qt.ForegroundRole and self.show_match_colors:
             match_quality = self.get_match_quality(row)
             if match_quality == BookStatusDialog.MATCH_COLORS.index('DARK_GRAY'):
-                return QVariant(QBrush(Qt.white))
+                return QBrush(Qt.white)
 
         elif role == Qt.BackgroundRole and self.show_match_colors:
             match_quality = self.get_match_quality(row)
             if match_quality == BookStatusDialog.MATCH_COLORS.index('LIGHT_GRAY'):
-                return QVariant(QBrush(QColor(0xD8, 0xD8,0xD8)))
+                return QBrush(QColor(0xD8, 0xD8,0xD8))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('DARK_GRAY'):
-                return QVariant(QBrush(QColor(0x98, 0x98,0x98)))
+                return QBrush(QColor(0x98, 0x98,0x98))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('GREEN'):
-                return QVariant(QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE)))
+                return QBrush(QColor.fromHsvF(self.GREEN_HUE, self.SATURATION, self.HSVALUE))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('MAGENTA'):
-                return QVariant(QBrush(QColor.fromHsvF(self.MAGENTA_HUE, self.SATURATION, self.HSVALUE)))
+                return QBrush(QColor.fromHsvF(self.MAGENTA_HUE, self.SATURATION, self.HSVALUE))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('ORANGE'):
-                return QVariant(QBrush(QColor.fromHsvF(self.ORANGE_HUE, self.SATURATION, self.HSVALUE)))
+                return QBrush(QColor.fromHsvF(self.ORANGE_HUE, self.SATURATION, self.HSVALUE))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('RED'):
-                return QVariant(QBrush(QColor.fromHsvF(self.RED_HUE, self.SATURATION, self.HSVALUE)))
+                return QBrush(QColor.fromHsvF(self.RED_HUE, self.SATURATION, self.HSVALUE))
             elif match_quality == BookStatusDialog.MATCH_COLORS.index('YELLOW'):
-                return QVariant(QBrush(QColor.fromHsvF(self.YELLOW_HUE, self.SATURATION, self.HSVALUE)))
+                return QBrush(QColor.fromHsvF(self.YELLOW_HUE, self.SATURATION, self.HSVALUE))
             else:
-                return QVariant(QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, self.HSVALUE)))
+                return QBrush(QColor.fromHsvF(self.WHITE_HUE, 0.0, self.HSVALUE))
 
         elif role == Qt.DecorationRole and col == self.parent.LOCKED_COL:
             return self.arraydata[row][self.parent.LOCKED_COL].picture
@@ -728,14 +745,14 @@ class MarkupTableModel(QAbstractTableModel):
                     return tip + '</p>'
 
         elif role != Qt.DisplayRole:
-            return QVariant()
+            return None
 
-        return QVariant(self.arraydata[index.row()][index.column()])
+        return self.arraydata[index.row()][index.column()]
 
     def headerData(self, col, orientation, role):
         if role == Qt.DisplayRole:
             if orientation == Qt.Horizontal:
-                return QVariant(self.headerdata[col])
+                return self.headerdata[col]
 
         if role == Qt.ToolTipRole:
             if orientation == Qt.Horizontal:
@@ -774,9 +791,9 @@ class MarkupTableModel(QAbstractTableModel):
 
                 suffix = "Right-click to show or hide columns.</p>"
 
-                return QString(tip + suffix)
+                return tip + suffix
 
-        return QVariant()
+        return None
 
     def refresh(self, show_match_colors):
         self.show_match_colors = show_match_colors
@@ -788,18 +805,19 @@ class MarkupTableModel(QAbstractTableModel):
 
     def setData(self, index, value, role):
         row, col = index.row(), index.column()
-        self.emit(SIGNAL("dataChanged(QModelIndex,QModelIndex)"), index, index)
+        self.dataChanged = pyqtSignal(object, object)
+        self.dataChanged.emit(index, index)
         return True
 
     def sort(self, Ncol, order):
         """
         Sort table by given column number.
         """
-        self.emit(SIGNAL("layoutAboutToBeChanged()"))
+        self.layoutChanged.emit("layoutAboutToBeChanged")
         self.arraydata = sorted(self.arraydata, key=operator.itemgetter(Ncol))
         if order == Qt.DescendingOrder:
             self.arraydata.reverse()
-        self.emit(SIGNAL("layoutChanged()"))
+        self.layoutChanged.emit("layoutChanged")
 
     # ~~~~~~~~~~~ Getters and Setters ~~~~~~~~~~~
     def get_annotations(self, row):
@@ -1235,6 +1253,13 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             # Return the event so it can be processed elsewhere
             return QLineEdit.eventFilter(self, source, event)
 
+
+    def setHeaderClickable(self, clickable):
+        if is_qt4:
+            self.tv.horizontalHeader().setClickable(clickable)
+        else:
+            self.tv.horizontalHeader().setSectionsClickable(clickable)
+
     def filter_clear(self):
         '''
         Clear the filter, show all rows
@@ -1246,7 +1271,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
             self.tv.showRow(i)
 
         # Restore clickability
-        self.tv.horizontalHeader().setClickable(True)
+        self.setHeaderClickable(True)
 
     def filter_table_rows(self, qstr):
         '''
@@ -1276,7 +1301,7 @@ class BookStatusDialog(SizePersistedDialog, Logger):
                 self.tv.hideRow(i)
 
         # Prevent sorting on cols, because we'll lose reference to the matched rows
-        self.tv.horizontalHeader().setClickable(False)
+        self.setHeaderClickable(False)
 
     def initialize(self, parent):
         self.busy = False
@@ -1434,9 +1459,12 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         self.dialogButtonBox.clicked.connect(self.dispatch_button_click)
 
         # ~~~~~~~~ Connect signals ~~~~~~~~
-        self.connect(self.tv, SIGNAL("clicked(QModelIndex)"), self.dispatch_single_click)
-        self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.dispatch_double_click)
-        self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
+#        self.connect(self.tv, SIGNAL("clicked(QModelIndex)"), self.dispatch_single_click)
+        self.tv.clicked.connect(self.dispatch_single_click)
+#        self.connect(self.tv, SIGNAL("doubleClicked(QModelIndex)"), self.dispatch_double_click)
+        self.tv.doubleClicked.connect(self.dispatch_double_click)
+#        self.connect(self.tv.horizontalHeader(), SIGNAL("sectionClicked(int)"), self.capture_sort_column)
+        self.tv.horizontalHeader().sectionClicked.connect(self.capture_sort_column)
 
         self.resize_dialog()
         self.tv.setFocus()
@@ -1462,7 +1490,9 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         '''
         self._log_location()
         self.library_collections = InventoryCollections(self)
-        self.connect(self.library_collections, self.library_collections.signal, self.library_collections_complete)
+#        self.connect(self.library_collections, self.library_collections.signal, self.library_collections_complete)
+        self.library_collections.signal.connect(self.library_collections_complete)
+        self.library_collections.signal.connect(self.library_collections_complete)
         QTimer.singleShot(0, self.start_library_collections_inventory)
 
         if False:
@@ -3841,7 +3871,8 @@ class BookStatusDialog(SizePersistedDialog, Logger):
         if self.updated_match_quality:
             self._log_location(sorted(self.updated_match_quality.keys()))
             self.flasher = RowFlasher(self, self.tm, self.updated_match_quality)
-            self.connect(self.flasher, self.flasher.signal, self._flasher_complete)
+#            self.connect(self.flasher, self.flasher.signal, self._flasher_complete)
+            self.flasher.signal.connect(self._flasher_complete)
             self.flasher.start()
 
     def _flasher_complete(self):

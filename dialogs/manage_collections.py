@@ -17,8 +17,12 @@ from calibre.gui2.dialogs.device_category_editor_ui import Ui_DeviceCategoryEdit
 
 from calibre_plugins.marvin_manager.common_utils import Logger
 
-from PyQt4.Qt import (Qt, QDialog, QIcon,
-                      pyqtSignal)
+try:
+    from PyQt5.Qt import (Qt, QDialog, QIcon,
+                          pyqtSignal)
+except ImportError:
+    from PyQt4.Qt import (Qt, QDialog, QIcon,
+                          pyqtSignal)
 
 
 class MyDeviceCategoryEditor(DeviceCategoryEditor, Logger):

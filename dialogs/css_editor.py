@@ -18,10 +18,16 @@ from calibre.gui2 import Application, open_url, warning_dialog
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import HelpView, Logger, SizePersistedDialog
 
-from PyQt4.Qt import (QDialog, QDialogButtonBox, QFont, QFontMetrics, QIcon, QPixmap,
-                      QSize, QSizePolicy,
-                      pyqtSignal)
-from PyQt4.QtWebKit import QWebPage, QWebView
+try:
+    from PyQt5.Qt import (QDialog, QDialogButtonBox, QFont, QFontMetrics, QIcon, QPixmap,
+                          QSize, QSizePolicy,
+                          pyqtSignal)
+    from PyQt5.QtWebKitWidgets import QWebPage, QWebView
+except ImportError:
+    from PyQt4.Qt import (QDialog, QDialogButtonBox, QFont, QFontMetrics, QIcon, QPixmap,
+                          QSize, QSizePolicy,
+                          pyqtSignal)
+    from PyQt4.QtWebKit import QWebPage, QWebView
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:

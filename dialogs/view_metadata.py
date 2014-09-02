@@ -19,9 +19,14 @@ from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 from calibre_plugins.marvin_manager.common_utils import (Logger, SizePersistedDialog,
     EMPTY_STAR, FULL_STAR)
 
-from PyQt4.Qt import (Qt, QBrush, QColor, QDialogButtonBox, QIcon, QImage,
-                      QPainter, QPalette, QPixmap, QPushButton, QSize, QSizePolicy,
-                      pyqtSignal)
+try:
+    from PyQt5.Qt import (Qt, QBrush, QColor, QDialogButtonBox, QIcon, QImage,
+                          QPainter, QPalette, QPixmap, QPushButton, QSize, QSizePolicy,
+                          pyqtSignal)
+except ImportError:
+    from PyQt4.Qt import (Qt, QBrush, QColor, QDialogButtonBox, QIcon, QImage,
+                          QPainter, QPalette, QPixmap, QPushButton, QSize, QSizePolicy,
+                          pyqtSignal)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:

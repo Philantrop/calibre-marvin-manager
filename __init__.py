@@ -15,7 +15,7 @@ class MarvinManagerPlugin(InterfaceActionBase):
     supported_platforms = ['linux', 'osx', 'windows']
     author = 'Wulf C. Krueger'
     # #mark ~~~ plugin version ~~~
-    version = (1, 2, 3)
+    version = (1, 2, 4)
     # #mark ~~~ Minimum calibre version ~~~
     minimum_calibre_version = (1, 29, 0)
 
@@ -48,7 +48,10 @@ class MarvinManagerPlugin(InterfaceActionBase):
 # cd ~/Documents/calibredev/Marvin_Manager
 # calibre-debug __init__.py
 if __name__ == '__main__':
-    from PyQt4.Qt import QApplication
+    try:
+        from PyQt5.Qt import QApplication
+    except ImportError:
+        from PyQt4.Qt import QApplication
     from calibre.gui2.preferences import test_widget
     app = QApplication([])
     test_widget('Advanced', 'Plugins')
