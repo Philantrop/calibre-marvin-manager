@@ -2727,7 +2727,7 @@ class MarvinManagerAction(InterfaceAction, Logger):
                     'library_book_count': len(self.library_scanner.uuid_map),
                     'is_virtual_library': bool(self.virtual_library),
                     'load_time': int(self.load_time)}
-            self._log_metrics(args)
+            #self._log_metrics(args)
             self.book_status_dialog.exec_()
 
             # MXD dialog closed
