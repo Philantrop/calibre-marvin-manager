@@ -6,6 +6,11 @@
 -->
 ##Marvin XD##
 
+Marvin XD
+
+A calibre plugin for managing Marvin, an iOS ebook reader application.
+
+
 ###JSON switches###
 * `development_mode` controls verbose display of debug information
 * `hash_caching_disabled` forces a reload of Marvin content every time
@@ -15,4 +20,4 @@
 * `show_staged_commands` displays commands sent to Marvin in debug stream
 
 ---
-Last update July 1, 2013 3:37:30 AM MDT
+Last update July 18, 2015 11:30:00 AM CEST
