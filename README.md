@@ -4,6 +4,9 @@
     A semi-useful site for previewing GFM is available at
     http://tmpvar.com/markdown.html
 -->
+##This plugin is NOT compatible with iOS >= 8.3. Nothing can be done about it till Marvin itself is adapted to the changes by Apple.##
+
+
 ##Marvin XD##
 
 Marvin XD
